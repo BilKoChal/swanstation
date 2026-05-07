@@ -4,8 +4,6 @@
 #include "common/timer.h"
 #include "settings.h"
 
-std::unique_ptr<GPUBackend> g_gpu_backend;
-
 GPUBackend::GPUBackend() = default;
 
 GPUBackend::~GPUBackend() = default;
