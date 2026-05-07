@@ -2,7 +2,6 @@
 #include "fifo_queue.h"
 #include "types.h"
 #include <atomic>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -45,8 +44,11 @@ protected:
   u32 m_buffer_size = 0;
 
   HeapFIFOQueue<SampleType, MaxSamples> m_buffer;
+  // Held while BeginWrite/EndWrite are in flight. In libretro mode the
+  // producer (SPU) and consumer (UploadToFrontend) run on the same
+  // thread, so this is always uncontended; it stays in place so other
+  // hosts that drive audio from a separate output thread remain safe.
   mutable std::mutex m_buffer_mutex;
-  std::condition_variable m_buffer_draining_cv;
 
   u32 m_max_samples = 0;
 };

@@ -33,22 +33,23 @@ void AudioStream::Shutdown()
 
 void AudioStream::BeginWrite(SampleType** buffer_ptr, u32* num_frames)
 {
+  // The SPU calls BeginWrite/EndWrite from the same thread that drains
+  // the buffer (in libretro mode, that is retro_run_frame()). The mutex
+  // is therefore always uncontended in single-threaded use; it remains
+  // here so that backends with their own audio output threads stay
+  // safe.
+  //
+  // Previously this routine waited on a condition variable whenever
+  // `buffer_space < requested_size`. Nothing in the codebase ever
+  // notified that CV (it was wait-only), so the SPU could deadlock if
+  // the buffer ever filled up. A non-blocking design is safer: in
+  // single-threaded operation the buffer never fills (m_max_samples is
+  // 2 * buffer_size, currently 8x smaller than the FIFO capacity, and
+  // UploadToFrontend drains it every retro_run); on the rare overrun
+  // path we simply give the SPU what space is contiguously available
+  // and let it write a smaller batch. EndWrite passes the actual
+  // count.
   m_buffer_mutex.lock();
-
-  const u32 requested_frames = std::min(*num_frames, m_buffer_size);
-  u32 size                   = requested_frames * AUDIO_CHANNELS;
-  u32 buffer_space           = m_max_samples - m_buffer.GetSize();
-  if (buffer_space < size)
-  {
-    std::unique_lock<std::mutex> lock(m_buffer_mutex, std::adopt_lock);
-    m_buffer_draining_cv.wait(lock, [this, size]() 
-		    {
-		    u32 buffer_space = m_max_samples - m_buffer.GetSize();
-		    return buffer_space >= size; 
-		    }
-		    );
-    lock.release();
-  }
 
   *buffer_ptr = m_buffer.GetWritePointer();
   *num_frames = std::min(m_buffer_size, m_buffer.GetContiguousSpace() / AUDIO_CHANNELS);
