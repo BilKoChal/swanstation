@@ -948,9 +948,10 @@ bool InitializeFastmem()
   const CPUFastmemMode mode = g_settings.cpu_fastmem_mode;
 
 #ifdef WITH_MMAP_FASTMEM
-  const auto handler = (mode == CPUFastmemMode::MMap) ? MMapPageFaultHandler : LUTPageFaultHandler;
+  const Common::PageFaultHandler::Callback handler =
+    (mode == CPUFastmemMode::MMap) ? MMapPageFaultHandler : LUTPageFaultHandler;
 #else
-  const auto handler = LUTPageFaultHandler;
+  const Common::PageFaultHandler::Callback handler = LUTPageFaultHandler;
 #endif
 
   s_code_buffer.ReserveCode(Common::PageFaultHandler::GetHandlerCodeSize());

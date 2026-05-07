@@ -36,7 +36,7 @@ bool AnalogJoystick::DoState(StateWrapper& sw, bool apply_input_state)
   sw.Do(&m_analog_mode);
 
   u16 button_state = m_button_state;
-  auto axis_state = m_axis_state;
+  std::array<u8, static_cast<u8>(Axis::Count)> axis_state = m_axis_state;
   sw.Do(&button_state);
   sw.Do(&axis_state);
 

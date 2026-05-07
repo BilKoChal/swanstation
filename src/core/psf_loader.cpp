@@ -10,7 +10,7 @@ namespace PSFLoader {
 
 std::optional<std::string> File::GetTagString(const char* tag_name) const
 {
-  auto it = m_tags.find(tag_name);
+  TagMap::const_iterator it = m_tags.find(tag_name);
   if (it == m_tags.end())
     return std::nullopt;
 
@@ -19,7 +19,7 @@ std::optional<std::string> File::GetTagString(const char* tag_name) const
 
 std::optional<int> File::GetTagInt(const char* tag_name) const
 {
-  auto it = m_tags.find(tag_name);
+  TagMap::const_iterator it = m_tags.find(tag_name);
   if (it == m_tags.end())
     return std::nullopt;
 
@@ -28,7 +28,7 @@ std::optional<int> File::GetTagInt(const char* tag_name) const
 
 std::optional<float> File::GetTagFloat(const char* tag_name) const
 {
-  auto it = m_tags.find(tag_name);
+  TagMap::const_iterator it = m_tags.find(tag_name);
   if (it == m_tags.end())
     return std::nullopt;
 

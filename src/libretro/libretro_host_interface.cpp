@@ -779,8 +779,8 @@ void* LibretroHostInterface::retro_get_memory_data(unsigned id)
       const MemoryCardType type = g_settings.memory_card_types[0];
       if (System::IsShutdown()  || type != MemoryCardType::Libretro)
         break;
-      auto card  = g_pad.GetMemoryCard(0);
-      auto& data = card->GetData();
+      MemoryCard* const card               = g_pad.GetMemoryCard(0);
+      MemoryCardImage::DataArray& data     = card->GetData();
       return data.data();
     }
 
