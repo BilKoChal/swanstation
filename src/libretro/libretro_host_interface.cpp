@@ -1637,10 +1637,18 @@ void LibretroHostInterface::UpdateControllersNamcoGunCon(u32 index)
   // Mouse range is between -32767 & 32767
   const int16_t gun_x = g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X);
   const int16_t gun_y = g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y);
-  const s32 pos_x = (g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN) ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * m_display->GetWindowWidth()) / 0xFFFF));
-  const s32 pos_y = (g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN) ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * m_display->GetWindowHeight()) / 0xFFFF));
+  const bool offscreen =
+    g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN) != 0;
+  const s32 pos_x = offscreen ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * m_display->GetWindowWidth())  / 0xFFFF);
+  const s32 pos_y = offscreen ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * m_display->GetWindowHeight()) / 0xFFFF);
 
   m_display->SetMousePosition(pos_x, pos_y);
+  // Cache the normalized 16-bit gun state for the HW renderers. They
+  // use it to draw the cursor overlay at their own render-target
+  // resolution; reading input again from inside Render() would be
+  // a second input_state call without an intervening poll, which is
+  // undefined per the libretro spec.
+  m_display->SetLightgunState(gun_x, gun_y, offscreen);
 
 }
 

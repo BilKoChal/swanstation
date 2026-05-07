@@ -499,10 +499,14 @@ bool LibretroVulkanHostDisplay::Render()
   const u32 resolution_scale = g_libretro_host_interface.GetResolutionScale();
   const u32 display_width    = static_cast<u32>(m_display_width) * resolution_scale;
   const u32 display_height   = static_cast<u32>(m_display_height) * resolution_scale;
-  const int16_t gun_x        = g_retro_input_state_callback(0, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X);
-  const int16_t gun_y        = g_retro_input_state_callback(0, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y);
-  const s32 pos_x            = (g_retro_input_state_callback(0, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN) ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * display_width) / 0xFFFF));
-  const s32 pos_y            = (g_retro_input_state_callback(0, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN) ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * display_height) / 0xFFFF));
+  // Lightgun state was cached at controller-update time; do NOT call
+  // g_retro_input_state_callback() from the renderer - see the matching
+  // comment in gpu_hw_opengl.cpp::Render().
+  const s16  gun_x           = GetLightgunRawX();
+  const s16  gun_y           = GetLightgunRawY();
+  const bool offscreen       = IsLightgunOffscreen();
+  const s32 pos_x            = offscreen ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * display_width)  / 0xFFFF);
+  const s32 pos_y            = offscreen ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * display_height) / 0xFFFF);
   if (display_width == 0 || display_height == 0 || !CheckFramebufferSize(display_width, display_height))
     return false;
 

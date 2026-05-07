@@ -61,6 +61,24 @@ public:
     m_mouse_position_y = y;
   }
 
+  // Lightgun position cached per frame at controller-update time, in
+  // libretro's normalized [-0x7FFF, 0x7FFF] screen coordinates. The HW
+  // renderers consume these directly so they don't have to re-poll
+  // input from inside the render path - see retro_run_frame() in
+  // libretro_host_interface.cpp where they are populated. Reading
+  // input twice per frame is undefined per the libretro spec
+  // (frontends may return stale or fresh values), so renderers must
+  // never call g_retro_input_state_callback themselves.
+  ALWAYS_INLINE s16 GetLightgunRawX() const { return m_lightgun_raw_x; }
+  ALWAYS_INLINE s16 GetLightgunRawY() const { return m_lightgun_raw_y; }
+  ALWAYS_INLINE bool IsLightgunOffscreen() const { return m_lightgun_offscreen; }
+  ALWAYS_INLINE void SetLightgunState(s16 raw_x, s16 raw_y, bool offscreen)
+  {
+    m_lightgun_raw_x = raw_x;
+    m_lightgun_raw_y = raw_y;
+    m_lightgun_offscreen = offscreen;
+  }
+
   virtual RenderAPI GetRenderAPI() const = 0;
   virtual void* GetRenderDevice() const = 0;
   virtual void* GetRenderContext() const = 0;
@@ -171,6 +189,11 @@ protected:
 
   s32 m_mouse_position_x = 0;
   s32 m_mouse_position_y = 0;
+
+  // Cached per-frame libretro lightgun state - see SetLightgunState().
+  s16  m_lightgun_raw_x = 0;
+  s16  m_lightgun_raw_y = 0;
+  bool m_lightgun_offscreen = true;
 
   s32 m_display_width = 0;
   s32 m_display_height = 0;
