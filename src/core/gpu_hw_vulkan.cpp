@@ -496,6 +496,16 @@ bool LibretroVulkanHostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
 
 bool LibretroVulkanHostDisplay::Render()
 {
+  // No display texture this frame -> send the libretro frame-dupe
+  // signal (NULL frame), matching the SW path in
+  // LibretroHostDisplay::Render(). See the equivalent comment in
+  // gpu_hw_opengl.cpp::Render().
+  if (!HasDisplayTexture())
+  {
+    g_retro_video_refresh_callback(nullptr, 0, 0, 0);
+    return true;
+  }
+
   const u32 resolution_scale = g_libretro_host_interface.GetResolutionScale();
   const u32 display_width    = static_cast<u32>(m_display_width) * resolution_scale;
   const u32 display_height   = static_cast<u32>(m_display_height) * resolution_scale;
@@ -520,7 +530,6 @@ bool LibretroVulkanHostDisplay::Render()
     {{0, 0}, {display_width, display_height}}, 1u,      &clear_value};
   vkCmdBeginRenderPass(cmdbuffer, &rp, VK_SUBPASS_CONTENTS_INLINE);
 
-  if (HasDisplayTexture())
   {
     const auto [left, top, width, height] = CalculateDrawRect(display_width, display_height, 0, false);
     RenderDisplay(left, top, width, height, m_display_texture_handle, m_display_texture_width, m_display_texture_height,
@@ -528,7 +537,7 @@ bool LibretroVulkanHostDisplay::Render()
                   m_display_texture_view_height);
   }
 
-  if (g_settings.controller_show_crosshair && HasSoftwareCursor() && HasDisplayTexture() && (pos_x > 0 || pos_y > 0))
+  if (g_settings.controller_show_crosshair && HasSoftwareCursor() && (pos_x > 0 || pos_y > 0))
   {
     const float width_scale = (display_width / 2400.0f);
     const float height_scale = (display_height / 1920.0f);

@@ -482,6 +482,19 @@ void LibretroOpenGLHostDisplay::RenderSoftwareCursor(s32 left, s32 bottom, s32 w
 
 bool LibretroOpenGLHostDisplay::Render()
 {
+  // No display texture this frame -> send the libretro frame-dupe
+  // signal (NULL frame), matching the software-renderer code path in
+  // LibretroHostDisplay::Render(). Previously the HW renderers all
+  // pushed a black-cleared FBO instead, which disagreed with the SW
+  // path on identical emulator state (display-disabled, mode-change
+  // gap, etc.) and produced visible black flashes where the SW
+  // backend would frame-dupe cleanly.
+  if (!HasDisplayTexture())
+  {
+    g_retro_video_refresh_callback(nullptr, 0, 0, 0);
+    return true;
+  }
+
   const GLuint fbo = static_cast<GLuint>(
     static_cast<retro_hw_render_callback*>(m_window_info.display_connection)->get_current_framebuffer());
   const u32 resolution_scale = g_libretro_host_interface.GetResolutionScale();
@@ -505,7 +518,6 @@ bool LibretroOpenGLHostDisplay::Render()
   glClear(GL_COLOR_BUFFER_BIT);
   glDisable(GL_SCISSOR_TEST);
 
-  if (HasDisplayTexture())
   {
     const auto [left, top, width, height] = CalculateDrawRect(display_width, display_height, 0, false);
     RenderDisplay(left, top, width, height, m_display_texture_handle, m_display_texture_width, m_display_texture_height,
@@ -513,7 +525,7 @@ bool LibretroOpenGLHostDisplay::Render()
                   m_display_texture_view_height);
   }
 
-  if (g_settings.controller_show_crosshair && HasSoftwareCursor() && HasDisplayTexture() && (pos_x > 0 || pos_y > 0))
+  if (g_settings.controller_show_crosshair && HasSoftwareCursor() && (pos_x > 0 || pos_y > 0))
   {
     const float width_scale = (display_width / 2400.0f);
     const float height_scale = (display_height / 1920.0f);
