@@ -716,7 +716,11 @@ void LibretroHostInterface::retro_run_frame()
 
   if (g_settings.audio_fast_hook)
   {
-    auto* const audio_stream = dynamic_cast<LibretroAudioStream*>(m_audio_stream.get());
+    // The audio stream is constructed by CreateAudioStream() below as a
+    // LibretroAudioStream; the type is invariant for the lifetime of
+    // the host interface. dynamic_cast adds RTTI lookup on every frame
+    // for no gain.
+    auto* const audio_stream = static_cast<LibretroAudioStream*>(m_audio_stream.get());
     audio_stream->UploadToFrontend();
   }
 }
