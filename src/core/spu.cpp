@@ -1154,8 +1154,16 @@ void SPU::Voice::TickADSR()
 
 void SPU::Voice::DecodeBlock(const ADPCMBlock& block)
 {
-  static s32 filter_table_pos[5] = {0, 60, 115, 98, 122};
-  static s32 filter_table_neg[5] = {0, 0, -52, -55, -60};
+  // The two ADPCM predictor tables only depend on the block's filter
+  // index and never change at runtime. Marking them constexpr places
+  // them in .rodata and eliminates the C++11 thread-safe-static-init
+  // guard (one acquire-load plus branch) that the compiler would
+  // otherwise emit on every entry to this function. DecodeBlock runs
+  // once per ADPCM block per active voice, up to ~200 times/sec per
+  // voice across 24 voices, so removing the guard is a small but
+  // consistent saving in the SPU hot path.
+  static constexpr s32 filter_table_pos[5] = {0, 60, 115, 98, 122};
+  static constexpr s32 filter_table_neg[5] = {0, 0, -52, -55, -60};
 
   // store samples needed for interpolation
   current_block_samples[2] = current_block_samples[NUM_SAMPLES_FROM_LAST_ADPCM_BLOCK + NUM_SAMPLES_PER_ADPCM_BLOCK - 1];
@@ -1187,7 +1195,7 @@ void SPU::Voice::DecodeBlock(const ADPCMBlock& block)
 
 s32 SPU::Voice::Interpolate() const
 {
-  static s16 gauss[0x200] = {
+  static constexpr s16 gauss[0x200] = {
     -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, //
     -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, //
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0001, //
@@ -1375,10 +1383,13 @@ ALWAYS_INLINE_RELEASE std::tuple<s32, s32> SPU::SampleVoice(u32 voice_index)
 void SPU::UpdateNoise()
 {
   // Dr Hell's noise waveform, implementation borrowed from pcsx-r.
-  static u8 noise_wave_add[64] = {
+  // constexpr to avoid the C++11 thread-safe-static-init guard the
+  // compiler would otherwise emit; this function runs once per SPU
+  // tick (44100 Hz) while audio is enabled.
+  static constexpr u8 noise_wave_add[64] = {
     1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0,
      0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1};
-  static u8 noise_freq_add[5]  = {0, 84, 140, 180, 210};
+  static constexpr u8 noise_freq_add[5]  = {0, 84, 140, 180, 210};
 
   const u32 noise_clock        = m_SPUCNT.noise_clock;
   const u32 level              = (0x8000u >> (noise_clock >> 2)) << 16;
