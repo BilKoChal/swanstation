@@ -238,3 +238,18 @@ ALWAYS_INLINE constexpr T SignExtendN(T value)
                              static_cast<std::underlying_type<type_>::type>(rhs));                                     \
     return lhs;                                                                                                        \
   }
+
+// Host endianness selection.
+//
+// swanstation currently only ships to little-endian targets (x86, x64,
+// AArch32 and AArch64 in their normal LE configurations). To keep the
+// hot paths honest we don't autodetect the host byte order, and we
+// don't define a positive marker for the LE case either: little-endian
+// is simply the unmarked default.
+//
+// Big-endian is opt-in. Pass -DMSB_FIRST=1 to the compiler (via the
+// build system or by hand) to flag a big-endian build. Code that
+// needs byte-order-dependent work should branch on `#ifdef MSB_FIRST`
+// only - the LE path stays the unconditional default and pays no
+// cost on the targets we actually support. There is no LSB_FIRST
+// macro and there should never be one.
