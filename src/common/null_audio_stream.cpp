@@ -10,10 +10,9 @@ NullAudioStream::~NullAudioStream() = default;
 
 void NullAudioStream::FramesAvailable()
 {
-  std::unique_lock<std::mutex> lock(m_buffer_mutex);
-  u32 available_samples = m_buffer.GetSize() / AUDIO_CHANNELS;
-  // Drop any buffer as soon as they're available
-  m_buffer.Remove(available_samples);
+  // Drop everything that's available as soon as it arrives.
+  // The base AudioStream is single-threaded; no lock needed.
+  m_buffer.Remove(m_buffer.GetSize());
 }
 
 std::unique_ptr<AudioStream> AudioStream::CreateNullAudioStream()

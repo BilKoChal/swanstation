@@ -3,7 +3,6 @@
 #include "types.h"
 #include <atomic>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 // Uses signed 16-bits samples.
@@ -43,12 +42,15 @@ protected:
 
   u32 m_buffer_size = 0;
 
+  // The libretro core is single-threaded by design: the SPU runs on
+  // the same thread (driven by TimingEvents) that eventually calls
+  // UploadToFrontend() at end-of-retro_run. Both subclasses
+  // (LibretroAudioStream, NullAudioStream) are libretro-only. No
+  // synchronization primitive is needed around this FIFO; the
+  // previously-present mutex was always uncontended and only added
+  // per-write atomic-CAS overhead (~50ns x ~300 SPU updates per
+  // frame).
   HeapFIFOQueue<SampleType, MaxSamples> m_buffer;
-  // Held while BeginWrite/EndWrite are in flight. In libretro mode the
-  // producer (SPU) and consumer (UploadToFrontend) run on the same
-  // thread, so this is always uncontended; it stays in place so other
-  // hosts that drive audio from a separate output thread remain safe.
-  mutable std::mutex m_buffer_mutex;
 
   u32 m_max_samples = 0;
 };
