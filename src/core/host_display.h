@@ -118,7 +118,6 @@ public:
     m_display_texture_view_y = 0;
     m_display_texture_view_width = 0;
     m_display_texture_view_height = 0;
-    m_display_changed = true;
   }
 
   void SetDisplayTexture(void* texture_handle, HostDisplayPixelFormat texture_format, s32 texture_width,
@@ -132,7 +131,6 @@ public:
     m_display_texture_view_y = view_y;
     m_display_texture_view_width = view_width;
     m_display_texture_view_height = view_height;
-    m_display_changed = true;
   }
 
   void SetDisplayParameters(s32 display_width, s32 display_height, s32 active_left, s32 active_top, s32 active_width,
@@ -145,7 +143,6 @@ public:
     m_display_active_width = active_width;
     m_display_active_height = active_height;
     m_display_aspect_ratio = display_aspect_ratio;
-    m_display_changed = true;
   }
 
   static u32 GetDisplayPixelFormatSize(HostDisplayPixelFormat format);
@@ -214,6 +211,4 @@ protected:
 
   std::unique_ptr<HostDisplayTexture> m_cursor_texture;
   float m_cursor_texture_scale = 1.0f;
-
-  bool m_display_changed = false;
 };
