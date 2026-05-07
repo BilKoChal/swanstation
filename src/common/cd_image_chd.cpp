@@ -301,9 +301,24 @@ bool CDImageCHD::HasNonStandardSubchannel() const
   return (m_sbi.GetReplacementSectorCount() > 0);
 }
 
-// There's probably a more efficient way of doing this with vectorization...
+// CHD stores CD audio sectors in big-endian byte order, so on
+// little-endian hosts every read of an audio sector needs a 16-bit
+// byte swap. The architecture-specific branches below are width
+// optimisations that all do the same job. On a big-endian host the
+// data is already in host order and no swap is needed - just
+// std::memcpy.
+//
+// (Selecting width here off the architecture macros, not off
+// MSB_FIRST, is intentional: x86_64 and AArch64 can swap eight
+// bytes per iteration, x86 and ARM are limited to four, and the
+// fallback handles the byte swap two bytes at a time. All three
+// LE branches produce the same result; only the LE/BE split is
+// guarded by MSB_FIRST.)
 ALWAYS_INLINE static void CopyAndSwap(void* dst_ptr, const u8* src_ptr, u32 data_size)
 {
+#if defined(MSB_FIRST)
+  std::memcpy(dst_ptr, src_ptr, data_size);
+#else
   u8* dst_ptr_byte = static_cast<u8*>(dst_ptr);
 #if defined(CPU_X64) || defined(CPU_AARCH64)
   const u32 num_values = data_size / 8;
@@ -338,6 +353,7 @@ ALWAYS_INLINE static void CopyAndSwap(void* dst_ptr, const u8* src_ptr, u32 data
     src_ptr += sizeof(value);
     dst_ptr_byte += sizeof(value);
   }
+#endif
 #endif
 }
 

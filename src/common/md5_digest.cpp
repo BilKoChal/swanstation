@@ -1,5 +1,18 @@
 #include "md5_digest.h"
 
+// Plumb's reference MD5 needs to know the host endianness. The
+// algorithm operates on 32-bit longwords; on a big-endian host the
+// raw input bytes need to be byte-reversed before the per-block
+// transform, on a little-endian host they don't. Upstream uses the
+// historical macro name HIGHFIRST to gate the byte-reverse pass.
+//
+// swanstation reserves MSB_FIRST for the same purpose (see
+// src/common/types.h). Mapping MSB_FIRST -> HIGHFIRST here keeps
+// this third-party implementation file otherwise untouched.
+#if defined(MSB_FIRST) && !defined(HIGHFIRST)
+#define HIGHFIRST 1
+#endif
+
 #ifndef HIGHFIRST
 #define byteReverse(buf, len) /* Nothing */
 #else
