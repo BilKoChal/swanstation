@@ -127,7 +127,13 @@ private:
   static bool RETRO_CALLCONV DiskControlGetImageLabel(unsigned index, char* label, size_t len);
 
   std::unique_ptr<GameSettings::Entry> m_game_settings;
-  float m_last_aspect_ratio = 4.0f / 3.0f;
+  float m_last_aspect_ratio    = 4.0f / 3.0f;
+  // Tracks the most recently advertised vertical refresh so retro_run_frame
+  // can re-issue RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO when the PSX changes
+  // CRTC mode (e.g., NTSC <-> PAL). RETRO_ENVIRONMENT_SET_GEOMETRY only
+  // updates the geometry struct and the frontend never learns about the
+  // new fps; an audio resampler driven by the stale ratio drifts.
+  float m_last_throttle_frequency = 60.0f;
 
   std::array<u32, NUM_CONTROLLER_AND_CARD_PORTS> retropad_device = {RETRO_DEVICE_JOYPAD};
 

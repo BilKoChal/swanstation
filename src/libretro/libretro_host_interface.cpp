@@ -473,7 +473,8 @@ void LibretroHostInterface::retro_get_system_av_info(struct retro_system_av_info
 {
   const bool use_resolution_scale = (g_settings.gpu_renderer != GPURenderer::Software);
   GetSystemAVInfo(info, use_resolution_scale);
-  m_last_aspect_ratio = info->geometry.aspect_ratio;
+  m_last_aspect_ratio        = info->geometry.aspect_ratio;
+  m_last_throttle_frequency  = static_cast<float>(info->timing.fps);
 }
 
 void LibretroHostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale)
@@ -500,7 +501,8 @@ bool LibretroHostInterface::UpdateSystemAVInfo(bool use_resolution_scale)
     return false;
 
   m_display->ResizeRenderWindow(avi.geometry.base_width, avi.geometry.base_height);
-  m_last_aspect_ratio = avi.geometry.aspect_ratio;
+  m_last_aspect_ratio        = avi.geometry.aspect_ratio;
+  m_last_throttle_frequency  = static_cast<float>(avi.timing.fps);
   return true;
 }
 
@@ -707,10 +709,27 @@ void LibretroHostInterface::retro_run_frame()
 
   System::RunFrame();
 
-  const float aspect_ratio = m_display->GetDisplayAspectRatio();
+  // Detect post-frame timing changes from the PSX side. The CRTC config
+  // can change mid-game (NTSC <-> PAL detection, interlace toggle,
+  // overclock change), and that updates both the aspect ratio and the
+  // vertical refresh that the SPU/audio resampling are pegged to.
+  //
+  // Aspect-only changes go through SET_GEOMETRY (cheap, no pipeline
+  // teardown). A change in vertical refresh requires SET_SYSTEM_AV_INFO
+  // because SET_GEOMETRY does not carry the timing struct - if we
+  // don't re-issue full av_info, the frontend keeps resampling audio
+  // at the stale fps ratio and the audio drifts.
+  const float aspect_ratio        = m_display->GetDisplayAspectRatio();
+  const float throttle_frequency  = (System::IsValid()) ? System::GetThrottleFrequency() : m_last_throttle_frequency;
 
-  if (aspect_ratio != m_last_aspect_ratio)
+  if (throttle_frequency != m_last_throttle_frequency)
+  {
+    UpdateSystemAVInfo(g_settings.gpu_renderer != GPURenderer::Software);
+  }
+  else if (aspect_ratio != m_last_aspect_ratio)
+  {
     UpdateGeometry();
+  }
 
   m_display->Render();
 
