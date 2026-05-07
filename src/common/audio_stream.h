@@ -51,6 +51,4 @@ protected:
   // per-write atomic-CAS overhead (~50ns x ~300 SPU updates per
   // frame).
   HeapFIFOQueue<SampleType, MaxSamples> m_buffer;
-
-  u32 m_max_samples = 0;
 };

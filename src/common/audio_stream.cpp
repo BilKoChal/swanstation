@@ -53,11 +53,14 @@ void AudioStream::EndWrite(u32 num_frames)
 bool AudioStream::SetBufferSize(u32 buffer_size)
 {
   const u32 buffer_size_in_samples = buffer_size * AUDIO_CHANNELS;
-  const u32 max_samples = buffer_size_in_samples * 2u;
-  if (max_samples > m_buffer.GetCapacity())
+  // The FIFO has fixed capacity; reject configurations that would not
+  // fit two batches' worth of samples (the historical 2x headroom that
+  // the now-removed back-pressure code relied on). The check is kept
+  // because games exposed via core options can request larger
+  // audio_buffer_size values.
+  if ((buffer_size_in_samples * 2u) > m_buffer.GetCapacity())
     return false;
 
   m_buffer_size = buffer_size;
-  m_max_samples = max_samples;
   return true;
 }
