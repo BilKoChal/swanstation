@@ -609,7 +609,10 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
     {
       const std::string& parent_path = System::GetMediaFileName();
       if (parent_path.empty())
+      {
+        DestroySystem();
         return false;
+      }
 
       P_THIS->m_disk_control_info.has_sub_images         = true;
       P_THIS->m_disk_control_info.image_index            = System::GetMediaSubImageIndex();
@@ -620,11 +623,17 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
       {
         const std::string& sub_image_path = System::GetMediaSubImagePath(i);
         if (sub_image_path.empty())
+        {
+          DestroySystem();
           return false;
+        }
 
         const std::string& sub_image_label = System::GetMediaSubImageTitle(i);
         if (sub_image_label.empty())
+        {
+          DestroySystem();
           return false;
+        }
 
         P_THIS->m_disk_control_info.image_paths.push_back(sub_image_path);
         P_THIS->m_disk_control_info.image_labels.push_back(sub_image_label);
@@ -634,11 +643,17 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
     {
       const std::string& image_path = System::GetMediaFileName();
       if (image_path.empty())
+      {
+        DestroySystem();
         return false;
+      }
 
       const std::string_view image_label = FileSystem::GetFileTitleFromPath(image_path);
       if (image_label.empty())
+      {
+        DestroySystem();
         return false;
+      }
 
       P_THIS->m_disk_control_info.has_sub_images = false;
       P_THIS->m_disk_control_info.image_index    = 0;
