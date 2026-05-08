@@ -281,6 +281,15 @@ void GPU::UpdateDMARequest()
       m_GPUSTAT.ready_to_send_vram = true;
       m_GPUSTAT.ready_to_recieve_dma = m_fifo.IsEmpty();
       break;
+
+    case BlitterState::DrawingPolyLine:
+      // Polyline draw drains FIFO words for vertices/colours and is not
+      // exposing readable VRAM. From the DMA controller's perspective this
+      // is equivalent to Idle - keep accepting words until the terminator
+      // word (0x50005000) is seen by ExecuteCommands.
+      m_GPUSTAT.ready_to_send_vram = false;
+      m_GPUSTAT.ready_to_recieve_dma = (m_fifo.IsEmpty() || m_fifo.GetSize() < m_command_total_words);
+      break;
   }
 
   bool dma_request;
@@ -323,6 +332,12 @@ void GPU::UpdateGPUIdle()
       break;
 
     case BlitterState::ReadingVRAM:
+      m_GPUSTAT.gpu_idle = false;
+      break;
+
+    case BlitterState::DrawingPolyLine:
+      // Mid-polyline: the GPU is actively consuming FIFO words for the
+      // current draw, so it is not idle.
       m_GPUSTAT.gpu_idle = false;
       break;
   }

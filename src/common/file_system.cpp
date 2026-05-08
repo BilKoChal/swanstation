@@ -292,20 +292,6 @@ void CanonicalizePath(std::string& path, bool OSPath /*= true*/)
   CanonicalizePath(path.data(), static_cast<u32>(path.size() + 1), path.c_str(), OSPath);
 }
 
-static inline bool FileSystemCharacterIsSane(char c, bool StripSlashes)
-{
-  if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != ' ' && c != '_' &&
-      c != '-' && c != '.')
-  {
-    if (!StripSlashes && (c == '/' || c == '\\'))
-      return true;
-
-    return false;
-  }
-
-  return true;
-}
-
 bool IsAbsolutePath(const std::string_view& path)
 {
 #ifdef _WIN32

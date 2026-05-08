@@ -1463,6 +1463,13 @@ void CDROM::ExecuteCommandSecondResponse(TickCount ticks_late)
     case Command::Stop:
       DoStatSecondResponse();
       break;
+
+    default:
+      // The other commands either don't have a second-response phase or
+      // shouldn't reach here (they're cleared via ClearCommandSecondResponse
+      // before this fires). Listed implicitly to silence the -Wswitch
+      // "27 enumeration values not handled" warning Apple Clang produces.
+      break;
   }
 
   m_command_second_response = Command::None;
@@ -1892,7 +1899,6 @@ void CDROM::DoSeekComplete(TickCount ticks_late)
   }
   else
   {
-    CDImage::Position pos(CDImage::Position::FromLBA(m_reader.GetLastReadSector()));
     m_secondary_status.ClearActiveBits();
     SendAsyncErrorResponse(STAT_SEEK_ERROR, 0x04);
     m_last_sector_header_valid = false;
@@ -2036,13 +2042,7 @@ void CDROM::DoSectorRead()
   const CDImage::SubChannelQ& subq = m_reader.GetSectorSubQ();
   const bool subq_valid = subq.IsCRCValid();
   if (subq_valid)
-  {
     m_last_subq = subq;
-  }
-  else
-  {
-    const CDImage::Position pos(CDImage::Position::FromLBA(m_current_lba));
-  }
 
   if (subq.track_number_bcd == CDImage::LEAD_OUT_TRACK_NUMBER)
   {

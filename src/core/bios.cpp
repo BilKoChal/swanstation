@@ -120,7 +120,7 @@ const ImageInfo* GetImageInfo(const Image& image)
 {
   // Hashes do not make sense for ever-evolving software such as OpenBIOS,
   // so instead it is detected by searching for a magic number.
-  static const ImageInfo openbios_info = {"OpenBIOS", ConsoleRegion::Auto, 0, false};
+  static const ImageInfo openbios_info = {"OpenBIOS", ConsoleRegion::Auto, {}, false};
   static const std::array<u8, 8> openbios_magic = {'O', 'p', 'e', 'n', 'B', 'I', 'O', 'S'};
 
   if (std::equal(openbios_magic.begin(), openbios_magic.end(), image.begin() + 0x78))
