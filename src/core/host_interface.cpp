@@ -25,30 +25,6 @@
 #include <stdlib.h>
 Log_SetChannel(HostInterface);
 
-HostInterface* g_host_interface;
-
-HostInterface::HostInterface()
-{
-  g_host_interface = this;
-}
-
-HostInterface::~HostInterface()
-{
-  // system should be shut down prior to the destructor
-  g_host_interface = nullptr;
-}
-
-bool HostInterface::Initialize()
-{
-  return true;
-}
-
-void HostInterface::Shutdown()
-{
-  if (!System::IsShutdown())
-    System::Shutdown();
-}
-
 bool HostInterface::BootSystem(std::shared_ptr<SystemBootParameters> parameters)
 {
   AcquireHostDisplay();
@@ -92,22 +68,6 @@ void HostInterface::DestroySystem()
   ReleaseHostDisplay();
 }
 
-void HostInterface::ReportError(const char* message)
-{
-  Log_ErrorPrint(message);
-}
-
-void HostInterface::ReportMessage(const char* message)
-{
-  Log_InfoPrint(message);
-}
-
-bool HostInterface::ConfirmMessage(const char* message)
-{
-  Log_WarningPrintf("ConfirmMessage(\"%s\") -> Yes", message);
-  return true;
-}
-
 void HostInterface::ReportFormattedError(const char* format, ...)
 {
   std::va_list ap;
@@ -136,15 +96,6 @@ void HostInterface::AddFormattedOSDMessage(float duration, const char* format, .
   va_end(ap);
 
   AddOSDMessage(std::move(message), duration);
-}
-
-std::string HostInterface::GetBIOSDirectory()
-{
-  std::string dir = GetStringSettingValue("BIOS", "SearchDirectory", "");
-  if (!dir.empty())
-    return dir;
-
-  return GetUserDirectoryRelativePath("bios");
 }
 
 std::optional<std::vector<u8>> HostInterface::GetBIOSImage(ConsoleRegion region)
@@ -241,11 +192,6 @@ std::optional<std::vector<u8>> HostInterface::FindBIOSImageInDirectory(ConsoleRe
     fallback_info->description);
 
   return fallback_image;
-}
-
-std::string HostInterface::GetShaderCacheBasePath() const
-{
-  return GetUserDirectoryRelativePath("cache/");
 }
 
 void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
@@ -442,6 +388,15 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
 
   if (g_settings.multitap_mode != old_settings.multitap_mode)
     System::UpdateMultitaps();
+
+  // Used to live in a libretro_host_interface.cpp override that
+  // delegated to the base impl above and then ran these two extras;
+  // folded in directly after the inheritance was removed.
+  if (g_settings.display_aspect_ratio != old_settings.display_aspect_ratio)
+    UpdateGeometry();
+
+  if (g_settings.log_level != old_settings.log_level)
+    UpdateLogging();
 }
 
 std::string HostInterface::GetUserDirectoryRelativePath(const char* format, ...) const
@@ -455,22 +410,6 @@ std::string HostInterface::GetUserDirectoryRelativePath(const char* format, ...)
     return formatted_path;
   return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "%s", m_user_directory.c_str(),
                                            formatted_path.c_str());
-}
-
-std::string HostInterface::GetSharedMemoryCardPath(u32 slot) const
-{
-  if (g_settings.memory_card_directory.empty())
-    return GetUserDirectoryRelativePath("memcards" FS_OSPATH_SEPARATOR_STR "shared_card_%u.mcd", slot + 1);
-  return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "shared_card_%u.mcd",
-                                           g_settings.memory_card_directory.c_str(), slot + 1);
-}
-
-std::string HostInterface::GetGameMemoryCardPath(const char* game_code, u32 slot) const
-{
-  if (g_settings.memory_card_directory.empty())
-    return GetUserDirectoryRelativePath("memcards" FS_OSPATH_SEPARATOR_STR "%s_%u.mcd", game_code, slot + 1);
-  return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "%s_%u.mcd",
-                                           g_settings.memory_card_directory.c_str(), game_code, slot + 1);
 }
 
 bool HostInterface::GetBoolSettingValue(const char* section, const char* key, bool default_value /*= false*/)

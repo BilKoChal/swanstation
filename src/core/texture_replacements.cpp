@@ -4,7 +4,7 @@
 #include "common/platform.h"
 #include "common/string_util.h"
 #include "common/timer.h"
-#include "libretro/libretro_host_interface.h"
+#include "core/host_interface.h"
 #include "host_interface.h"
 #include "settings.h"
 #include "xxhash.h"
@@ -87,7 +87,7 @@ void TextureReplacements::Shutdown()
 std::string TextureReplacements::GetSourceDirectory() const
 {
   // Use the shader cache path as base for the textures folder
-  std::string cache_folder = g_libretro_host_interface.GetShaderCacheBasePath();
+  std::string cache_folder = g_host_interface_storage.GetShaderCacheBasePath();
   return g_host_interface->GetUserDirectoryRelativePath("%s" "textures" FS_OSPATH_SEPARATOR_STR "%s", cache_folder.c_str(), m_game_id.c_str());
 }
 
@@ -103,7 +103,7 @@ std::string TextureReplacements::GetVRAMWriteDumpFilename(u32 width, u32 height,
     return {};
 
   const TextureReplacementHash hash = GetVRAMWriteHash(width, height, pixels);
-  std::string cache_folder = g_libretro_host_interface.GetShaderCacheBasePath();
+  std::string cache_folder = g_host_interface_storage.GetShaderCacheBasePath();
   std::string filename = g_host_interface->GetUserDirectoryRelativePath("%s" "dump" FS_OSPATH_SEPARATOR_STR "textures" FS_OSPATH_SEPARATOR_STR "%s" 
   FS_OSPATH_SEPARATOR_STR "vram-write-%s.png", cache_folder.c_str(), m_game_id.c_str(), hash.ToString().c_str());
 

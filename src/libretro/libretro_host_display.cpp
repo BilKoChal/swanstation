@@ -1,6 +1,6 @@
 #include "libretro_host_display.h"
 #include "common/align.h"
-#include "libretro_host_interface.h"
+#include "core/host_interface.h"
 #include <libretro.h>
 #include <array>
 #include <tuple>
@@ -41,7 +41,7 @@ bool LibretroHostDisplay::CheckPixelFormat(retro_pixel_format new_format)
   if (!g_retro_environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &new_format))
     return false;
 
-  if (!g_libretro_host_interface.UpdateSystemAVInfo(false))
+  if (!g_host_interface_storage.UpdateSystemAVInfo(false))
     return false;
 
   m_current_pixel_format = new_format;

@@ -8,7 +8,7 @@
 #include "gpu_sw_backend.h"
 #include "host_display.h"
 #include "host_interface.h"
-#include "libretro/libretro_host_interface.h"
+#include "core/host_interface.h"
 #include "shader_cache_version.h"
 #include "system.h"
 Log_SetChannel(GPU_HW_D3D11);
@@ -340,7 +340,7 @@ bool LibretroD3D11HostDisplay::Render()
     return true;
   }
 
-  const u32 resolution_scale = g_libretro_host_interface.GetResolutionScale();
+  const u32 resolution_scale = g_host_interface_storage.GetResolutionScale();
   const u32 display_width = static_cast<u32>(m_display_width) * resolution_scale;
   const u32 display_height = static_cast<u32>(m_display_height) * resolution_scale;
   // Lightgun state was cached at controller-update time; do NOT call

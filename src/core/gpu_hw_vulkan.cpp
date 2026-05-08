@@ -11,7 +11,7 @@
 #include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "host_interface.h"
-#include "../libretro/libretro_host_interface.h"
+#include "core/host_interface.h"
 #include "system.h"
 #include "vulkan_loader.h"
 Log_SetChannel(GPU_HW_Vulkan);
@@ -186,7 +186,7 @@ static bool RetroCreateVulkanDevice(struct retro_vulkan_context* context, VkInst
     Vulkan::Context::GPUList gpus = Vulkan::Context::EnumerateGPUs(instance);
     if (gpus.empty())
     {
-      g_libretro_host_interface.ReportError("No GPU provided and none available, cannot create device");
+      g_host_interface_storage.ReportError("No GPU provided and none available, cannot create device");
       Vulkan::ResetVulkanLibraryFunctionPointers();
       return false;
     }
@@ -506,7 +506,7 @@ bool LibretroVulkanHostDisplay::Render()
     return true;
   }
 
-  const u32 resolution_scale = g_libretro_host_interface.GetResolutionScale();
+  const u32 resolution_scale = g_host_interface_storage.GetResolutionScale();
   const u32 display_width    = static_cast<u32>(m_display_width) * resolution_scale;
   const u32 display_height   = static_cast<u32>(m_display_height) * resolution_scale;
   // Lightgun state was cached at controller-update time; do NOT call

@@ -6,7 +6,7 @@
 #include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "shader_cache_version.h"
-#include "../libretro/libretro_host_interface.h"
+#include "core/host_interface.h"
 #include <libretro.h>
 #include "system.h"
 #include "texture_replacements.h"
@@ -497,7 +497,7 @@ bool LibretroOpenGLHostDisplay::Render()
 
   const GLuint fbo = static_cast<GLuint>(
     static_cast<retro_hw_render_callback*>(m_window_info.display_connection)->get_current_framebuffer());
-  const u32 resolution_scale = g_libretro_host_interface.GetResolutionScale();
+  const u32 resolution_scale = g_host_interface_storage.GetResolutionScale();
   const u32 display_width = static_cast<u32>(m_display_width) * resolution_scale;
   const u32 display_height = static_cast<u32>(m_display_height) * resolution_scale;
   // Lightgun state was cached at controller-update time; do NOT call

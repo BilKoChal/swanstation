@@ -1,6 +1,6 @@
 #include "libretro_settings_interface.h"
 #include "common/string_util.h"
-#include "libretro_host_interface.h"
+#include "core/host_interface.h"
 #include <type_traits>
 
 template<typename T, typename DefaultValueType>

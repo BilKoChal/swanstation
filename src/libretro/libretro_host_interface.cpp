@@ -1,4 +1,4 @@
-#include "libretro_host_interface.h"
+#include "core/host_interface.h"
 #include "common/byte_stream.h"
 #include "common/file_system.h"
 #include "common/log.h"
@@ -33,7 +33,7 @@
 #include <file/file_path.h>
 #include <streams/file_stream.h>
 
-Log_SetChannel(LibretroHostInterface);
+Log_SetChannel(HostInterface);
 
 #ifdef WIN32
 #include "core/gpu_hw_d3d11.h"
@@ -46,12 +46,12 @@ RETRO_API unsigned retro_api_version(void)
 
 RETRO_API void retro_init(void)
 {
-  g_libretro_host_interface.Initialize();
+  g_host_interface_storage.Initialize();
 }
 
 RETRO_API void retro_deinit(void)
 {
-  g_libretro_host_interface.Shutdown();
+  g_host_interface_storage.Shutdown();
 }
 
 RETRO_API void retro_get_system_info(struct retro_system_info* info)
@@ -77,53 +77,53 @@ RETRO_API void retro_get_system_info(struct retro_system_info* info)
 
 RETRO_API void retro_get_system_av_info(struct retro_system_av_info* info)
 {
-  g_libretro_host_interface.retro_get_system_av_info(info);
+  g_host_interface_storage.retro_get_system_av_info(info);
 }
 
 RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device)
 {
-  g_libretro_host_interface.retro_set_controller_port_device(port, device);
-  g_libretro_host_interface.UpdateCoreOptionsDisplay(true);
+  g_host_interface_storage.retro_set_controller_port_device(port, device);
+  g_host_interface_storage.UpdateCoreOptionsDisplay(true);
 }
 
 RETRO_API void retro_reset(void)
 {
-  g_libretro_host_interface.ResetSystem();
+  g_host_interface_storage.ResetSystem();
 }
 
 RETRO_API void retro_run(void)
 {
-  g_libretro_host_interface.retro_run_frame();
+  g_host_interface_storage.retro_run_frame();
 }
 
 RETRO_API size_t retro_serialize_size(void)
 {
-  return g_libretro_host_interface.retro_serialize_size();
+  return g_host_interface_storage.retro_serialize_size();
 }
 
 RETRO_API bool retro_serialize(void* data, size_t size)
 {
-  return g_libretro_host_interface.retro_serialize(data, size);
+  return g_host_interface_storage.retro_serialize(data, size);
 }
 
 RETRO_API bool retro_unserialize(const void* data, size_t size)
 {
-  return g_libretro_host_interface.retro_unserialize(data, size);
+  return g_host_interface_storage.retro_unserialize(data, size);
 }
 
 RETRO_API void retro_cheat_reset(void)
 {
-  g_libretro_host_interface.retro_cheat_reset();
+  g_host_interface_storage.retro_cheat_reset();
 }
 
 RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char* code)
 {
-  g_libretro_host_interface.retro_cheat_set(index, enabled, code);
+  g_host_interface_storage.retro_cheat_set(index, enabled, code);
 }
 
 RETRO_API bool retro_load_game(const struct retro_game_info* game)
 {
-  return g_libretro_host_interface.retro_load_game(game);
+  return g_host_interface_storage.retro_load_game(game);
 }
 
 RETRO_API bool retro_load_game_special(unsigned game_type, const struct retro_game_info* info, size_t num_info)
@@ -133,29 +133,29 @@ RETRO_API bool retro_load_game_special(unsigned game_type, const struct retro_ga
 
 RETRO_API void retro_unload_game(void)
 {
-  g_libretro_host_interface.DestroySystem();
+  g_host_interface_storage.DestroySystem();
 }
 
 RETRO_API unsigned retro_get_region(void)
 {
-  return g_libretro_host_interface.retro_get_region();
+  return g_host_interface_storage.retro_get_region();
 }
 
 RETRO_API void* retro_get_memory_data(unsigned id)
 {
-  return g_libretro_host_interface.retro_get_memory_data(id);
+  return g_host_interface_storage.retro_get_memory_data(id);
 }
 
 RETRO_API size_t retro_get_memory_size(unsigned id)
 {
-  return g_libretro_host_interface.retro_get_memory_size(id);
+  return g_host_interface_storage.retro_get_memory_size(id);
 }
 
 RETRO_API void retro_set_environment(retro_environment_t f)
 {
   struct retro_vfs_interface_info vfs_iface_info;
   g_retro_environment_callback = f;
-  g_libretro_host_interface.retro_set_environment();
+  g_host_interface_storage.retro_set_environment();
 
   vfs_iface_info.required_interface_version = 1;
   vfs_iface_info.iface                      = NULL;
@@ -189,8 +189,9 @@ RETRO_API void retro_set_input_state(retro_input_state_t f)
   g_retro_input_state_callback = f;
 }
 
-LibretroHostInterface g_libretro_host_interface;
-#define P_THIS (&g_libretro_host_interface)
+HostInterface g_host_interface_storage;
+HostInterface* g_host_interface;
+#define P_THIS (&g_host_interface_storage)
 
 #define RETRO_DEVICE_PS_CONTROLLER RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
 #define RETRO_DEVICE_PS_DUALSHOCK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0)
@@ -230,9 +231,12 @@ static void LibretroLogCallback(void* pUserParam, const char* channelName, const
                               (level <= LogLevel::Perf) ? functionName : channelName, message);
 }
 
-LibretroHostInterface::LibretroHostInterface() = default;
+HostInterface::HostInterface()
+{
+  g_host_interface = this;
+}
 
-LibretroHostInterface::~LibretroHostInterface()
+HostInterface::~HostInterface()
 {
   if (System::IsValid())
   {
@@ -245,11 +249,13 @@ LibretroHostInterface::~LibretroHostInterface()
     m_hw_render_display->DestroyRenderDevice();
     m_hw_render_display.reset();
   }
+
+  g_host_interface = nullptr;
 }
 
 #include "libretro_core_options.h"
 
-void LibretroHostInterface::retro_set_environment()
+void HostInterface::retro_set_environment()
 {
   libretro_supports_option_categories = false;
   libretro_set_core_options(g_retro_environment_callback, &libretro_supports_option_categories);
@@ -303,7 +309,7 @@ void LibretroHostInterface::retro_set_environment()
   InitLogging();
 }
 
-void LibretroHostInterface::InitInterfaces()
+void HostInterface::InitInterfaces()
 {
   InitRumbleInterface();
   InitDiskControlInterface();
@@ -315,7 +321,7 @@ void LibretroHostInterface::InitInterfaces()
   m_supports_input_bitmasks = g_retro_environment_callback(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, &dummy);
 }
 
-void LibretroHostInterface::InitLogging()
+void HostInterface::InitLogging()
 {
   if (s_libretro_log_callback_registered)
     return;
@@ -330,11 +336,8 @@ void LibretroHostInterface::InitLogging()
   }
 }
 
-bool LibretroHostInterface::Initialize()
+bool HostInterface::Initialize()
 {
-  if (!HostInterface::Initialize())
-    return false;
-
   /* Reset disk control info struct */
   P_THIS->m_disk_control_info.has_sub_images      = false;
   P_THIS->m_disk_control_info.initial_image_index = 0;
@@ -352,10 +355,14 @@ bool LibretroHostInterface::Initialize()
   return true;
 }
 
-void LibretroHostInterface::Shutdown()
+void HostInterface::Shutdown()
 {
   libretro_supports_option_categories = false;
-  HostInterface::Shutdown();
+
+  // Used to delegate to a base-class HostInterface::Shutdown that did
+  // exactly this; folded in here after the inheritance was removed.
+  if (!System::IsShutdown())
+    System::Shutdown();
 
   /* Reset disk control info struct */
   P_THIS->m_disk_control_info.has_sub_images      = false;
@@ -367,25 +374,25 @@ void LibretroHostInterface::Shutdown()
   P_THIS->m_disk_control_info.image_labels.clear();
 }
 
-void LibretroHostInterface::ReportError(const char* message)
+void HostInterface::ReportError(const char* message)
 {
   AddFormattedOSDMessage(10.0f, "ERROR: %s", message);
   Log_ErrorPrint(message);
 }
 
-void LibretroHostInterface::ReportMessage(const char* message)
+void HostInterface::ReportMessage(const char* message)
 {
   AddOSDMessage(message, 5.0f);
   Log_InfoPrint(message);
 }
 
-bool LibretroHostInterface::ConfirmMessage(const char* message)
+bool HostInterface::ConfirmMessage(const char* message)
 {
   Log_InfoPrintf("Confirm: %s", message);
   return false;
 }
 
-void LibretroHostInterface::GetGameInfo(const char* path, CDImage* image, std::string* code, std::string* title)
+void HostInterface::GetGameInfo(const char* path, CDImage* image, std::string* code, std::string* title)
 {
   // Just use the filename for now... we don't have the game list. Unless we can pull this from the frontend somehow?
   *title = FileSystem::GetFileTitleFromPath(path);
@@ -405,19 +412,19 @@ static const char* GetSaveDirectory()
   return save_directory;
 }
 
-std::string LibretroHostInterface::GetSharedMemoryCardPath(u32 slot) const
+std::string HostInterface::GetSharedMemoryCardPath(u32 slot) const
 {
   return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "duckstation_shared_card_%d.mcd",
                                          GetSaveDirectory(), slot + 1);
 }
 
-std::string LibretroHostInterface::GetGameMemoryCardPath(const char* game_code, u32 slot) const
+std::string HostInterface::GetGameMemoryCardPath(const char* game_code, u32 slot) const
 {
   return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "%s_%d.mcd", GetSaveDirectory(), game_code,
                                          slot + 1);
 }
 
-std::string LibretroHostInterface::GetShaderCacheBasePath() const
+std::string HostInterface::GetShaderCacheBasePath() const
 {
   // Use the system directory, and failing that, the downloads directory.
   const char* cache_directory_ptr = nullptr;
@@ -446,7 +453,7 @@ std::string LibretroHostInterface::GetShaderCacheBasePath() const
   return shader_cache_path;
 }
 
-std::string LibretroHostInterface::GetStringSettingValue(const char* section, const char* key,
+std::string HostInterface::GetStringSettingValue(const char* section, const char* key,
                                                          const char* default_value /*= ""*/)
 {
   TinyString name;
@@ -457,11 +464,11 @@ std::string LibretroHostInterface::GetStringSettingValue(const char* section, co
   return default_value;
 }
 
-void LibretroHostInterface::DisplayLoadingScreen(const char* message, int progress_min /*= -1*/,
+void HostInterface::DisplayLoadingScreen(const char* message, int progress_min /*= -1*/,
 		                                 int progress_max /*= -1*/, int progress_value /*= -1*/) {}
 
 
-void LibretroHostInterface::AddOSDMessage(std::string message, float duration /*= 2.0f*/)
+void HostInterface::AddOSDMessage(std::string message, float duration /*= 2.0f*/)
 {
   if (!g_settings.display_show_osd_messages)
     return;
@@ -472,7 +479,7 @@ void LibretroHostInterface::AddOSDMessage(std::string message, float duration /*
   g_retro_environment_callback(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 }
 
-void LibretroHostInterface::retro_get_system_av_info(struct retro_system_av_info* info)
+void HostInterface::retro_get_system_av_info(struct retro_system_av_info* info)
 {
   const bool use_resolution_scale = (g_settings.gpu_renderer != GPURenderer::Software);
   GetSystemAVInfo(info, use_resolution_scale);
@@ -480,7 +487,7 @@ void LibretroHostInterface::retro_get_system_av_info(struct retro_system_av_info
   m_last_throttle_frequency  = static_cast<float>(info->timing.fps);
 }
 
-void LibretroHostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale)
+void HostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale)
 {
   const u32 resolution_scale = use_resolution_scale ? GetResolutionScale() : 1u;
 
@@ -496,7 +503,7 @@ void LibretroHostInterface::GetSystemAVInfo(struct retro_system_av_info* info, b
   info->timing.sample_rate = static_cast<double>(AUDIO_SAMPLE_RATE);
 }
 
-bool LibretroHostInterface::UpdateSystemAVInfo(bool use_resolution_scale)
+bool HostInterface::UpdateSystemAVInfo(bool use_resolution_scale)
 {
   struct retro_system_av_info avi;
   GetSystemAVInfo(&avi, use_resolution_scale);
@@ -509,7 +516,7 @@ bool LibretroHostInterface::UpdateSystemAVInfo(bool use_resolution_scale)
   return true;
 }
 
-void LibretroHostInterface::UpdateGeometry()
+void HostInterface::UpdateGeometry()
 {
   struct retro_system_av_info avi;
   const bool use_resolution_scale = (g_settings.gpu_renderer != GPURenderer::Software);
@@ -521,7 +528,7 @@ void LibretroHostInterface::UpdateGeometry()
   m_last_aspect_ratio = avi.geometry.aspect_ratio;
 }
 
-void LibretroHostInterface::UpdateLogging()
+void HostInterface::UpdateLogging()
 {
   Log::SetFilterLevel(g_settings.log_level);
 
@@ -531,7 +538,7 @@ void LibretroHostInterface::UpdateLogging()
     Log::SetConsoleOutputParams(true, nullptr, g_settings.log_level);
 }
 
-bool LibretroHostInterface::UpdateGameSettings()
+bool HostInterface::UpdateGameSettings()
 {
   std::unique_ptr<GameSettings::Entry> new_game_settings;
 
@@ -549,7 +556,7 @@ bool LibretroHostInterface::UpdateGameSettings()
   return true;
 }
 
-void LibretroHostInterface::ApplyGameSettings()
+void HostInterface::ApplyGameSettings()
 {
   if (!g_settings.apply_game_settings || !m_game_settings)
     return;
@@ -557,7 +564,7 @@ void LibretroHostInterface::ApplyGameSettings()
   m_game_settings->ApplySettings(System::GetState() == System::State::Starting);
 }
 
-bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
+bool HostInterface::retro_load_game(const struct retro_game_info* game)
 {
   std::shared_ptr<SystemBootParameters> bp = std::make_shared<SystemBootParameters>();
   bp->filename = game->path;
@@ -706,7 +713,7 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
   return true;
 }
 
-void LibretroHostInterface::retro_set_controller_port_device(u32 port, u32 device)
+void HostInterface::retro_set_controller_port_device(u32 port, u32 device)
 {
   if (retropad_device[port] != device)
   {
@@ -715,7 +722,7 @@ void LibretroHostInterface::retro_set_controller_port_device(u32 port, u32 devic
   }
 }
 
-void LibretroHostInterface::retro_run_frame()
+void HostInterface::retro_run_frame()
 {
   // Refresh the per-frame A/V skip flags. If the frontend is doing
   // single-instance runahead (or any equivalent skip-frame mechanism) it
@@ -775,23 +782,23 @@ void LibretroHostInterface::retro_run_frame()
     m_audio_stream->UploadToFrontend();
 }
 
-unsigned LibretroHostInterface::retro_get_region()
+unsigned HostInterface::retro_get_region()
 {
   return System::IsPALRegion() ? RETRO_REGION_PAL : RETRO_REGION_NTSC;
 }
 
-size_t LibretroHostInterface::retro_serialize_size()
+size_t HostInterface::retro_serialize_size()
 {
   return System::MAX_SAVE_STATE_SIZE;
 }
 
-bool LibretroHostInterface::retro_serialize(void* data, size_t size)
+bool HostInterface::retro_serialize(void* data, size_t size)
 {
   std::unique_ptr<ByteStream> stream = ByteStream_CreateMemoryStream(data, static_cast<u32>(size));
   return System::SaveState(stream.get());
 }
 
-bool LibretroHostInterface::retro_unserialize(const void* data, size_t size)
+bool HostInterface::retro_unserialize(const void* data, size_t size)
 {
   // Ask the frontend whether this load is for runahead / rewind / netplay
   // rollback or a normal disk load. The runahead flavours guarantee the
@@ -813,7 +820,7 @@ bool LibretroHostInterface::retro_unserialize(const void* data, size_t size)
   return System::LoadState(stream.get(), is_memory_state);
 }
 
-void* LibretroHostInterface::retro_get_memory_data(unsigned id)
+void* HostInterface::retro_get_memory_data(unsigned id)
 {
   switch (id)
   {
@@ -838,7 +845,7 @@ void* LibretroHostInterface::retro_get_memory_data(unsigned id)
   return nullptr;
 }
 
-size_t LibretroHostInterface::retro_get_memory_size(unsigned id)
+size_t HostInterface::retro_get_memory_size(unsigned id)
 {
   switch (id)
   {
@@ -858,12 +865,12 @@ size_t LibretroHostInterface::retro_get_memory_size(unsigned id)
   return 0;
 }
 
-void LibretroHostInterface::retro_cheat_reset()
+void HostInterface::retro_cheat_reset()
 {
   System::SetCheatList(nullptr);
 }
 
-void LibretroHostInterface::retro_cheat_set(unsigned index, bool enabled, const char* code)
+void HostInterface::retro_cheat_set(unsigned index, bool enabled, const char* code)
 {
   CheatList* cl = System::GetCheatList();
   if (!cl)
@@ -881,12 +888,12 @@ void LibretroHostInterface::retro_cheat_set(unsigned index, bool enabled, const 
   cl->SetCode(index, std::move(cc));
 }
 
-void LibretroHostInterface::AcquireHostDisplay()
+void HostInterface::AcquireHostDisplay()
 {
   WindowInfo wi;
   // start in software mode, switch to hardware later
   struct retro_system_av_info avi;
-  g_libretro_host_interface.GetSystemAVInfo(&avi, false);
+  g_host_interface_storage.GetSystemAVInfo(&avi, false);
 
   wi.surface_width  = avi.geometry.base_width;
   wi.surface_height = avi.geometry.base_height;
@@ -896,7 +903,7 @@ void LibretroHostInterface::AcquireHostDisplay()
   m_display->InitializeRenderDevice({}, false, false);
 }
 
-void LibretroHostInterface::ReleaseHostDisplay()
+void HostInterface::ReleaseHostDisplay()
 {
   if (m_hw_render_display)
   {
@@ -908,11 +915,11 @@ void LibretroHostInterface::ReleaseHostDisplay()
   m_display.reset();
 }
 
-void LibretroHostInterface::OnControllerTypeChanged(u32 slot) {}
+void HostInterface::OnControllerTypeChanged(u32 slot) {}
 
-void LibretroHostInterface::SetMouseMode(bool relative, bool hide_cursor) {}
+void HostInterface::SetMouseMode(bool relative, bool hide_cursor) {}
 
-bool LibretroHostInterface::UpdateCoreOptionsDisplay(bool controller)
+bool HostInterface::UpdateCoreOptionsDisplay(bool controller)
 {
   LibretroSettingsInterface si;
 
@@ -1116,13 +1123,13 @@ bool LibretroHostInterface::UpdateCoreOptionsDisplay(bool controller)
 
   return true;
 }
-bool LibretroHostInterface::HasCoreVariablesChanged()
+bool HostInterface::HasCoreVariablesChanged()
 {
   bool changed = false;
   return (g_retro_environment_callback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &changed) && changed);
 }
 
-std::string LibretroHostInterface::GetBIOSDirectory()
+std::string HostInterface::GetBIOSDirectory()
 {
   // Assume BIOS files are located in system directory.
   const char* system_directory = nullptr;
@@ -1131,7 +1138,7 @@ std::string LibretroHostInterface::GetBIOSDirectory()
   return system_directory;
 }
 
-void LibretroHostInterface::LoadSettings()
+void HostInterface::LoadSettings()
 {
   LibretroSettingsInterface si;
   g_settings.Load(si);
@@ -1192,7 +1199,7 @@ void LibretroHostInterface::LoadSettings()
   }
 }
 
-void LibretroHostInterface::UpdateSettings()
+void HostInterface::UpdateSettings()
 {
   Settings old_settings(std::move(g_settings));
   LoadSettings();
@@ -1256,30 +1263,19 @@ void LibretroHostInterface::UpdateSettings()
   CheckForSettingsChanges(old_settings);
 }
 
-void LibretroHostInterface::CheckForSettingsChanges(const Settings& old_settings)
-{
-  HostInterface::CheckForSettingsChanges(old_settings);
-
-  if (g_settings.display_aspect_ratio != old_settings.display_aspect_ratio)
-    UpdateGeometry();
-
-  if (g_settings.log_level != old_settings.log_level)
-    UpdateLogging();
-}
-
-void LibretroHostInterface::OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+void HostInterface::OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
                                                  const std::string& game_title)
 {
   if (UpdateGameSettings())
     UpdateSettings();
 }
 
-void LibretroHostInterface::InitRumbleInterface()
+void HostInterface::InitRumbleInterface()
 {
   m_rumble_interface_valid = g_retro_environment_callback(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &m_rumble_interface);
 }
 
-void LibretroHostInterface::UpdateControllers()
+void HostInterface::UpdateControllers()
 {
   g_retro_input_poll_callback();
 
@@ -1324,7 +1320,7 @@ void LibretroHostInterface::UpdateControllers()
   }
 }
 
-void LibretroHostInterface::UpdateControllersDigitalController(u32 index)
+void HostInterface::UpdateControllersDigitalController(u32 index)
 {
   DigitalController* controller = static_cast<DigitalController*>(System::GetController(index));
 
@@ -1360,7 +1356,7 @@ void LibretroHostInterface::UpdateControllersDigitalController(u32 index)
   }
 }
 
-void LibretroHostInterface::UpdateControllersAnalogController(u32 index)
+void HostInterface::UpdateControllersAnalogController(u32 index)
 {
   AnalogController* controller = static_cast<AnalogController*>(System::GetController(index));
 
@@ -1497,7 +1493,7 @@ void LibretroHostInterface::UpdateControllersAnalogController(u32 index)
   }
 }
 
-void LibretroHostInterface::UpdateControllersAnalogJoystick(u32 index)
+void HostInterface::UpdateControllersAnalogJoystick(u32 index)
 {
   AnalogJoystick* controller = static_cast<AnalogJoystick*>(System::GetController(index));
 
@@ -1547,7 +1543,7 @@ void LibretroHostInterface::UpdateControllersAnalogJoystick(u32 index)
   }
 }
 
-void LibretroHostInterface::UpdateControllersNeGcon(u32 index)
+void HostInterface::UpdateControllersNeGcon(u32 index)
 {
   NeGcon* controller = static_cast<NeGcon*>(System::GetController(index));
 
@@ -1599,7 +1595,7 @@ void LibretroHostInterface::UpdateControllersNeGcon(u32 index)
 
 }
 
-void LibretroHostInterface::UpdateControllersNeGconRumble(u32 index)
+void HostInterface::UpdateControllersNeGconRumble(u32 index)
 {
   NeGconRumble* controller = static_cast<NeGconRumble*>(System::GetController(index));
 
@@ -1684,7 +1680,7 @@ void LibretroHostInterface::UpdateControllersNeGconRumble(u32 index)
 
 }
 
-void LibretroHostInterface::UpdateControllersNamcoGunCon(u32 index)
+void HostInterface::UpdateControllersNamcoGunCon(u32 index)
 {
   NamcoGunCon* controller = static_cast<NamcoGunCon*>(System::GetController(index));
 
@@ -1726,7 +1722,7 @@ void LibretroHostInterface::UpdateControllersNamcoGunCon(u32 index)
 
 }
 
-void LibretroHostInterface::UpdateControllersPlayStationMouse(u32 index)
+void HostInterface::UpdateControllersPlayStationMouse(u32 index)
 {
   PlayStationMouse* controller = static_cast<PlayStationMouse*>(System::GetController(index));
 
@@ -1756,7 +1752,7 @@ void LibretroHostInterface::UpdateControllersPlayStationMouse(u32 index)
 
 }
 
-bool LibretroHostInterface::UpdateCoreOptionsDisplayCallback()
+bool HostInterface::UpdateCoreOptionsDisplayCallback()
 {
   return P_THIS->UpdateCoreOptionsDisplay(false);
 }
@@ -1805,7 +1801,7 @@ static std::optional<GPURenderer> RenderAPIToRenderer(HostDisplay::RenderAPI api
   }
 }
 
-bool LibretroHostInterface::RequestHardwareRendererContext()
+bool HostInterface::RequestHardwareRendererContext()
 {
   retro_variable renderer_variable{"swanstation_GPU_Renderer",
                                    Settings::GetRendererName(Settings::DEFAULT_GPU_RENDERER)};
@@ -1866,22 +1862,22 @@ bool LibretroHostInterface::RequestHardwareRendererContext()
   return m_hw_render_callback_valid;
 }
 
-void LibretroHostInterface::HardwareRendererContextReset()
+void HostInterface::HardwareRendererContextReset()
 {
   Log_InfoPrintf("Hardware context reset, type = %u",
-                 static_cast<unsigned>(g_libretro_host_interface.m_hw_render_callback.context_type));
+                 static_cast<unsigned>(g_host_interface_storage.m_hw_render_callback.context_type));
 
-  g_libretro_host_interface.m_hw_render_callback_valid = true;
-  g_libretro_host_interface.SwitchToHardwareRenderer();
+  g_host_interface_storage.m_hw_render_callback_valid = true;
+  g_host_interface_storage.SwitchToHardwareRenderer();
 }
 
-void LibretroHostInterface::SwitchToHardwareRenderer()
+void HostInterface::SwitchToHardwareRenderer()
 {
   struct retro_system_av_info avi;
-  g_libretro_host_interface.GetSystemAVInfo(&avi, true);
+  g_host_interface_storage.GetSystemAVInfo(&avi, true);
 
   WindowInfo wi;
-  wi.display_connection = &g_libretro_host_interface.m_hw_render_callback;
+  wi.display_connection = &g_host_interface_storage.m_hw_render_callback;
   wi.surface_width      = avi.geometry.base_width;
   wi.surface_height     = avi.geometry.base_height;
 
@@ -1937,30 +1933,30 @@ void LibretroHostInterface::SwitchToHardwareRenderer()
     }
   }
 
-  std::swap(display, g_libretro_host_interface.m_display);
+  std::swap(display, g_host_interface_storage.m_display);
   System::RecreateGPU(renderer.value());
   display->DestroyRenderDevice();
   m_using_hardware_renderer = true;
 }
 
-void LibretroHostInterface::HardwareRendererContextDestroy()
+void HostInterface::HardwareRendererContextDestroy()
 {
   Log_InfoPrintf("Hardware context destroyed");
 
   // switch back to software
-  if (g_libretro_host_interface.m_using_hardware_renderer)
-    g_libretro_host_interface.SwitchToSoftwareRenderer();
+  if (g_host_interface_storage.m_using_hardware_renderer)
+    g_host_interface_storage.SwitchToSoftwareRenderer();
 
-  if (g_libretro_host_interface.m_hw_render_display)
+  if (g_host_interface_storage.m_hw_render_display)
   {
-    g_libretro_host_interface.m_hw_render_display->DestroyRenderDevice();
-    g_libretro_host_interface.m_hw_render_display.reset();
+    g_host_interface_storage.m_hw_render_display->DestroyRenderDevice();
+    g_host_interface_storage.m_hw_render_display.reset();
   }
 
-  g_libretro_host_interface.m_hw_render_callback_valid = false;
+  g_host_interface_storage.m_hw_render_callback_valid = false;
 }
 
-void LibretroHostInterface::SwitchToSoftwareRenderer()
+void HostInterface::SwitchToSoftwareRenderer()
 {
   Log_InfoPrintf("Switching to software renderer");
 
@@ -1974,7 +1970,7 @@ void LibretroHostInterface::SwitchToSoftwareRenderer()
   }
 
   struct retro_system_av_info avi;
-  g_libretro_host_interface.GetSystemAVInfo(&avi, false);
+  g_host_interface_storage.GetSystemAVInfo(&avi, false);
 
   WindowInfo wi;
   wi.surface_width = avi.geometry.base_width;
@@ -1992,7 +1988,7 @@ void LibretroHostInterface::SwitchToSoftwareRenderer()
   }
 }
 
-bool LibretroHostInterface::DiskControlSetEjectState(bool ejected)
+bool HostInterface::DiskControlSetEjectState(bool ejected)
 {
   if (System::IsShutdown())
     return false;
@@ -2024,7 +2020,7 @@ bool LibretroHostInterface::DiskControlSetEjectState(bool ejected)
   return true;
 }
 
-bool LibretroHostInterface::DiskControlGetEjectState()
+bool HostInterface::DiskControlGetEjectState()
 {
   if (System::IsShutdown())
     return false;
@@ -2032,12 +2028,12 @@ bool LibretroHostInterface::DiskControlGetEjectState()
   return !System::HasMedia();
 }
 
-unsigned LibretroHostInterface::DiskControlGetImageIndex()
+unsigned HostInterface::DiskControlGetImageIndex()
 {
   return (unsigned)P_THIS->m_disk_control_info.image_index;
 }
 
-bool LibretroHostInterface::DiskControlSetImageIndex(unsigned index)
+bool HostInterface::DiskControlSetImageIndex(unsigned index)
 {
   if (System::IsShutdown() ||
       System::HasMedia() ||
@@ -2048,12 +2044,12 @@ bool LibretroHostInterface::DiskControlSetImageIndex(unsigned index)
   return true;
 }
 
-unsigned LibretroHostInterface::DiskControlGetNumImages()
+unsigned HostInterface::DiskControlGetNumImages()
 {
   return (unsigned)P_THIS->m_disk_control_info.image_count;
 }
 
-bool LibretroHostInterface::DiskControlReplaceImageIndex(unsigned index, const retro_game_info* info)
+bool HostInterface::DiskControlReplaceImageIndex(unsigned index, const retro_game_info* info)
 {
 #ifdef _MSC_VER
 #define CASE_COMPARE _stricmp
@@ -2106,7 +2102,7 @@ bool LibretroHostInterface::DiskControlReplaceImageIndex(unsigned index, const r
   return true;
 }
 
-bool LibretroHostInterface::DiskControlAddImageIndex()
+bool HostInterface::DiskControlAddImageIndex()
 {
   if (System::IsShutdown())
     return false;
@@ -2121,7 +2117,7 @@ bool LibretroHostInterface::DiskControlAddImageIndex()
   return true;
 }
 
-bool LibretroHostInterface::DiskControlSetInitialImage(unsigned index, const char* path)
+bool HostInterface::DiskControlSetInitialImage(unsigned index, const char* path)
 {
   /* Note: 'path' is ignored, since we cannot
    * determine the actual set path until after
@@ -2132,7 +2128,7 @@ bool LibretroHostInterface::DiskControlSetInitialImage(unsigned index, const cha
   return true;
 }
 
-bool LibretroHostInterface::DiskControlGetImagePath(unsigned index, char* path, size_t len)
+bool HostInterface::DiskControlGetImagePath(unsigned index, char* path, size_t len)
 {
   if ((index >= P_THIS->m_disk_control_info.image_count) ||
       (index >= P_THIS->m_disk_control_info.image_paths.size()) ||
@@ -2143,7 +2139,7 @@ bool LibretroHostInterface::DiskControlGetImagePath(unsigned index, char* path, 
   return true;
 }
 
-bool LibretroHostInterface::DiskControlGetImageLabel(unsigned index, char* label, size_t len)
+bool HostInterface::DiskControlGetImageLabel(unsigned index, char* label, size_t len)
 {
   if ((index >= P_THIS->m_disk_control_info.image_count) ||
       (index >= P_THIS->m_disk_control_info.image_labels.size()) ||
@@ -2154,26 +2150,26 @@ bool LibretroHostInterface::DiskControlGetImageLabel(unsigned index, char* label
   return true;
 }
 
-void LibretroHostInterface::InitDiskControlInterface()
+void HostInterface::InitDiskControlInterface()
 {
   unsigned version = 0;
   if (g_retro_environment_callback(RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION, &version) && version >= 1)
   {
     retro_disk_control_ext_callback ext_cb = {
-      &LibretroHostInterface::DiskControlSetEjectState, &LibretroHostInterface::DiskControlGetEjectState,
-      &LibretroHostInterface::DiskControlGetImageIndex, &LibretroHostInterface::DiskControlSetImageIndex,
-      &LibretroHostInterface::DiskControlGetNumImages,  &LibretroHostInterface::DiskControlReplaceImageIndex,
-      &LibretroHostInterface::DiskControlAddImageIndex, &LibretroHostInterface::DiskControlSetInitialImage,
-      &LibretroHostInterface::DiskControlGetImagePath,  &LibretroHostInterface::DiskControlGetImageLabel};
+      &HostInterface::DiskControlSetEjectState, &HostInterface::DiskControlGetEjectState,
+      &HostInterface::DiskControlGetImageIndex, &HostInterface::DiskControlSetImageIndex,
+      &HostInterface::DiskControlGetNumImages,  &HostInterface::DiskControlReplaceImageIndex,
+      &HostInterface::DiskControlAddImageIndex, &HostInterface::DiskControlSetInitialImage,
+      &HostInterface::DiskControlGetImagePath,  &HostInterface::DiskControlGetImageLabel};
     if (g_retro_environment_callback(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, &ext_cb))
       return;
   }
 
   retro_disk_control_callback cb = {
-    &LibretroHostInterface::DiskControlSetEjectState, &LibretroHostInterface::DiskControlGetEjectState,
-    &LibretroHostInterface::DiskControlGetImageIndex, &LibretroHostInterface::DiskControlSetImageIndex,
-    &LibretroHostInterface::DiskControlGetNumImages,  &LibretroHostInterface::DiskControlReplaceImageIndex,
-    &LibretroHostInterface::DiskControlAddImageIndex};
+    &HostInterface::DiskControlSetEjectState, &HostInterface::DiskControlGetEjectState,
+    &HostInterface::DiskControlGetImageIndex, &HostInterface::DiskControlSetImageIndex,
+    &HostInterface::DiskControlGetNumImages,  &HostInterface::DiskControlReplaceImageIndex,
+    &HostInterface::DiskControlAddImageIndex};
   if (!g_retro_environment_callback(RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, &cb))
     Log_WarningPrint("Failed to set disk control interface");
 }

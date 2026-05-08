@@ -1,5 +1,5 @@
 #include "libretro_audio_stream.h"
-#include "libretro_host_interface.h"
+#include "core/host_interface.h"
 #include <algorithm>
 
 #ifndef AUDIO_CHANNELS
