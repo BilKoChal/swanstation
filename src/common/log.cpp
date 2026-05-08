@@ -230,7 +230,12 @@ static void ConsoleOutputLogCallback(void* pUserParam, const char* channelName, 
   FormatLogMessageAndPrint(channelName, functionName, level, message, true, true, true,
                            [level](const char* message, int message_len) {
                              const int outputFd = (level <= LogLevel::Warning) ? STDERR_FILENO : STDOUT_FILENO;
-                             write(outputFd, message, message_len);
+                             // Deliberately ignore the result: this is the log path, there is
+                             // nowhere meaningful to surface a write() failure to. glibc tags
+                             // write() with __wur which a plain (void) cast does not silence,
+                             // so capture into a discard variable instead.
+                             const ssize_t written = write(outputFd, message, message_len);
+                             (void)written;
                            });
 #endif
 }
