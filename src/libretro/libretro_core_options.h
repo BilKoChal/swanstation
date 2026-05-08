@@ -2031,10 +2031,13 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    },
    "true"},
   {"swanstation_Audio_FastHook",
-   "Use Alternative Audio Hook (Restart)",
+   "Use Per-Frame Audio Batching (Restart)",
    NULL,
-   "Use a faster and more efficient to submit audio samples to the frontend. Mostly safe to enable, but may hang "
-   "for a select few games that rely on the old method to function. Requires the core to be restarted to apply.",
+   "Drains all SPU samples to the frontend once per emulated frame, instead of pushing each chunk as the SPU "
+   "produces it. This is faster and produces more even audio batching, and is the right choice for almost every "
+   "game. A small number of titles (notably Formula 1 / Formula 1 '97) hang at boot if audio is not delivered to "
+   "the frontend mid-frame; the core auto-disables this option for those known titles, but if a game freezes at "
+   "startup with audio enabled, try disabling this manually.",
    NULL,
    "advanced",
    {
