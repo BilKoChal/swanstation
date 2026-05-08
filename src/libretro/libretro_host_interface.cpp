@@ -1680,6 +1680,14 @@ void LibretroHostInterface::UpdateControllersNamcoGunCon(u32 index)
   const s32 pos_x = offscreen ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * m_display->GetWindowWidth())  / 0xFFFF);
   const s32 pos_y = offscreen ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * m_display->GetWindowHeight()) / 0xFFFF);
 
+  // The cached display mouse position is what NamcoGunCon::UpdatePosition
+  // reads during a SIO Transfer to compute the gun's beam-tick / scanline
+  // pair, so the host position is part of the PSX-visible input fingerprint
+  // that runahead has to track. A position change with no button change
+  // would otherwise leave s_runahead_replay_pending false and the replayed
+  // simulation would aim at last frame's pixel.
+  if (pos_x != m_display->GetMousePositionX() || pos_y != m_display->GetMousePositionY())
+    System::SetRunaheadReplayFlag();
   m_display->SetMousePosition(pos_x, pos_y);
   // Cache the normalized 16-bit gun state for the HW renderers. They
   // use it to draw the cursor overlay at their own render-target
@@ -1709,6 +1717,13 @@ void LibretroHostInterface::UpdateControllersPlayStationMouse(u32 index)
   const s32 pos_x = (m_display->GetMousePositionX() + mouse_x);
   const s32 pos_y = (m_display->GetMousePositionY() + mouse_y);
 
+  // PlayStationMouse::UpdatePosition reads the cached display position
+  // during a SIO Transfer to compute the per-frame delta the PSX sees,
+  // so a non-zero raw mouse delta is a PSX-visible input change.
+  // Runahead has to know about it or the replay will see an outdated
+  // mouse motion.
+  if (mouse_x != 0 || mouse_y != 0)
+    System::SetRunaheadReplayFlag();
   m_display->SetMousePosition(pos_x, pos_y);
 
 }

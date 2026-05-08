@@ -76,7 +76,15 @@ void NeGcon::SetAxisState(s32 axis_code, float value)
 
 void NeGcon::SetAxisState(Axis axis, u8 value)
 {
-  m_axis_state[static_cast<u8>(axis)] = value;
+  if (value != m_axis_state[static_cast<u8>(axis)])
+  {
+    // Runahead-replay flag - same rationale as in SetButtonState. The
+    // NeGcon's steering axis is the primary input for the racing games
+    // it ships with, so a missed flag here means runahead replays the
+    // wrong steering for one frame on every twist of the wheel.
+    System::SetRunaheadReplayFlag();
+    m_axis_state[static_cast<u8>(axis)] = value;
+  }
 }
 
 void NeGcon::SetButtonState(s32 button_code, bool pressed)
