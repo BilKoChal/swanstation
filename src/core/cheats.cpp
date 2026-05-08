@@ -16,6 +16,11 @@
 Log_SetChannel(Cheats);
 static std::array<u32, 256> cht_register; // Used for D7 ,51 & 52 cheat types
 
+void CheatList::ResetSharedScratchRegisters()
+{
+  cht_register.fill(0);
+}
+
 using KeyValuePairVector = std::vector<std::pair<std::string, std::string>>;
 
 static bool IsValidScanAddress(PhysicalMemoryAddress address)

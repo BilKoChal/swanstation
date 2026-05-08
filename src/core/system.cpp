@@ -816,6 +816,12 @@ void Shutdown()
   s_running_game_path.clear();
   s_running_game_title.clear();
   s_cheat_list.reset();
+  // Wipe the cheat scratch register file so leftover state from this
+  // session can't leak into the next game's cheats. This complements the
+  // reset in SetCheatList, which catches the path where a frontend
+  // explicitly resets cheats (e.g. libretro's retro_cheat_reset) without
+  // tearing the system down first.
+  CheatList::ResetSharedScratchRegisters();
   s_state = State::Shutdown;
 
   g_host_interface->OnRunningGameChanged(s_running_game_path, nullptr, s_running_game_code, s_running_game_title);
@@ -1779,6 +1785,11 @@ CheatList* GetCheatList()
 
 void SetCheatList(std::unique_ptr<CheatList> cheats)
 {
+  // Reset the shared cheat scratch registers used by D7/51/52 instruction
+  // families - the new cheat list (or null, for retro_cheat_reset) gets
+  // its own clean register state rather than inheriting whatever the
+  // previous list left behind.
+  CheatList::ResetSharedScratchRegisters();
   s_cheat_list = std::move(cheats);
 }
 

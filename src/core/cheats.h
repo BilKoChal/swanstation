@@ -170,6 +170,15 @@ public:
 
   static bool ParseLibretroCheat(CheatCode* cc, const char* line);
 
+  // Reset the global scratch register file used by the D7/0x51/0x52 cheat
+  // instruction families. The registers are TU-local statics that persist
+  // for the lifetime of the process - if the host loads a new game without
+  // restarting the core, register-using cheats from the previous game would
+  // otherwise see leftover values. Call this when the cheat lifecycle
+  // begins fresh (currently from System::Shutdown after the cheat list is
+  // released).
+  static void ResetSharedScratchRegisters();
+
   bool LoadFromPCSXRString(const std::string& str);
   bool LoadFromLibretroString(const std::string& str);
   bool LoadFromEPSXeString(const std::string& str);
