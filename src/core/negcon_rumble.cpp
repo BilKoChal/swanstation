@@ -147,21 +147,17 @@ void NeGconRumble::SetButtonState(Button button, bool pressed)
     return;
   }
 
-  const u16 bit = u16(1) << static_cast<u8>(button);
-
-  if (pressed)
+  // Check the bit we're actually about to flip, not (1 << button) - the NeGcon
+  // m_button_state uses non-contiguous bit positions per the indices table
+  // above, so the previous code's runahead-replay-flag check ran against a
+  // different bit than the one being changed and could fire the flag on
+  // unrelated state or miss real changes.
+  const u16 bit = u16(1) << indices[static_cast<u8>(button)];
+  const u16 new_state = pressed ? (m_button_state & ~bit) : (m_button_state | bit);
+  if (new_state != m_button_state)
   {
-    if (m_button_state & bit)
-      System::SetRunaheadReplayFlag();
-
-    m_button_state &= ~(u16(1) << indices[static_cast<u8>(button)]);
-  }
-  else
-  {
-    if (!(m_button_state & bit))
-      System::SetRunaheadReplayFlag();
-
-    m_button_state |= u16(1) << indices[static_cast<u8>(button)];
+    System::SetRunaheadReplayFlag();
+    m_button_state = new_state;
   }
 }
 

@@ -57,10 +57,15 @@ void NamcoGunCon::SetButtonState(Button button, bool pressed)
   }
 
   static constexpr std::array<u8, static_cast<size_t>(Button::Count)> indices = {{13, 3, 14}};
-  if (pressed)
-    m_button_state &= ~(u16(1) << indices[static_cast<u8>(button)]);
-  else
-    m_button_state |= u16(1) << indices[static_cast<u8>(button)];
+  const u16 bit = u16(1) << indices[static_cast<u8>(button)];
+  const u16 new_state = pressed ? (m_button_state & ~bit) : (m_button_state | bit);
+  if (new_state != m_button_state)
+  {
+    // The runahead simulation needs to re-run any frame where input changed
+    // between the original poll and now; signalling here lets it detect that.
+    System::SetRunaheadReplayFlag();
+    m_button_state = new_state;
+  }
 }
 
 void NamcoGunCon::SetButtonState(s32 button_code, bool pressed)
