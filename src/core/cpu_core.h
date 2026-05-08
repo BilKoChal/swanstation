@@ -77,8 +77,19 @@ struct State
   std::array<u32, ICACHE_LINES> icache_tags = {};
   std::array<u8, ICACHE_SIZE> icache_data = {};
 
-  static constexpr u32 GPRRegisterOffset(u32 index) { return offsetof(State, regs.r) + (sizeof(u32) * index); }
-  static constexpr u32 GTERegisterOffset(u32 index) { return offsetof(State, gte_regs.r32) + (sizeof(u32) * index); }
+  // offsetof on a compound member access (offsetof(State, regs.r)) is a GNU
+  // extension that GCC accepts but Apple Clang rejects in a constexpr context
+  // ("cannot access field of null pointer"). The C++ standard only allows
+  // direct members. Compose from two offsetof calls instead - the result is
+  // identical at runtime, and Clang/GCC both fold the constants.
+  static constexpr u32 GPRRegisterOffset(u32 index)
+  {
+    return offsetof(State, regs) + offsetof(Registers, r) + (sizeof(u32) * index);
+  }
+  static constexpr u32 GTERegisterOffset(u32 index)
+  {
+    return offsetof(State, gte_regs) + offsetof(GTE::Regs, r32) + (sizeof(u32) * index);
+  }
 };
 
 extern State g_state;
