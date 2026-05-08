@@ -800,8 +800,24 @@ bool LibretroHostInterface::retro_serialize(void* data, size_t size)
 
 bool LibretroHostInterface::retro_unserialize(const void* data, size_t size)
 {
+  // Ask the frontend whether this load is for runahead / rewind / netplay
+  // rollback or a normal disk load. The runahead flavours guarantee the
+  // state was produced by the same binary in the same address space, so
+  // we can take the cheap "memory state" path which marks JIT blocks
+  // invalidated rather than throwing the entire CPU code cache away and
+  // recompiling the dispatcher from scratch (System::DoState's
+  // is_memory_state argument). The cache stays warm across the runahead
+  // window, which is what makes per-frame state reload affordable.
+  retro_savestate_context ctx = RETRO_SAVESTATE_CONTEXT_NORMAL;
+  bool is_memory_state = false;
+  if (g_retro_environment_callback(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &ctx))
+  {
+    is_memory_state = (ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE ||
+                       ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY);
+  }
+
   std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<u32>(size));
-  return System::LoadState(stream.get());
+  return System::LoadState(stream.get(), is_memory_state);
 }
 
 void* LibretroHostInterface::retro_get_memory_data(unsigned id)

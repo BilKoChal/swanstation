@@ -76,7 +76,7 @@ static std::unique_ptr<CDImage> OpenCDImage(const char* path, Common::Error* err
 static bool ReadExecutableFromImage(ISOReader& iso, std::string* out_executable_name, std::vector<u8>* out_executable_data);
 static bool ShouldCheckForImagePatches();
 
-static bool DoLoadState(ByteStream* stream, bool force_software_renderer, bool update_display);
+static bool DoLoadState(ByteStream* stream, bool force_software_renderer, bool update_display, bool is_memory_state);
 static bool DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display, bool is_memory_state);
 static void DoRunFrame();
 static bool CreateGPU(GPURenderer renderer);
@@ -596,7 +596,7 @@ bool Boot(const SystemBootParameters& params)
 
   if (params.state_stream)
   {
-    if (!DoLoadState(params.state_stream.get(), params.force_software_renderer, true))
+    if (!DoLoadState(params.state_stream.get(), params.force_software_renderer, true, false))
     {
       Shutdown();
       return false;
@@ -977,15 +977,15 @@ void Reset()
   g_gpu->ResetGraphicsAPIState();
 }
 
-bool LoadState(ByteStream* state)
+bool LoadState(ByteStream* state, bool is_memory_state)
 {
   if (IsShutdown())
     return false;
 
-  return DoLoadState(state, false, false);
+  return DoLoadState(state, false, false, is_memory_state);
 }
 
-bool DoLoadState(ByteStream* state, bool force_software_renderer, bool update_display)
+bool DoLoadState(ByteStream* state, bool force_software_renderer, bool update_display, bool is_memory_state)
 {
   SAVE_STATE_HEADER header;
   if (!state->Read2(&header, sizeof(header)))
@@ -1111,7 +1111,7 @@ bool DoLoadState(ByteStream* state, bool force_software_renderer, bool update_di
     return false;
 
   StateWrapper sw(state, StateWrapper::Mode::Read, header.version);
-  if (!DoState(sw, nullptr, update_display, false))
+  if (!DoState(sw, nullptr, update_display, is_memory_state))
     return false;
 
   if (s_state == State::Starting)
