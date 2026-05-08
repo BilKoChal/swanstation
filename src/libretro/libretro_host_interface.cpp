@@ -1384,20 +1384,30 @@ void HostInterface::UpdateControllersAnalogController(u32 index)
      {AnalogController::Axis::RightX, {RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X}},
      {AnalogController::Axis::RightY, {RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y}}}};
 
+  // Read all 16 RETRO_DEVICE_ID_JOYPAD_* buttons into a single u16
+  // bitmask so we can drive both SetButtonState() and the analog-mode
+  // combo-press detection below from one source. The bitmask path
+  // costs one callback into the libretro frontend; the fallback path
+  // costs sixteen, but that's still strictly fewer than the previous
+  // code, which made sixteen-or-one for the loop and then eight more
+  // unconditionally for PadCombo_L1..PadCombo_Select.
+  u16 active;
   if (m_supports_input_bitmasks)
   {
-    const u16 active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-    for (const auto& it : button_mapping)
-      controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+    active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
   }
   else
   {
-    for (const auto& it : button_mapping)
+    active = 0u;
+    for (u32 id = 0; id < 16u; id++)
     {
-      const int16_t state = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, it.second);
-      controller->SetButtonState(it.first, state != 0);
+      if (g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, id) != 0)
+        active |= static_cast<u16>(1u << id);
     }
   }
+
+  for (const auto& it : button_mapping)
+    controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
 
   for (const auto& it : axis_mapping)
   {
@@ -1413,14 +1423,18 @@ void HostInterface::UpdateControllersAnalogController(u32 index)
     m_rumble_interface.set_rumble_state(index, RETRO_RUMBLE_WEAK, weak);
   }
 
-  const u16 PadCombo_L1 = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L);
-  const u16 PadCombo_R1 = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R);
-  const u16 PadCombo_L2 = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2);
-  const u16 PadCombo_R2 = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2);
-  const u16 PadCombo_L3 = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3);
-  const u16 PadCombo_R3 = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3);
-  const u16 PadCombo_Start = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
-  const u16 PadCombo_Select = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT);
+  // Derive the analog-mode combo-press flags from the bitmask we
+  // already have, instead of re-querying the frontend eight more
+  // times. Compiler will fold the shifts at compile time since the
+  // RETRO_DEVICE_ID_JOYPAD_* values are constants.
+  const bool PadCombo_L1     = (active & (1u << RETRO_DEVICE_ID_JOYPAD_L))      != 0u;
+  const bool PadCombo_R1     = (active & (1u << RETRO_DEVICE_ID_JOYPAD_R))      != 0u;
+  const bool PadCombo_L2     = (active & (1u << RETRO_DEVICE_ID_JOYPAD_L2))     != 0u;
+  const bool PadCombo_R2     = (active & (1u << RETRO_DEVICE_ID_JOYPAD_R2))     != 0u;
+  const bool PadCombo_L3     = (active & (1u << RETRO_DEVICE_ID_JOYPAD_L3))     != 0u;
+  const bool PadCombo_R3     = (active & (1u << RETRO_DEVICE_ID_JOYPAD_R3))     != 0u;
+  const bool PadCombo_Start  = (active & (1u << RETRO_DEVICE_ID_JOYPAD_START))  != 0u;
+  const bool PadCombo_Select = (active & (1u << RETRO_DEVICE_ID_JOYPAD_SELECT)) != 0u;
   int analog_press_status = 0;
 
   // Check if we're allowed to press the analog button, and then set the selected combo.
@@ -1615,20 +1629,28 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
      {NeGconRumble::Axis::II, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_Y}},
      {NeGconRumble::Axis::L, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_L}}}};
 
+  // Same pattern as UpdateControllersAnalogController - read once into
+  // a u16 bitmask (one libretro callback when the frontend supports it,
+  // eight buttons via the fallback loop when not), then drive both the
+  // SetButtonState pass and the analog-mode-toggle detection from it
+  // without re-querying.
+  u16 active;
   if (m_supports_input_bitmasks)
   {
-    const u16 active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-    for (const auto& it : button_mapping)
-      controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+    active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
   }
   else
   {
-    for (const auto& it : button_mapping)
+    active = 0u;
+    for (u32 id = 0; id < 16u; id++)
     {
-      const int16_t state = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, it.second);
-      controller->SetButtonState(it.first, state != 0);
+      if (g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, id) != 0)
+        active |= static_cast<u16>(1u << id);
     }
   }
+
+  for (const auto& it : button_mapping)
+    controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
 
   for (const auto& it : axis_mapping)
   {
@@ -1654,7 +1676,7 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
   }
 
   // All this is retained from UpdateControllersAnalogController because we can't map the Analog button normally due to input spam...
-  const u16 Analog_Select = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT);
+  const bool Analog_Select = (active & (1u << RETRO_DEVICE_ID_JOYPAD_SELECT)) != 0u;
   int analog_press_status = 0;
 
   // Check if we're allowed to press the analog button, and then set the selected combo.
