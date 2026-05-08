@@ -247,7 +247,23 @@ ifeq ($(CPU_ARCH),x64)
 endif
 
 ifneq (,$(filter $(CPU_ARCH),aarch64 aarch32))
+   # vixl's own sources include their headers without the "vixl/" prefix
+   # (e.g. #include "code-buffer-vixl.h"), while consumers in src/core use
+   # the "vixl/..." prefix. vixl's CMake makes ${SRC}/include "PUBLIC" and
+   # ${SRC}/include/vixl plus the per-target subdir "PRIVATE". This single
+   # %.o pattern rule has no notion of PRIVATE/PUBLIC, so add all three to
+   # INCFLAGS - the per-target subdir is selected here so we don't pull in
+   # both aarch32 and aarch64 internal headers at once. The vixl bare-name
+   # headers (code-buffer-vixl.h, cpu-features.h, ...) do not collide with
+   # anything else in the tree (verified by name search).
    INCFLAGS += -I$(VIXL_DIR)/include
+   INCFLAGS += -I$(VIXL_DIR)/include/vixl
+endif
+ifeq ($(CPU_ARCH),aarch64)
+   INCFLAGS += -I$(VIXL_DIR)/include/vixl/aarch64
+endif
+ifeq ($(CPU_ARCH),aarch32)
+   INCFLAGS += -I$(VIXL_DIR)/include/vixl/aarch32
 endif
 
 # ---------------------------------------------------------------------
