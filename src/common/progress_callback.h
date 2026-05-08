@@ -87,38 +87,3 @@ protected:
 
   State* m_saved_state;
 };
-
-class ConsoleProgressCallback final : public BaseProgressCallback
-{
-public:
-  static const u32 COLUMNS = 78;
-
-public:
-  ConsoleProgressCallback();
-  ~ConsoleProgressCallback();
-
-  void PushState() override;
-  void PopState() override;
-
-  void SetCancellable(bool cancellable) override;
-  void SetTitle(const char* title) override;
-  void SetStatusText(const char* text) override;
-  void SetProgressRange(u32 range) override;
-  void SetProgressValue(u32 value) override;
-
-  void DisplayError(const char* message) override;
-  void DisplayWarning(const char* message) override;
-  void DisplayInformation(const char* message) override;
-  void DisplayDebugMessage(const char* message) override;
-
-  void ModalError(const char* message) override;
-  bool ModalConfirmation(const char* message) override;
-  void ModalInformation(const char* message) override;
-
-private:
-  void Clear();
-  void Redraw(bool update_value_only);
-
-  float m_last_percent_complete;
-  u32 m_last_bar_length;
-};
