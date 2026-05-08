@@ -48,8 +48,8 @@ static JitCodeBuffer s_code_buffer;
 static FastMapTable s_fast_map[FAST_MAP_TABLE_COUNT];
 static std::unique_ptr<CodeBlock::HostCodePointer[]> s_fast_map_pointers;
 
-DispatcherFunction s_asm_dispatcher;
-SingleBlockDispatcherFunction s_single_block_asm_dispatcher;
+static DispatcherFunction s_asm_dispatcher;
+static SingleBlockDispatcherFunction s_single_block_asm_dispatcher;
 
 static FastMapTable DecodeFastMapPointer(u32 slot, FastMapTable ptr)
 {

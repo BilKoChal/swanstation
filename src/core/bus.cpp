@@ -74,7 +74,7 @@ union MEMCTRL
 };
 
 std::bitset<RAM_8MB_CODE_PAGE_COUNT> m_ram_code_bits{};
-u32 m_ram_code_page_count = 0;
+static u32 m_ram_code_page_count = 0;
 u8* g_ram = nullptr; // 2MB RAM
 u32 g_ram_size = 0;
 u32 g_ram_mask = 0;
