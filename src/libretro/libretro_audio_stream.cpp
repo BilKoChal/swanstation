@@ -23,14 +23,21 @@ void LibretroAudioStream::UploadToFrontend()
   // libretro frontend reads samples synchronously from the buffer we
   // pass it, and the FIFO storage stays valid until Remove() is called
   // below.
+  //
+  // When the frontend has cleared RETRO_AV_ENABLE_AUDIO for this frame
+  // (single-instance runahead skip frame, fast-forward, etc.), we still
+  // need to drain the FIFO so the SPU side doesn't keep accumulating
+  // backpressure across the runahead window - we just don't forward
+  // anything to the frontend.
   while (true)
   {
     const u32 num_samples = m_buffer.GetContiguousSize();
     if (num_samples == 0)
       break;
 
-    g_retro_audio_sample_batch_callback(m_buffer.GetReadPointer(),
-                                        num_samples / AUDIO_CHANNELS);
+    if (!g_retro_skip_audio_this_frame)
+      g_retro_audio_sample_batch_callback(m_buffer.GetReadPointer(),
+                                          num_samples / AUDIO_CHANNELS);
     m_buffer.Remove(num_samples);
   }
 }
@@ -48,14 +55,16 @@ void LibretroAudioStream::FramesAvailable()
   if (g_settings.audio_fast_hook)
     return;
 
+  // Same skip-but-still-drain rule as UploadToFrontend; see comment there.
   while (true)
   {
     const u32 num_samples = m_buffer.GetContiguousSize();
     if (num_samples == 0)
       break;
 
-    g_retro_audio_sample_batch_callback(m_buffer.GetReadPointer(),
-                                        num_samples / AUDIO_CHANNELS);
+    if (!g_retro_skip_audio_this_frame)
+      g_retro_audio_sample_batch_callback(m_buffer.GetReadPointer(),
+                                          num_samples / AUDIO_CHANNELS);
     m_buffer.Remove(num_samples);
   }
 }

@@ -200,13 +200,21 @@ bool LibretroHostDisplay::Render()
 {
   if (HasDisplayTexture())
   {
-    g_retro_video_refresh_callback(m_display_texture_handle, m_display_texture_view_width,
-                                   m_display_texture_view_height, m_frame_buffer_pitch);
+    // When the frontend has cleared RETRO_AV_ENABLE_VIDEO for this frame
+    // (single-instance runahead skip frame, fast-forward, etc.), suppress
+    // the refresh callback. The HW renderers' GPU state has already been
+    // produced and remains intact for the next live frame; the SW
+    // renderer's framebuffer pointer (m_software_fb.data) is owned by
+    // the frontend and we still need to clear our handle below so the
+    // next frame's SetDisplayTexture replaces it cleanly.
+    if (!g_retro_skip_video_this_frame)
+      g_retro_video_refresh_callback(m_display_texture_handle, m_display_texture_view_width,
+                                     m_display_texture_view_height, m_frame_buffer_pitch);
 
     if (m_display_texture_handle == m_software_fb.data)
       ClearDisplayTexture();
   }
-  else
+  else if (!g_retro_skip_video_this_frame)
     g_retro_video_refresh_callback(nullptr, 0, 0, 0);
 
   return true;

@@ -207,6 +207,9 @@ retro_audio_sample_batch_t g_retro_audio_sample_batch_callback;
 retro_input_poll_t g_retro_input_poll_callback;
 retro_input_state_t g_retro_input_state_callback;
 
+bool g_retro_skip_video_this_frame = false;
+bool g_retro_skip_audio_this_frame = false;
+
 static retro_log_callback s_libretro_log_callback = {};
 static bool s_libretro_log_callback_valid = false;
 static bool s_libretro_log_callback_registered = false;
@@ -714,6 +717,26 @@ void LibretroHostInterface::retro_set_controller_port_device(u32 port, u32 devic
 
 void LibretroHostInterface::retro_run_frame()
 {
+  // Refresh the per-frame A/V skip flags. If the frontend is doing
+  // single-instance runahead (or any equivalent skip-frame mechanism) it
+  // calls retro_run with AV bits cleared; we still simulate the frame but
+  // suppress audio output and video output to the frontend for that frame.
+  // Failure or unsupported callback => assume both enabled (the spec says
+  // "the core should assume that the frontend will not skip any steps").
+  {
+    int flags = 0;
+    if (g_retro_environment_callback(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &flags))
+    {
+      g_retro_skip_video_this_frame = (flags & RETRO_AV_ENABLE_VIDEO) == 0;
+      g_retro_skip_audio_this_frame = (flags & RETRO_AV_ENABLE_AUDIO) == 0;
+    }
+    else
+    {
+      g_retro_skip_video_this_frame = false;
+      g_retro_skip_audio_this_frame = false;
+    }
+  }
+
   if (HasCoreVariablesChanged() || controller_dirty)
   {
     controller_dirty = false;

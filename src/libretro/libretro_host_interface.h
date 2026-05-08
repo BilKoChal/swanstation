@@ -160,3 +160,13 @@ extern retro_audio_sample_t g_retro_audio_sample_callback;
 extern retro_audio_sample_batch_t g_retro_audio_sample_batch_callback;
 extern retro_input_poll_t g_retro_input_poll_callback;
 extern retro_input_state_t g_retro_input_state_callback;
+
+// Per-frame A/V skip flags driven by RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE.
+// When the frontend is running ahead via single-instance runahead (or fast-
+// forwarding past audio for the same reason), it tells us per-frame to skip
+// the video and/or audio output callbacks. We still simulate everything so
+// the next "live" frame is correct - we just drop the frontend-side output
+// for the discarded frames, avoiding audio glitches and wasted GPU work.
+// Both default to false; see retro_run_frame() for how they're refreshed.
+extern bool g_retro_skip_video_this_frame;
+extern bool g_retro_skip_audio_this_frame;
