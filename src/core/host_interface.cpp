@@ -477,16 +477,6 @@ std::string HostInterface::TranslateStdString(const char* context, const char* s
   return result;
 }
 
-void HostInterface::ToggleSoftwareRendering()
-{
-  if (System::IsShutdown() || g_settings.gpu_renderer == GPURenderer::Software)
-    return;
-
-  const GPURenderer new_renderer = g_gpu->IsHardwareRenderer() ? GPURenderer::Software : g_settings.gpu_renderer;
-
-  System::RecreateGPU(new_renderer);
-}
-
 void HostInterface::UpdateSoftwareCursor()
 {
   if (System::IsShutdown())

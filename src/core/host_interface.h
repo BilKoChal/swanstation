@@ -37,7 +37,7 @@ struct Entry;
 // vtable on every method that used to be virtual.
 //
 // The two classes have been merged here. Methods that used to be on
-// the base (BootSystem, GetBIOSImage, ToggleSoftwareRendering, the
+// the base (BootSystem, GetBIOSImage, AddOSDMessage, the
 // translation/error/OSD helpers, ...) are kept as plain non-virtual
 // member functions; methods that used to be libretro-only (retro_*,
 // the controller update helpers, hardware renderer setup, the disk
@@ -176,9 +176,6 @@ public:
 
   /// Enables "relative" mouse mode, locking the cursor position and returning relative coordinates.
   void SetMouseMode(bool relative, bool hide_cursor);
-
-  /// Quick switch between software and hardware rendering.
-  void ToggleSoftwareRendering();
 
   /// Updates software cursor state, based on controllers.
   void UpdateSoftwareCursor();
