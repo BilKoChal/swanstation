@@ -213,12 +213,6 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
 #endif
 
 #if defined(__ANDROID__) && defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM64)
-  if (g_settings.rewind_enable)
-  {
-    Log_WarningPrintf("Rewind is not supported on 32-bit ARM for Android.");
-    g_settings.rewind_enable = false;
-  }
-
   if (g_settings.runahead_frames > 0)
   {
     Log_WarningPrintf("Runahead is not supported on 32-bit ARM for Android.");
@@ -342,10 +336,7 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
       System::UpdateMemoryCardTypes();
     }
 
-    if (g_settings.rewind_enable != old_settings.rewind_enable ||
-        g_settings.rewind_save_frequency != old_settings.rewind_save_frequency ||
-        g_settings.rewind_save_slots != old_settings.rewind_save_slots ||
-        g_settings.runahead_frames != old_settings.runahead_frames)
+    if (g_settings.runahead_frames != old_settings.runahead_frames)
     {
       System::UpdateMemorySaveStateSettings();
     }
