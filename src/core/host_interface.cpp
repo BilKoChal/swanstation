@@ -62,12 +62,8 @@ bool HostInterface::BootSystem(std::shared_ptr<SystemBootParameters> parameters)
 
   if (!System::Boot(*parameters))
   {
-    if (!System::IsStartupCancelled())
-    {
-      ReportError(
-        g_host_interface->TranslateString("System", "System failed to boot. The log may contain more information."));
-    }
-
+    ReportError(
+      g_host_interface->TranslateString("System", "System failed to boot. The log may contain more information."));
     m_audio_stream.reset();
     ReleaseHostDisplay();
     return false;

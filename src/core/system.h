@@ -66,8 +66,6 @@ State GetState();
 bool IsShutdown();
 bool IsValid();
 
-bool IsStartupCancelled();
-
 ConsoleRegion GetRegion();
 bool IsPALRegion();
 

@@ -95,7 +95,6 @@ static void UpdateRunningGame(const char* path, CDImage* image);
 static bool CheckForSBIFile(CDImage* image);
 
 static State s_state = State::Shutdown;
-static std::atomic_bool s_startup_cancelled{false};
 
 static ConsoleRegion s_region = ConsoleRegion::NTSC_U;
 TickCount g_ticks_per_second = MASTER_CLOCK;
@@ -138,11 +137,6 @@ bool IsShutdown()
 bool IsValid()
 {
   return s_state != State::Shutdown && s_state != State::Starting;
-}
-
-bool IsStartupCancelled()
-{
-  return s_startup_cancelled.load();
 }
 
 ConsoleRegion GetRegion()
@@ -516,9 +510,7 @@ bool RecreateGPU(GPURenderer renderer, bool update_display /* = true*/)
   g_gpu.reset();
   if (!CreateGPU(renderer))
   {
-    if (!IsStartupCancelled())
-      g_host_interface->ReportError("Failed to recreate GPU.");
-
+    g_host_interface->ReportError("Failed to recreate GPU.");
     System::Shutdown();
     return false;
   }
@@ -591,7 +583,6 @@ bool ShouldCheckForImagePatches()
 bool Boot(const SystemBootParameters& params)
 {
   s_state = State::Starting;
-  s_startup_cancelled.store(false);
   s_region = g_settings.region;
 
   if (params.state_stream)
@@ -764,13 +755,6 @@ bool Initialize(bool force_software_renderer)
 
   if (g_settings.gpu_pgxp_enable)
     PGXP::Initialize();
-
-  // Was startup cancelled? (e.g. shading compilers took too long and the user closed the application)
-  if (IsStartupCancelled())
-  {
-    Shutdown();
-    return false;
-  }
 
   // CPU code cache must happen after GPU, because it might steal our address space.
   CPU::CodeCache::Initialize();
