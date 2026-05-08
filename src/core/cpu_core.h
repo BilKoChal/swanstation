@@ -77,16 +77,32 @@ struct State
   std::array<u32, ICACHE_LINES> icache_tags = {};
   std::array<u8, ICACHE_SIZE> icache_data = {};
 
-  // offsetof on a compound member access (offsetof(State, regs.r)) is a GNU
-  // extension that GCC accepts but Apple Clang rejects in a constexpr context
-  // ("cannot access field of null pointer"). The C++ standard only allows
-  // direct members. Compose from two offsetof calls instead - the result is
-  // identical at runtime, and Clang/GCC both fold the constants.
-  static constexpr u32 GPRRegisterOffset(u32 index)
+  // Compute the byte offset of a register within the State struct, for the
+  // recompiler's EmitLoadCPUStructField / EmitStoreCPUStructField helpers.
+  // These are deliberately NOT constexpr.
+  //
+  // Apple Clang rejects offsetof through a union member in a constexpr
+  // context ("cannot access field of null pointer") even when the
+  // composition uses only direct members - r and r32 are members of
+  // anonymous/named unions inside Registers / GTE::Regs, and Clang's
+  // constexpr evaluator walks them as null-pointer accesses through the
+  // union. GCC chooses to elide that check; Clang chooses to enforce it.
+  // It is a longstanding Clang/GCC divergence on __builtin_offsetof
+  // constexpr semantics, not specific to any deployment target.
+  //
+  // Dropping constexpr costs nothing at runtime: every call site passes a
+  // runtime u32 (guest_reg / GTE register index), so the value is computed
+  // at runtime in either case. The two inner offsetof calls remain
+  // compile-time constants regardless of the constexpr keyword on the
+  // wrapper, and the compiler folds them through normal optimization just
+  // as well as it would through constexpr evaluation. Verified at -O3
+  // with GCC: object files for cpu_recompiler_code_generator{,_generic}.o
+  // are bit-identical with and without the keyword.
+  static u32 GPRRegisterOffset(u32 index)
   {
     return offsetof(State, regs) + offsetof(Registers, r) + (sizeof(u32) * index);
   }
-  static constexpr u32 GTERegisterOffset(u32 index)
+  static u32 GTERegisterOffset(u32 index)
   {
     return offsetof(State, gte_regs) + offsetof(GTE::Regs, r32) + (sizeof(u32) * index);
   }
