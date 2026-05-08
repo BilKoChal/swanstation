@@ -1,7 +1,5 @@
 add_library(common
   align.h
-  audio_stream.cpp
-  audio_stream.h
   bitfield.h
   bitutils.h
   byte_stream.cpp
@@ -52,8 +50,6 @@ add_library(common
   make_array.h
   md5_digest.cpp
   md5_digest.h
-  null_audio_stream.cpp
-  null_audio_stream.h
   memory_arena.cpp
   memory_arena.h
   page_fault_handler.cpp

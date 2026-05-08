@@ -225,7 +225,7 @@ VIXL_DIR          := $(DEPS_DIR)/vixl
 # Notes:
 #  - We only add `-Isrc`. Source files inside src/{common,core,libretro}
 #    use forms like `#include "common/byte_stream.h"` and same-directory
-#    `#include "audio_stream.h"`; the latter resolves source-relative
+#    `#include "byte_stream.h"`; the latter resolves source-relative
 #    automatically. Adding `-Isrc/common` would shadow the system
 #    `<string.h>` with `src/common/string.h` and break `<cstring>`.
 INCFLAGS := \
@@ -271,7 +271,6 @@ endif
 # ---------------------------------------------------------------------
 COMMON_DIR := $(SRC_DIR)/common
 SOURCES_CXX += \
-   $(COMMON_DIR)/audio_stream.cpp \
    $(COMMON_DIR)/byte_stream.cpp \
    $(COMMON_DIR)/cd_image.cpp \
    $(COMMON_DIR)/cd_image_bin.cpp \
@@ -294,7 +293,6 @@ SOURCES_CXX += \
    $(COMMON_DIR)/jit_code_buffer.cpp \
    $(COMMON_DIR)/log.cpp \
    $(COMMON_DIR)/md5_digest.cpp \
-   $(COMMON_DIR)/null_audio_stream.cpp \
    $(COMMON_DIR)/memory_arena.cpp \
    $(COMMON_DIR)/page_fault_handler.cpp \
    $(COMMON_DIR)/progress_callback.cpp \

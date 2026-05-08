@@ -14,7 +14,7 @@
 
 enum class LogLevel : u8;
 
-class AudioStream;
+class LibretroAudioStream;
 class ByteStream;
 class CDImage;
 class HostDisplay;
@@ -38,7 +38,7 @@ public:
   ALWAYS_INLINE HostDisplay* GetDisplay() const { return m_display.get(); }
 
   /// Access to host audio stream.
-  ALWAYS_INLINE AudioStream* GetAudioStream() const { return m_audio_stream.get(); }
+  ALWAYS_INLINE LibretroAudioStream* GetAudioStream() const { return m_audio_stream.get(); }
 
   /// Initializes the emulator frontend.
   virtual bool Initialize();
@@ -114,7 +114,6 @@ public:
 protected:
   virtual void AcquireHostDisplay() = 0;
   virtual void ReleaseHostDisplay() = 0;
-  virtual std::unique_ptr<AudioStream> CreateAudioStream() = 0;
 
   virtual void OnControllerTypeChanged(u32 slot) = 0;
 
@@ -137,7 +136,7 @@ protected:
   void UpdateSoftwareCursor();
 
   std::unique_ptr<HostDisplay> m_display;
-  std::unique_ptr<AudioStream> m_audio_stream;
+  std::unique_ptr<LibretroAudioStream> m_audio_stream;
   std::string m_user_directory;
 };
 

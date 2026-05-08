@@ -72,7 +72,6 @@ public:
 protected:
   void AcquireHostDisplay() override;
   void ReleaseHostDisplay() override;
-  std::unique_ptr<AudioStream> CreateAudioStream() override;
   void CheckForSettingsChanges(const Settings& old_settings) override;
   void OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
                             const std::string& game_title) override;

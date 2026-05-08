@@ -1,6 +1,6 @@
 #include "spu.h"
 #include "cdrom.h"
-#include "common/audio_stream.h"
+#include "libretro/libretro_audio_stream.h"
 #include "common/state_wrapper.h"
 #include "dma.h"
 #include "host_interface.h"

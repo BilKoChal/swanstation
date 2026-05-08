@@ -1,7 +1,7 @@
 #include "host_interface.h"
 #include "bios.h"
 #include "cdrom.h"
-#include "common/audio_stream.h"
+#include "libretro/libretro_audio_stream.h"
 #include "common/byte_stream.h"
 #include "common/file_system.h"
 #include "common/image.h"
@@ -53,8 +53,11 @@ bool HostInterface::BootSystem(std::shared_ptr<SystemBootParameters> parameters)
 {
   AcquireHostDisplay();
 
-  // create the audio stream. this will never fail, since we'll just fall back to null
-  m_audio_stream = CreateAudioStream();
+  // Construct the libretro audio stream directly. There used to be a
+  // virtual CreateAudioStream() hook to abstract the construction, but
+  // since the libretro core has only ever had one audio stream type
+  // (LibretroAudioStream), the indirection bought nothing.
+  m_audio_stream = std::make_unique<LibretroAudioStream>();
   m_audio_stream->Reconfigure(AUDIO_SAMPLE_RATE, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, g_settings.audio_buffer_size);
 
   if (System::IsValid())

@@ -772,14 +772,7 @@ void LibretroHostInterface::retro_run_frame()
   m_display->Render();
 
   if (g_settings.audio_fast_hook)
-  {
-    // The audio stream is constructed by CreateAudioStream() below as a
-    // LibretroAudioStream; the type is invariant for the lifetime of
-    // the host interface. dynamic_cast adds RTTI lookup on every frame
-    // for no gain.
-    auto* const audio_stream = static_cast<LibretroAudioStream*>(m_audio_stream.get());
-    audio_stream->UploadToFrontend();
-  }
+    m_audio_stream->UploadToFrontend();
 }
 
 unsigned LibretroHostInterface::retro_get_region()
@@ -915,10 +908,6 @@ void LibretroHostInterface::ReleaseHostDisplay()
   m_display.reset();
 }
 
-std::unique_ptr<AudioStream> LibretroHostInterface::CreateAudioStream()
-{
-  return std::make_unique<LibretroAudioStream>();
-}
 void LibretroHostInterface::OnControllerTypeChanged(u32 slot) {}
 
 void LibretroHostInterface::SetMouseMode(bool relative, bool hide_cursor) {}

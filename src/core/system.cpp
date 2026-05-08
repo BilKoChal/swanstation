@@ -3,7 +3,7 @@
 #include "bus.h"
 #include "cdrom.h"
 #include "cheats.h"
-#include "common/audio_stream.h"
+#include "libretro/libretro_audio_stream.h"
 #include "common/error.h"
 #include "common/file_system.h"
 #include "common/iso_reader.h"
@@ -120,7 +120,6 @@ static s32 s_rewind_save_counter = -1;
 static bool s_rewinding_first_save = false;
 
 static std::deque<MemorySaveState> s_runahead_states;
-static std::unique_ptr<AudioStream> s_runahead_audio_stream;
 static bool s_runahead_replay_pending = false;
 static u32 s_runahead_frames = 0;
 
@@ -779,7 +778,6 @@ void Shutdown()
     return;
 
   ClearMemorySaveStates();
-  s_runahead_audio_stream.reset();
 
   g_texture_replacements.Shutdown();
 
@@ -1821,21 +1819,11 @@ void UpdateMemorySaveStateSettings()
   if (s_runahead_frames > 0)
   {
     Log_InfoPrintf("Runahead is active with %u frames", s_runahead_frames);
-
-    if (!s_runahead_audio_stream)
-    {
-      // doesn't matter if it's not resampled here since it eats everything anyway, nom nom nom.
-      s_runahead_audio_stream = AudioStream::CreateNullAudioStream();
-      s_runahead_audio_stream->Reconfigure(
-		      HostInterface::AUDIO_SAMPLE_RATE,
-		      HostInterface::AUDIO_SAMPLE_RATE,
-		      HostInterface::AUDIO_CHANNELS,
-		      AudioStream::DefaultBufferSize);
-    }
-  }
-  else
-  {
-    s_runahead_audio_stream.reset();
+    // The replay path used to allocate a separate NullAudioStream and
+    // pointer-swap it onto the SPU; that has been replaced with a
+    // SetSilentMode toggle on the host's existing audio stream
+    // (see DoRunahead) so the indirection and the second instance go
+    // away.
   }
 }
 
@@ -1989,7 +1977,13 @@ void DoRunahead()
   s32 frames_to_run = static_cast<s32>(s_runahead_frames) - static_cast<s32>(s_runahead_states.size());
   if (frames_to_run > 0)
   {
-    g_spu.SetAudioStream(s_runahead_audio_stream.get());
+    // Switch the host audio stream into silent mode for the replay
+    // window: the SPU keeps producing samples for state correctness,
+    // but the FIFO is drained inside EndWrite so nothing reaches the
+    // libretro frontend and back-pressure does not build up. This
+    // replaces the previous pointer-swap-to-NullAudioStream pattern.
+    LibretroAudioStream* const audio_stream = g_host_interface->GetAudioStream();
+    audio_stream->SetSilentMode(true);
 
     while (frames_to_run > 0)
     {
@@ -1998,15 +1992,13 @@ void DoRunahead()
       frames_to_run--;
     }
 
-    g_spu.SetAudioStream(g_host_interface->GetAudioStream());
-
+    audio_stream->SetSilentMode(false);
   }
   else
   {
     // save this frame
     SaveRunaheadState();
   }
-
 }
 
 void DoMemorySaveStates()

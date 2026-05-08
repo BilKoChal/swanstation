@@ -12,6 +12,7 @@ namespace Common {
 }
 
 class TimingEvent;
+class LibretroAudioStream;
 
 class SPU
 {
@@ -41,7 +42,7 @@ public:
   std::array<u8, RAM_SIZE>& GetRAM() { return m_ram; }
 
   /// Change output stream - used for runahead.
-  ALWAYS_INLINE void SetAudioStream(AudioStream* stream) { m_audio_stream = stream; }
+  ALWAYS_INLINE void SetAudioStream(LibretroAudioStream* stream) { m_audio_stream = stream; }
 
 private:
   static constexpr u32 SPU_BASE = 0x1F801C00;
@@ -357,7 +358,7 @@ private:
 
   std::unique_ptr<TimingEvent> m_tick_event;
   std::unique_ptr<TimingEvent> m_transfer_event;
-  AudioStream* m_audio_stream = nullptr;
+  LibretroAudioStream* m_audio_stream = nullptr;
   TickCount m_ticks_carry = 0;
   TickCount m_cpu_ticks_per_spu_tick = 0;
   TickCount m_cpu_tick_divider = 0;
