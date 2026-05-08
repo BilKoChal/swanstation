@@ -32,9 +32,19 @@ static void DecodeXA_ADPCMChunk(const u8* chunk_ptr, s16* samples, s32* last_sam
 
     for (u32 word = 0; word < 28; word++)
     {
-      // NOTE: assumes LE
-      u32 word_data;
-      std::memcpy(&word_data, &words_ptr[word * sizeof(u32)], sizeof(word_data));
+      // The 32-bit XA-ADPCM word as stored on disc is little-endian.
+      // The original code memcpy'd four host-order bytes into a u32
+      // and then shifted: that works on a little-endian host (where
+      // the LE-on-disc layout matches the host layout) but reverses
+      // which nibble the (block * N) shift selects on a big-endian
+      // host. Build the u32 explicitly from individual bytes so the
+      // subsequent shifts pick the same nibble regardless of host
+      // byte order.
+      const u8* const word_bytes = &words_ptr[word * sizeof(u32)];
+      const u32 word_data = static_cast<u32>(word_bytes[0])
+                          | (static_cast<u32>(word_bytes[1]) << 8)
+                          | (static_cast<u32>(word_bytes[2]) << 16)
+                          | (static_cast<u32>(word_bytes[3]) << 24);
 
       // extract nibble from block
       const u32 nibble = IS_8BIT ? ((word_data >> (block * 8)) & 0xFF) : ((word_data >> (block * 4)) & 0x0F);
