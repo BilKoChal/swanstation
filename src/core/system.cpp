@@ -1634,28 +1634,32 @@ bool CheckForSBIFile(CDImage* image)
   Log_WarningPrintf("SBI file missing but required for %s (%s)", s_running_game_code.c_str(),
                     s_running_game_title.c_str());
 
+  // The libretro frontend has no synchronous "are you sure?" UI hook,
+  // so this used to call ConfirmMessage which is a stub returning
+  // false unconditionally - meaning users who explicitly opted in via
+  // AllowBootingWithoutSBIFile=true were still blocked from booting.
+  // Honour the opt-in instead: emit a long-duration OSD warning and
+  // proceed. The off-by-default branch keeps the hard refusal so
+  // ordinary users still get the error message about needing the SBI.
   if (g_host_interface->GetBoolSettingValue("CDROM", "AllowBootingWithoutSBIFile", false))
   {
-    return g_host_interface->ConfirmMessage(
-      StringUtil::StdStringFromFormat(
-        g_host_interface->TranslateString(
-          "System",
-          "You are attempting to run a libcrypt protected game without an SBI file:\n\n%s: %s\n\nThe game will "
-          "likely not run properly.\n\nPlease check the README for instructions on how to add an SBI file.\n\nDo "
-          "you wish to continue?"),
-        s_running_game_code.c_str(), s_running_game_title.c_str())
-        .c_str());
-  }
-  else
-  {
-    g_host_interface->ReportError(SmallString::FromFormat(
+    g_host_interface->AddFormattedOSDMessage(
+      30.0f,
       g_host_interface->TranslateString(
-        "System", "You are attempting to run a libcrypt protected game without an SBI file:\n\n%s: %s\n\nYour dump is "
-                  "incomplete, you must add the SBI file to run this game. \n\n"
-                  "The name of the SBI file must match the name of the disc image."),
-      s_running_game_code.c_str(), s_running_game_title.c_str()));
-    return false;
+        "System",
+        "WARNING: Running libcrypt-protected game %s (%s) without an SBI file. The game will likely not "
+        "run correctly. See the README for how to add an SBI file."),
+      s_running_game_code.c_str(), s_running_game_title.c_str());
+    return true;
   }
+
+  g_host_interface->ReportError(SmallString::FromFormat(
+    g_host_interface->TranslateString(
+      "System", "You are attempting to run a libcrypt protected game without an SBI file:\n\n%s: %s\n\nYour dump is "
+                "incomplete, you must add the SBI file to run this game. \n\n"
+                "The name of the SBI file must match the name of the disc image."),
+    s_running_game_code.c_str(), s_running_game_title.c_str()));
+  return false;
 }
 
 bool HasMediaSubImages()
