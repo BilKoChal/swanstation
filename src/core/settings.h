@@ -72,7 +72,6 @@ struct Settings
   bool cpu_fastmem_rewrite = false;
 
   bool apply_game_settings = true;
-  bool disable_all_enhancements = false;
 
   bool rewind_enable = false;
   float rewind_save_frequency = 10.0f;
@@ -111,7 +110,6 @@ struct Settings
   bool display_force_4_3_for_24bit = false;
   bool gpu_24bit_chroma_smoothing = false;
   bool display_show_osd_messages = true;
-  bool display_show_enhancements = false;
   float gpu_pgxp_tolerance = -1.0f;
   float gpu_pgxp_depth_clear_threshold = 300.0f / 4096.0f;
 
