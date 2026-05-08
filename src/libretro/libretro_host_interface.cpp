@@ -500,7 +500,7 @@ void HostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_
   info->geometry.max_height = VRAM_HEIGHT * resolution_scale;
 
   info->timing.fps = (System::IsValid()) ? System::GetThrottleFrequency() : 60.0;
-  info->timing.sample_rate = static_cast<double>(AUDIO_SAMPLE_RATE);
+  info->timing.sample_rate = static_cast<double>(LibretroAudioStream::SAMPLE_RATE);
 }
 
 bool HostInterface::UpdateSystemAVInfo(bool use_resolution_scale)

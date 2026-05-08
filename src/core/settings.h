@@ -107,8 +107,6 @@ struct Settings
   u32 cdrom_read_speedup = 1;
   u32 cdrom_seek_speedup = 1;
 
-  u32 audio_buffer_size = 2048;
-
   bool use_old_mdec_routines = true;
 
   // timing hacks section

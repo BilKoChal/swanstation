@@ -2,48 +2,24 @@
 #include "core/host_interface.h"
 #include <algorithm>
 
-#ifndef AUDIO_CHANNELS
-#define AUDIO_CHANNELS 2
-#endif
-
-LibretroAudioStream::LibretroAudioStream() = default;
-
-LibretroAudioStream::~LibretroAudioStream() = default;
-
-bool LibretroAudioStream::Reconfigure(u32 input_sample_rate,
-                                      u32 output_sample_rate,
-                                      u32 channels,
-                                      u32 buffer_size)
-{
-  m_buffer_size = buffer_size;
-  return SetBufferSize(buffer_size);
-}
-
-void LibretroAudioStream::Shutdown()
-{
-  m_buffer.Clear();
-  m_buffer_size = 0;
-}
-
 void LibretroAudioStream::BeginWrite(SampleType** buffer_ptr, u32* num_frames)
 {
-  // The libretro core is single-threaded; producer (SPU) and consumer
-  // (UploadToFrontend) run on the same thread. No synchronisation
-  // primitive is required around the FIFO; see the comment in
-  // libretro_audio_stream.h for the previous mutex's rationale.
+  // Single-threaded by design (see header); no synchronisation needed.
   //
-  // BeginWrite is non-blocking: the SPU is told what contiguous space
-  // is currently available, capped at m_buffer_size, and EndWrite
-  // records the count the caller actually filled. The SPU's loop in
-  // spu.cpp Execute() handles short returns by re-issuing
-  // BeginWrite/EndWrite until all generated frames are consumed.
+  // Non-blocking: tell the SPU what contiguous space is currently
+  // available, capped at one slice (BUFFER_SIZE). EndWrite records the
+  // count the caller actually filled. The SPU's loop in spu.cpp
+  // Execute() handles short returns - which only occur when the FIFO
+  // wrapped past the end of its backing array since the last drain -
+  // by re-issuing BeginWrite/EndWrite until all generated frames are
+  // consumed.
   *buffer_ptr = m_buffer.GetWritePointer();
-  *num_frames = std::min(m_buffer_size, m_buffer.GetContiguousSpace() / AUDIO_CHANNELS);
+  *num_frames = std::min(BUFFER_SIZE, m_buffer.GetContiguousSpace() / CHANNELS);
 }
 
 void LibretroAudioStream::EndWrite(u32 num_frames)
 {
-  m_buffer.AdvanceTail(num_frames * AUDIO_CHANNELS);
+  m_buffer.AdvanceTail(num_frames * CHANNELS);
 
   if (m_silent_mode)
   {
@@ -76,7 +52,7 @@ void LibretroAudioStream::EndWrite(u32 num_frames)
 
     if (!g_retro_skip_audio_this_frame)
       g_retro_audio_sample_batch_callback(m_buffer.GetReadPointer(),
-                                          num_samples / AUDIO_CHANNELS);
+                                          num_samples / CHANNELS);
     m_buffer.Remove(num_samples);
   }
 }
@@ -109,22 +85,7 @@ void LibretroAudioStream::UploadToFrontend()
 
     if (!g_retro_skip_audio_this_frame)
       g_retro_audio_sample_batch_callback(m_buffer.GetReadPointer(),
-                                          num_samples / AUDIO_CHANNELS);
+                                          num_samples / CHANNELS);
     m_buffer.Remove(num_samples);
   }
-}
-
-bool LibretroAudioStream::SetBufferSize(u32 buffer_size)
-{
-  const u32 buffer_size_in_samples = buffer_size * AUDIO_CHANNELS;
-  // The FIFO has fixed capacity; reject configurations that would not
-  // fit two batches' worth of samples (the historical 2x headroom that
-  // the now-removed back-pressure code relied on). The check is kept
-  // because games exposed via core options can request larger
-  // audio_buffer_size values.
-  if ((buffer_size_in_samples * 2u) > m_buffer.GetCapacity())
-    return false;
-
-  m_buffer_size = buffer_size;
-  return true;
 }

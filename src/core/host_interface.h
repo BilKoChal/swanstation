@@ -45,7 +45,6 @@ struct Entry;
 class HostInterface
 {
 public:
-  static constexpr u32 AUDIO_SAMPLE_RATE = 44100, AUDIO_CHANNELS = 2, DEFAULT_AUDIO_BUFFER_SIZE = 2048;
 
   struct DiskControlInfo
   {

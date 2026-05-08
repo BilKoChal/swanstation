@@ -29,12 +29,11 @@ bool HostInterface::BootSystem(std::shared_ptr<SystemBootParameters> parameters)
 {
   AcquireHostDisplay();
 
-  // Construct the libretro audio stream directly. There used to be a
-  // virtual CreateAudioStream() hook to abstract the construction, but
-  // since the libretro core has only ever had one audio stream type
-  // (LibretroAudioStream), the indirection bought nothing.
+  // The libretro audio stream is configured at compile time (44.1 kHz
+  // stereo, 2048-frame slice budget; see LibretroAudioStream.h). There
+  // is nothing to plumb at runtime, so the previous Reconfigure() call
+  // and the unused base-class hook went away with it.
   m_audio_stream = std::make_unique<LibretroAudioStream>();
-  m_audio_stream->Reconfigure(AUDIO_SAMPLE_RATE, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, g_settings.audio_buffer_size);
 
   if (System::IsValid())
     g_spu.SetAudioStream(m_audio_stream.get());
