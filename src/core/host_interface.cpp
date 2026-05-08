@@ -299,9 +299,7 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
         g_settings.display_active_start_offset != old_settings.display_active_start_offset ||
         g_settings.display_active_end_offset != old_settings.display_active_end_offset ||
         g_settings.display_line_start_offset != old_settings.display_line_start_offset ||
-        g_settings.display_line_end_offset != old_settings.display_line_end_offset ||
-        g_settings.rewind_enable != old_settings.rewind_enable ||
-        g_settings.runahead_frames != old_settings.runahead_frames)
+        g_settings.display_line_end_offset != old_settings.display_line_end_offset)
     {
       g_gpu->UpdateSettings();
     }
