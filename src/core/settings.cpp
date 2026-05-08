@@ -3,14 +3,13 @@
 #include "common/string_util.h"
 #include "host_display.h"
 #include "host_interface.h"
+#include "libretro/libretro_settings_interface.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <numeric>
 
 Settings g_settings;
-
-SettingsInterface::~SettingsInterface() = default;
 
 const char* SettingInfo::StringDefaultValue() const
 {
@@ -132,7 +131,7 @@ void Settings::UpdateOverclockActive()
   cpu_overclock_active = (cpu_overclock_enable && (cpu_overclock_numerator != 1 || cpu_overclock_denominator != 1));
 }
 
-void Settings::Load(SettingsInterface& si)
+void Settings::Load(LibretroSettingsInterface& si)
 {
   region =
     ParseConsoleRegionName(

@@ -7,18 +7,7 @@
 #include <string>
 #include <vector>
 
-class SettingsInterface
-{
-public:
-  virtual ~SettingsInterface();
-
-  virtual int GetIntValue(const char* section, const char* key, int default_value = 0) = 0;
-  virtual float GetFloatValue(const char* section, const char* key, float default_value = 0.0f) = 0;
-  virtual bool GetBoolValue(const char* section, const char* key, bool default_value = false) = 0;
-  virtual std::string GetStringValue(const char* section, const char* key, const char* default_value = "") = 0;
-
-  virtual std::vector<std::string> GetStringList(const char* section, const char* key) = 0;
-};
+class LibretroSettingsInterface;
 
 struct SettingInfo
 {
@@ -205,7 +194,7 @@ struct Settings
                        DEFAULT_GPU_MAX_RUN_AHEAD = 128, DEFAULT_VRAM_WRITE_DUMP_WIDTH_THRESHOLD = 128,
                        DEFAULT_VRAM_WRITE_DUMP_HEIGHT_THRESHOLD = 128;
 
-  void Load(SettingsInterface& si);
+  void Load(LibretroSettingsInterface& si);
 
   static std::optional<LogLevel> ParseLogLevelName(const char* str);
   static const char* GetLogLevelName(LogLevel level);
