@@ -1984,7 +1984,10 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    "Internal Run-Ahead",
    NULL,
    "Simulates the system ahead of time and rolls back/replays to reduce input lag. Has very high system "
-   "requirements.",
+   "requirements. Most libretro frontends (including RetroArch) provide their own run-ahead implementation "
+   "in their settings; the frontend version is generally more efficient and supports both single- and "
+   "second-instance modes, so prefer it when available and leave this option at 0. Only enable this "
+   "internal version if the frontend does not offer its own run-ahead, or to test against it.",
    NULL,
    "advanced",
    {
