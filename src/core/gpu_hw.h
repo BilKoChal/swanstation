@@ -360,6 +360,16 @@ protected:
   bool m_using_uv_limits = false;
   bool m_pgxp_depth_buffer = false;
 
+  // Previous-value cache of g_settings.gpu_shader_precompile_mode
+  // so UpdateHWSettings can detect a runtime flip and route it
+  // through the same destroy/recompile path the other shader-
+  // affecting settings use. Without this, switching the mode at
+  // runtime would silently fail to apply: the existing Lazy
+  // worker would keep running (or not be spawned) regardless of
+  // the new value, because shaders_changed wouldn't fire on a
+  // pure precompile-mode change.
+  GPUShaderPrecompileMode m_shader_precompile_mode = GPUShaderPrecompileMode::Lazy;
+
   BatchConfig m_batch;
   BatchUBOData m_batch_ubo_data = {};
 
