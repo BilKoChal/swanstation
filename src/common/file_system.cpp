@@ -165,133 +165,6 @@ extern "C" int64_t rfwrite(void const* buffer,
 
 namespace FileSystem {
 
-void CanonicalizePath(char* Destination, u32 cbDestination, const char* Path, bool OSPath /*= true*/)
-{
-  u32 i, j;
-  // get length
-  u32 pathLength = static_cast<u32>(std::strlen(Path));
-
-  // clone to a local buffer if the same pointer
-  if (Destination == Path)
-  {
-    char* pathClone = (char*)alloca(pathLength + 1);
-    strlcpy(pathClone, Path, pathLength + 1);
-    Path = pathClone;
-  }
-
-  // zero destination
-  std::memset(Destination, 0, cbDestination);
-
-  // iterate path
-  u32 destinationLength = 0;
-  for (i = 0; i < pathLength;)
-  {
-    char prevCh = (i > 0) ? Path[i - 1] : '\0';
-    char currentCh = Path[i];
-    char nextCh = (i < (pathLength - 1)) ? Path[i + 1] : '\0';
-
-    if (currentCh == '.')
-    {
-      if (prevCh == '\\' || prevCh == '/' || prevCh == '\0')
-      {
-        // handle '.'
-        if (nextCh == '\\' || nextCh == '/' || nextCh == '\0')
-        {
-          // skip '.\'
-          i++;
-
-          // remove the previous \, if we have one trailing the dot it'll append it anyway
-          if (destinationLength > 0)
-            Destination[--destinationLength] = '\0';
-          // if there was no previous \, skip past the next one
-          else if (nextCh != '\0')
-            i++;
-
-          continue;
-        }
-        // handle '..'
-        else if (nextCh == '.')
-        {
-          char afterNext = ((i + 1) < pathLength) ? Path[i + 2] : '\0';
-          if (afterNext == '\\' || afterNext == '/' || afterNext == '\0')
-          {
-            // remove one directory of the path, including the /.
-            if (destinationLength > 1)
-            {
-              for (j = destinationLength - 2; j > 0; j--)
-              {
-                if (Destination[j] == '\\' || Destination[j] == '/')
-                  break;
-              }
-
-              destinationLength = j;
-#ifdef _DEBUG
-              Destination[destinationLength] = '\0';
-#endif
-            }
-
-            // skip the dot segment
-            i += 2;
-            continue;
-          }
-        }
-      }
-    }
-
-    // fix ospath
-    if (OSPath && (currentCh == '\\' || currentCh == '/'))
-      currentCh = FS_OSPATH_SEPARATOR_CHARACTER;
-
-    // copy character
-    if (destinationLength < cbDestination)
-    {
-      Destination[destinationLength++] = currentCh;
-#ifdef _DEBUG
-      Destination[destinationLength] = '\0';
-#endif
-    }
-    else
-      break;
-
-    // increment position by one
-    i++;
-  }
-
-  // if we end up with the empty string, return '.'
-  if (destinationLength == 0)
-    Destination[destinationLength++] = '.';
-
-  // ensure nullptr termination
-  if (destinationLength < cbDestination)
-    Destination[destinationLength] = '\0';
-  else
-    Destination[destinationLength - 1] = '\0';
-}
-
-void CanonicalizePath(String& Destination, const char* Path, bool OSPath /* = true */)
-{
-  // the function won't actually write any more characters than are present to the buffer,
-  // so we can get away with simply passing both pointers if they are the same.
-  if (Destination.GetWriteableCharArray() != Path)
-  {
-    // otherwise, resize the destination to at least the source's size, and then pass as-is
-    Destination.Reserve(static_cast<u32>(std::strlen(Path)) + 1);
-  }
-
-  CanonicalizePath(Destination.GetWriteableCharArray(), Destination.GetBufferSize(), Path, OSPath);
-  Destination.UpdateSize();
-}
-
-void CanonicalizePath(String& Destination, bool OSPath /* = true */)
-{
-  CanonicalizePath(Destination, Destination);
-}
-
-void CanonicalizePath(std::string& path, bool OSPath /*= true*/)
-{
-  CanonicalizePath(path.data(), static_cast<u32>(path.size() + 1), path.c_str(), OSPath);
-}
-
 bool IsAbsolutePath(const std::string_view& path)
 {
 #ifdef _WIN32
@@ -345,15 +218,6 @@ static std::string_view::size_type GetLastSeperatorPosition(const std::string_vi
 std::string GetDisplayNameFromPath(const std::string_view& path)
 {
   return std::string(GetFileNameFromPath(path));
-}
-
-std::string_view GetPathDirectory(const std::string_view& path)
-{
-  std::string::size_type pos = GetLastSeperatorPosition(path, false);
-  if (pos == std::string_view::npos)
-    return {};
-
-  return path.substr(0, pos);
 }
 
 std::string_view GetFileNameFromPath(const std::string_view& path)
@@ -847,22 +711,6 @@ s64 FSeek64(RFILE* fp, s64 offset, int whence)
 s64 FTell64(RFILE* fp)
 {
 	return filestream_tell(fp);
-}
-
-s64 FSize64(RFILE* fp)
-{
-	const s64 pos = filestream_tell(fp);
-	if (pos >= 0)
-	{
-		if (filestream_seek(fp, 0, RETRO_VFS_SEEK_POSITION_END) == 0)
-		{
-			const s64 size = filestream_tell(fp);
-			if (filestream_seek(fp, pos, RETRO_VFS_SEEK_POSITION_START) == 0)
-				return size;
-		}
-	}
-
-	return -1;
 }
 
 } // namespace FileSystem

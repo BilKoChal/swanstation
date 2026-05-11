@@ -130,8 +130,6 @@ public:
 
   bool Open(CDImage* image, u32 track_number);
 
-  std::vector<std::string> GetFilesInDirectory(const char* path);
-
   bool ReadFile(const char* path, std::vector<u8>* data);
 
 private:

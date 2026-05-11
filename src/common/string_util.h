@@ -109,9 +109,6 @@ inline std::optional<bool> FromChars(const std::string_view& str, int base)
   return std::nullopt;
 }
 
-/// Encode/decode hexadecimal byte buffers
-std::optional<std::vector<u8>> DecodeHex(const std::string_view& str);
-
 /// starts_with from C++20
 ALWAYS_INLINE static bool StartsWith(const std::string_view& str, const char* prefix)
 {
