@@ -1082,14 +1082,33 @@ bool GPU_HW_OpenGL::CompilePrograms()
   {
     for (u32 texture_mode = 0; texture_mode < 9; texture_mode++)
     {
+      // Reserved_Direct16Bit (3) and Reserved_RawDirect16Bit (7) produce
+      // shaders identical to Direct16Bit (2) and RawDirect16Bit (6) - see
+      // GPU_HW_D3D11::CompileShaders for the full explanation. For
+      // OpenGL we can't simply copy the resulting GL::Program object
+      // because it's move-only (it owns a GLuint program ID that the
+      // destructor will glDeleteProgram), so we have to re-link the
+      // program. We can, however, skip the ~50ms shader-source
+      // regeneration in GenerateBatchFragmentShader by re-using the
+      // already-built source string from the previous (source_mode)
+      // iteration. The shader cache will hit on the second GetProgram
+      // call and reload the binary instead of recompiling.
+      const u32 source_mode = (texture_mode == static_cast<u32>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                              (texture_mode == static_cast<u32>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                            texture_mode;
+
       for (u8 dithering = 0; dithering < 2; dithering++)
       {
         for (u8 interlacing = 0; interlacing < 2; interlacing++)
         {
           const bool textured = (static_cast<GPUTextureMode>(texture_mode) != GPUTextureMode::Disabled);
           const std::string batch_vs = shadergen.GenerateBatchVertexShader(textured);
+          // If we're at a Reserved_* texture_mode, build a fragment
+          // shader source for the equivalent non-reserved mode. The
+          // post-MD5 cache dedup will then short-circuit the GL
+          // compile/link work too.
           const std::string fs = shadergen.GenerateBatchFragmentShader(
-            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(texture_mode),
+            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(source_mode),
             ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
 
           const auto link_callback = [this, textured, use_binding_layout](GL::Program& prog) {

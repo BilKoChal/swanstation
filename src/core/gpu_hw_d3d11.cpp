@@ -989,10 +989,37 @@ bool GPU_HW_D3D11::CompileShaders()
   {
     for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
     {
+      // Reserved_Direct16Bit (3) and Reserved_RawDirect16Bit (7) produce
+      // shaders that are byte-for-byte identical to Direct16Bit (2) and
+      // RawDirect16Bit (6) after macro expansion: GPU_HW_ShaderGen's
+      // GenerateBatchFragmentShader masks the RawTextureBit out of
+      // texture_mode and only consults the result via the PALETTE,
+      // PALETTE_4_BIT, and PALETTE_8_BIT macros - all three of which
+      // evaluate to false for any of {Direct16Bit, Reserved_Direct16Bit,
+      // RawDirect16Bit, Reserved_RawDirect16Bit}. The disk-backed
+      // shader cache already deduplicates at the MD5 level, but
+      // reaching that fast-path still requires (a) calling
+      // GenerateBatchFragmentShader, which builds ~3000 lines of HLSL
+      // every iteration, and (b) MD5-hashing that output to compute
+      // the cache key. Short-circuit at the dispatch matrix instead
+      // so the slots for 3 and 7 inherit the compiled object pointer
+      // directly from 2 and 6, eliminating those two cost centres.
+      const u8 source_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                             (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                          texture_mode;
+
       for (u8 dithering = 0; dithering < 2; dithering++)
       {
         for (u8 interlacing = 0; interlacing < 2; interlacing++)
         {
+          if (source_mode != texture_mode)
+          {
+            m_batch_pixel_shaders[render_mode][texture_mode][dithering][interlacing] =
+              m_batch_pixel_shaders[render_mode][source_mode][dithering][interlacing];
+            progress.Increment();
+            continue;
+          }
+
           const std::string ps = shadergen.GenerateBatchFragmentShader(
             static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(texture_mode),
             ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));

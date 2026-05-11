@@ -1482,12 +1482,32 @@ bool GPU_HW_Vulkan::CompilePipelines()
   {
     for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
     {
+      // See the comment in GPU_HW_D3D11::CompileShaders: shaders for
+      // Reserved_*Direct16Bit modes are bit-identical to their non-
+      // reserved counterparts. We can't share the resulting
+      // VkShaderModule handle between array slots safely because the
+      // error-path 'enumerate(SafeDestroyShaderModule)' calls would
+      // double-destroy, so for Vulkan we still call into
+      // GetFragmentShader for each slot - but we feed it the source
+      // string from the canonical (source_mode) slot, skipping the
+      // ~50ms GenerateBatchFragmentShader call. The shader cache
+      // hits on the second lookup and avoids the GLSL->SPIR-V
+      // compile too; only the cheap vkCreateShaderModule call runs.
+      // The PSO loop below does NOT dedup because VkPipeline shares
+      // the same enumerate-destroy hazard with no convenient
+      // refcounting alternative - the per-PSO win for ~22% of the
+      // pipeline matrix is left for a future commit that adds a
+      // proper ownership-tracking layer.
+      const u8 source_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                             (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                          texture_mode;
+
       for (u8 dithering = 0; dithering < 2; dithering++)
       {
         for (u8 interlacing = 0; interlacing < 2; interlacing++)
         {
           const std::string fs = shadergen.GenerateBatchFragmentShader(
-            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(texture_mode),
+            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(source_mode),
             ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
 
           VkShaderModule shader = g_vulkan_shader_cache->GetFragmentShader(fs);

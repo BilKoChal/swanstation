@@ -434,10 +434,27 @@ bool GPU_HW_D3D12::CompilePipelines()
   {
     for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
     {
+      // See the equivalent comment in GPU_HW_D3D11::CompileShaders:
+      // Reserved_*Direct16Bit produce sources identical to the
+      // non-reserved variants after macro expansion. Skip the
+      // regeneration and the cache-key MD5 by copying the compiled
+      // blob pointer directly.
+      const u8 source_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                             (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                          texture_mode;
+
       for (u8 dithering = 0; dithering < 2; dithering++)
       {
         for (u8 interlacing = 0; interlacing < 2; interlacing++)
         {
+          if (source_mode != texture_mode)
+          {
+            batch_fragment_shaders[render_mode][texture_mode][dithering][interlacing] =
+              batch_fragment_shaders[render_mode][source_mode][dithering][interlacing];
+            progress.Increment();
+            continue;
+          }
+
           const std::string fs = shadergen.GenerateBatchFragmentShader(
             static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(texture_mode),
             ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
@@ -463,10 +480,30 @@ bool GPU_HW_D3D12::CompilePipelines()
       {
         for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
         {
+          // See the comment on the shader-compile loop above: the
+          // Reserved_*Direct16Bit shaders are bit-identical to their
+          // non-reserved variants. Since the PSO inputs (bound shader,
+          // vertex attributes, render-target format, blend / depth /
+          // raster state) don't depend on texture_mode except through
+          // the bound shader, the resulting PSO is also identical.
+          // Copy the ComPtr to inherit the reference instead of
+          // building a duplicate PSO.
+          const u8 source_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                                 (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                              texture_mode;
+
           for (u8 dithering = 0; dithering < 2; dithering++)
           {
             for (u8 interlacing = 0; interlacing < 2; interlacing++)
             {
+              if (source_mode != texture_mode)
+              {
+                m_batch_pipelines[depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing] =
+                  m_batch_pipelines[depth_test][render_mode][source_mode][transparency_mode][dithering][interlacing];
+                progress.Increment();
+                continue;
+              }
+
               const bool textured = (static_cast<GPUTextureMode>(texture_mode) != GPUTextureMode::Disabled);
 
               gpbuilder.SetRootSignature(m_batch_root_signature.Get());
