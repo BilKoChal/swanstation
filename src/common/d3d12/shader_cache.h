@@ -32,6 +32,15 @@ public:
 
   void Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_level, bool debug);
 
+  // Returns whether Open() has already been called successfully on
+  // this instance. Used by the persistent (lazy-compile) GPU backend
+  // to avoid re-reading the same on-disk index on UpdateSettings
+  // round-trips through DestroyPipelines/CompilePipelines, which
+  // would both leak file handles and double-count m_shader_index /
+  // m_pipeline_index entries. Mirrors the equivalent accessor on
+  // D3D11::ShaderCache.
+  bool IsOpen() const { return m_shader_index_file != nullptr; }
+
   ALWAYS_INLINE ComPtr<ID3DBlob> GetVertexShader(std::string_view shader_code)
   {
     return GetShaderBlob(EntryType::VertexShader, shader_code);
