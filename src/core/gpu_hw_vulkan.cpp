@@ -1493,7 +1493,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
       return false;
     }
 
-    batch_vertex_shaders[textured] = shader;
+    batch_vertex_shaders[textured].store(shader, std::memory_order_release);
     progress.Increment();
   }
 
@@ -1982,30 +1982,45 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(u8 render_mode, u8 texture_
                          (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
-  // Caller is responsible for holding m_batch_shader_mutex
-  // (GetBatchPipeline takes the lock; the Enabled-mode precompile
-  // path is single-threaded).
-  VkShaderModule& slot = m_batch_fragment_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+  // Fast path: lock-free load. Both the precompile worker and the
+  // main thread can read a slot concurrently without contending
+  // with each other or with each other's slow-path compiles.
+  std::atomic<VkShaderModule>& slot =
+    m_batch_fragment_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+  VkShaderModule existing = slot.load(std::memory_order_acquire);
+  if (existing != VK_NULL_HANDLE)
+    return existing;
 
-  if (slot == VK_NULL_HANDLE)
+  // Slow path: take the compile mutex, re-check, compile if still
+  // unset. The double-checked-locking pattern means a main-thread
+  // lazy fault-in won't redundantly compile a slot the worker
+  // just finished publishing.
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+
+  existing = slot.load(std::memory_order_relaxed);
+  if (existing != VK_NULL_HANDLE)
+    return existing;
+
+  if (!m_shadergen)
   {
-    if (!m_shadergen)
-    {
-      Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
-      return VK_NULL_HANDLE;
-    }
-    const std::string fs = m_shadergen->GenerateBatchFragmentShader(
-      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-    slot = g_vulkan_shader_cache->GetFragmentShader(fs);
-    if (slot == VK_NULL_HANDLE)
-    {
-      Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                      texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
-      return VK_NULL_HANDLE;
-    }
+    Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
+    return VK_NULL_HANDLE;
+  }
+  const std::string fs = m_shadergen->GenerateBatchFragmentShader(
+    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+  VkShaderModule shader = g_vulkan_shader_cache->GetFragmentShader(fs);
+  if (shader == VK_NULL_HANDLE)
+  {
+    Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
+                    texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+    return VK_NULL_HANDLE;
   }
 
-  return slot;
+  // Publish under release ordering so a subsequent acquire load
+  // observes both the slot value and any consumer-side state
+  // initialised before this store.
+  slot.store(shader, std::memory_order_release);
+  return shader;
 }
 
 VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 texture_mode, u8 transparency_mode,
@@ -2018,18 +2033,35 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 tex
                          (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
-  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  std::atomic<VkPipeline>& slot =
+    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
+                     [BoolToUInt8(interlacing)];
 
-  VkPipeline& slot = m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
-                                      [BoolToUInt8(interlacing)];
+  // Fast path: lock-free atomic load. This is what DrawBatchVertices
+  // hits once a slot is filled (either by the precompile worker or
+  // by an earlier main-thread fault-in). No kernel call, no
+  // serialisation against the worker.
+  VkPipeline existing = slot.load(std::memory_order_acquire);
+  if (existing != VK_NULL_HANDLE)
+    return existing;
 
-  if (slot != VK_NULL_HANDLE)
-    return slot;
-
-  // Need the bound fragment shader first.
+  // Slow path. The shader-cache / pipeline-cache mutations and the
+  // m_batch_pipelines store all need to be serialised against the
+  // worker, but the fragment-shader fetch is a separate independent
+  // step with its own internal locking - we call it WITHOUT holding
+  // m_batch_shader_mutex so a sibling helper isn't deadlocked when
+  // it tries to take the same lock.
   VkShaderModule fs = GetBatchFragmentShader(render_mode, lookup_mode, dithering, interlacing);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+
+  // Double-check under the lock - some other thread may have
+  // compiled this slot while we were waiting on m_batch_shader_mutex.
+  existing = slot.load(std::memory_order_relaxed);
+  if (existing != VK_NULL_HANDLE)
+    return existing;
 
   static constexpr std::array<VkCompareOp, 3> depth_test_values = {
     VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_GREATER_OR_EQUAL, VK_COMPARE_OP_LESS_OR_EQUAL};
@@ -2051,7 +2083,10 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 tex
   }
 
   gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  gpbuilder.SetVertexShader(m_batch_vertex_shaders[BoolToUInt8(textured)]);
+  // Vertex shaders are filled at CompilePipelines time before the
+  // worker is spawned, so a relaxed load is sufficient - we're
+  // strictly after that store in happens-before order.
+  gpbuilder.SetVertexShader(m_batch_vertex_shaders[BoolToUInt8(textured)].load(std::memory_order_relaxed));
   gpbuilder.SetFragmentShader(fs);
 
   gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -2103,8 +2138,10 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 tex
     return VK_NULL_HANDLE;
   }
 
-  slot = pipeline;
-  return slot;
+  // Publish under release ordering. DrawBatchVertices' acquire load
+  // pairs with this store.
+  slot.store(pipeline, std::memory_order_release);
+  return pipeline;
 }
 
 void GPU_HW_Vulkan::DestroyPipelines()
@@ -2115,9 +2152,34 @@ void GPU_HW_Vulkan::DestroyPipelines()
   StopShaderCompileThread();
   m_shadergen.reset();
 
-  m_batch_pipelines.enumerate(Vulkan::Util::SafeDestroyPipeline);
-  m_batch_fragment_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
-  m_batch_vertex_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
+  // Atomic slot teardown. By this point the worker is stopped and
+  // no other thread is touching the arrays, so memory_order_relaxed
+  // is sufficient.
+  VkDevice device = g_vulkan_context->GetDevice();
+  m_batch_pipelines.enumerate([device](std::atomic<VkPipeline>& slot) {
+    VkPipeline p = slot.load(std::memory_order_relaxed);
+    if (p != VK_NULL_HANDLE)
+    {
+      vkDestroyPipeline(device, p, nullptr);
+      slot.store(VK_NULL_HANDLE, std::memory_order_relaxed);
+    }
+  });
+  m_batch_fragment_shaders.enumerate([device](std::atomic<VkShaderModule>& slot) {
+    VkShaderModule m = slot.load(std::memory_order_relaxed);
+    if (m != VK_NULL_HANDLE)
+    {
+      vkDestroyShaderModule(device, m, nullptr);
+      slot.store(VK_NULL_HANDLE, std::memory_order_relaxed);
+    }
+  });
+  m_batch_vertex_shaders.enumerate([device](std::atomic<VkShaderModule>& slot) {
+    VkShaderModule m = slot.load(std::memory_order_relaxed);
+    if (m != VK_NULL_HANDLE)
+    {
+      vkDestroyShaderModule(device, m, nullptr);
+      slot.store(VK_NULL_HANDLE, std::memory_order_relaxed);
+    }
+  });
 
   m_vram_fill_pipelines.enumerate(Vulkan::Util::SafeDestroyPipeline);
 

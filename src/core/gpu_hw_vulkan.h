@@ -235,7 +235,24 @@ private:
   VkBufferView m_texture_stream_buffer_view = VK_NULL_HANDLE;
 
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
-  DimensionalArray<VkPipeline, 2, 2, 5, 9, 4, 3> m_batch_pipelines{};
+  //
+  // std::atomic<VkPipeline> rather than a plain VkPipeline so the
+  // draw path can sample a slot without taking any lock. The slow
+  // path (slot still null after the atomic load) takes the compile
+  // mutex, re-checks the slot, compiles if still null, publishes
+  // back to the slot. The fast path - which is what DrawBatchVertices
+  // hits once a slot has been filled either by the precompile worker
+  // or by an earlier main-thread fault-in - is a single
+  // memory_order_acquire load with no kernel calls and no
+  // serialisation against the worker. Without this, the user-visible
+  // experience after a texture-filter change was a multi-second
+  // hang: the precompile worker holds m_batch_shader_mutex for the
+  // duration of each ~50-200 ms vkCreateGraphicsPipelines call, so
+  // every concurrent main-thread DrawBatchVertices stalled behind
+  // it for one PSO compile, and the runloop never made forward
+  // progress until the worker finished the entire 2160-entry
+  // matrix.
+  DimensionalArray<std::atomic<VkPipeline>, 2, 2, 5, 9, 4, 3> m_batch_pipelines{};
 
   // Persistent vertex / fragment shader modules and shadergen for
   // the lazy and background-thread compile paths. These used to be
@@ -248,22 +265,26 @@ private:
   // helper-entry remap (see GetBatchFragmentShader) routes all
   // accesses through the canonical slots 2 / 6.
   //
-  // m_batch_shader_mutex serialises:
+  // m_batch_shader_mutex serialises the SLOW path of the lazy
+  // helpers:
   //   - g_vulkan_shader_cache mutations (its unordered_map indices
   //     aren't thread-safe on insert)
   //   - the VkPipelineCache passed to vkCreateGraphicsPipelines
   //     (Vulkan spec: must be externally synchronised when shared
   //     across threads)
-  //   - the m_batch_fragment_shaders / m_batch_pipelines matrix
-  //     writes
-  // Fast path: one uncontended mutex lock per DrawBatchVertices.
+  //   - the writes that publish a newly-compiled VkPipeline /
+  //     VkShaderModule back into the matrix slot
+  // The FAST path - draw-time lookup of an already-filled slot -
+  // does NOT take this mutex; it uses an atomic load on the slot
+  // itself. See the comment on m_batch_pipelines above for why
+  // this matters.
   std::mutex m_batch_shader_mutex;
   std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
   std::thread m_shader_compile_thread;
   std::atomic<bool> m_shader_compile_thread_quit{false};
 
-  DimensionalArray<VkShaderModule, 2> m_batch_vertex_shaders{};              // [textured]
-  DimensionalArray<VkShaderModule, 2, 2, 9, 4> m_batch_fragment_shaders{};   // [render][texture][dither][interlace]
+  DimensionalArray<std::atomic<VkShaderModule>, 2> m_batch_vertex_shaders{};              // [textured]
+  DimensionalArray<std::atomic<VkShaderModule>, 2, 2, 9, 4> m_batch_fragment_shaders{};   // [render][texture][dither][interlace]
 
   // [wrapped][interlaced]
   DimensionalArray<VkPipeline, 2, 2> m_vram_fill_pipelines{};
