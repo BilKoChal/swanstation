@@ -23,6 +23,14 @@ public:
 
   void Open(bool is_gles, std::string_view base_path, u32 version);
 
+  // Returns whether Open() has already been called successfully on
+  // this instance. Used by the lazy-compile path in GPU_HW_OpenGL
+  // to avoid re-reading the same on-disk index on UpdateSettings
+  // round-trips through CompilePrograms, which would both leak
+  // file handles and double-count m_index entries. Mirrors the
+  // equivalent accessor on D3D11::ShaderCache and D3D12::ShaderCache.
+  bool IsOpen() const { return m_index_file != nullptr; }
+
   std::optional<Program> GetProgram(const std::string_view vertex_shader, const std::string_view geometry_shader,
                                     const std::string_view fragment_shader, const PreLinkCallback& callback = {});
 

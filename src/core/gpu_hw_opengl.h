@@ -15,6 +15,7 @@
 #include "core/host_display.h"
 #include "glad.h"
 #include "gpu_hw.h"
+#include "gpu_hw_shadergen.h"
 #include "texture_replacements.h"
 #include <array>
 #include <memory>
@@ -144,6 +145,23 @@ private:
 
   bool CompilePrograms();
 
+  // Lazy batch-program compile path. The libretro hardware-renderer
+  // protocol gives us a single GL context bound to the runloop
+  // thread; there's no way to compile shaders on a background
+  // worker (no second context, no glShareLists hand-off), so
+  // unlike the D3D11/D3D12/Vulkan backends OpenGL's 'Lazy' mode
+  // degrades to 'Disabled' - compile each combination on the
+  // runloop the first time the game dispatches a draw using it.
+  // No threading, no atomics, no mutex; everything runs on one
+  // thread.
+  //
+  // The matrix slots start as default-constructed GL::Programs
+  // (program id 0); GetBatchProgram fills a slot on demand,
+  // applying the Reserved_*Direct16Bit dedup at the matrix level
+  // by re-linking the program from the canonical mode's source
+  // string (the shader cache makes the second link cheap).
+  const GL::Program* GetBatchProgram(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
+
   void SetDepthFunc();
   void SetDepthFunc(GLenum func);
   void SetBlendMode();
@@ -179,6 +197,20 @@ private:
   GL::Program m_vram_write_program;
   GL::Program m_vram_copy_program;
   GL::Program m_vram_update_depth_program;
+
+  // Persistent shader cache, shadergen, and the
+  // use_binding_layout flag the cold-start CompilePrograms picked
+  // up. All three used to be locals in CompilePrograms(); they
+  // now outlive that function so GetBatchProgram can call into
+  // them at draw time on a lazy miss. On UpdateSettings round-
+  // trips through CompilePrograms the cache instance persists
+  // (Open is guarded by the new GL::ShaderCache::IsOpen()
+  // accessor) so the in-memory index isn't re-read from disk each
+  // time. The shadergen is rebuilt each CompilePrograms because
+  // its baked-in settings may have changed.
+  GL::ShaderCache m_shader_cache;
+  std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
+  bool m_use_binding_layout = false;
 
   u32 m_uniform_buffer_alignment = 1;
   u32 m_texture_stream_buffer_size = 0;

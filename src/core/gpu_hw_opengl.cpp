@@ -1068,97 +1068,88 @@ bool GPU_HW_OpenGL::CreateTextureBuffer()
 
 bool GPU_HW_OpenGL::CompilePrograms()
 {
-  GL::ShaderCache shader_cache;
-  shader_cache.Open(IsGLES(), g_host_interface->GetShaderCacheBasePath(), SHADER_CACHE_VERSION);
+  // Reset every program object so the new compile starts from a
+  // clean slate. Without this, on an UpdateSettings round-trip
+  // through CompilePrograms (in Lazy / Disabled mode where the
+  // matrix isn't refilled here) the lazy fault-in path in
+  // GetBatchProgram would observe programs left over from the
+  // previous settings - built with the old texture filter / scale
+  // / etc. - and use them for the new draws. The synchronous
+  // 'Enabled' loop further down also relies on this: it calls
+  // GetBatchProgram which short-circuits on IsValid(), so a
+  // pre-populated slot would silently keep its old program.
+  //
+  // GL::Program's move-assign operator calls Destroy() on the
+  // destination before taking the source's state, so default-
+  // assigning each slot to a temporary {} both glDeleteProgram's
+  // the old handle and rewinds the slot to id = 0.
+  for (auto& a : m_render_programs)
+    for (auto& b : a)
+      for (auto& c : b)
+        for (auto& slot : c)
+          slot = GL::Program{};
 
-  const bool use_binding_layout = GPU_HW_ShaderGen::UseGLSLBindingLayout();
-  GPU_HW_ShaderGen shadergen(m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading,
-                             m_true_color, m_scaled_dithering, m_texture_filtering, m_using_uv_limits,
-                             m_pgxp_depth_buffer, m_disable_color_perspective, m_supports_dual_source_blend);
-
-  ShaderCompileProgressTracker progress("Compiling Programs", (4 * 9 * 2 * 2) + (2 * 3) + (2 * 2) + 1 + 1 + 1 + 1 + 1);
-
-  for (u32 render_mode = 0; render_mode < 4; render_mode++)
+  // Open the disk-backed program cache once. On subsequent calls
+  // (UpdateSettings -> CompilePrograms) the instance still holds
+  // the index from last time and the disk file hasn't moved, so
+  // re-opening would double-count m_index and leak file handles.
+  if (!m_shader_cache.IsOpen())
   {
-    for (u32 texture_mode = 0; texture_mode < 9; texture_mode++)
+    m_shader_cache.Open(IsGLES(), g_host_interface->GetShaderCacheBasePath(), SHADER_CACHE_VERSION);
+  }
+  GL::ShaderCache& shader_cache = m_shader_cache;
+
+  m_use_binding_layout = GPU_HW_ShaderGen::UseGLSLBindingLayout();
+  const bool use_binding_layout = m_use_binding_layout;
+
+  m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
+    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+    m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+    m_supports_dual_source_blend);
+  GPU_HW_ShaderGen& shadergen = *m_shadergen;
+
+  // OpenGL is the odd one out: the libretro hardware-renderer
+  // protocol exposes only a single GL context bound to the
+  // runloop, so there's no way to spin up a worker that compiles
+  // in the background like D3D11/D3D12/Vulkan do. 'Lazy' therefore
+  // degrades to the same shape as 'Disabled': skip the matrix at
+  // CompilePrograms time, fault each combo in on the runloop the
+  // first time the game dispatches a draw using it.
+  //
+  // 'Enabled' still does the full synchronous walk via the
+  // GetBatchProgram helper, mirroring the D3D11/D3D12/Vulkan
+  // commits.
+  const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+  const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+  const u32 batch_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(4 * 9 * 2 * 2) : 0u;
+
+  ShaderCompileProgressTracker progress("Compiling Programs",
+                                        batch_progress_units + (2 * 3) + (2 * 2) + 1 + 1 + 1 + 1 + 1);
+
+  if (precompile_sync)
+  {
+    for (u8 render_mode = 0; render_mode < 4; render_mode++)
     {
-      // Reserved_Direct16Bit (3) and Reserved_RawDirect16Bit (7) produce
-      // shaders identical to Direct16Bit (2) and RawDirect16Bit (6) - see
-      // GPU_HW_D3D11::CompileShaders for the full explanation. For
-      // OpenGL we can't simply copy the resulting GL::Program object
-      // because it's move-only (it owns a GLuint program ID that the
-      // destructor will glDeleteProgram), so we have to re-link the
-      // program. We can, however, skip the ~50ms shader-source
-      // regeneration in GenerateBatchFragmentShader by re-using the
-      // already-built source string from the previous (source_mode)
-      // iteration. The shader cache will hit on the second GetProgram
-      // call and reload the binary instead of recompiling.
-      const u32 source_mode = (texture_mode == static_cast<u32>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                              (texture_mode == static_cast<u32>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
-                                                                                                            texture_mode;
-
-      for (u8 dithering = 0; dithering < 2; dithering++)
+      for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
       {
-        for (u8 interlacing = 0; interlacing < 2; interlacing++)
+        for (u8 dithering = 0; dithering < 2; dithering++)
         {
-          const bool textured = (static_cast<GPUTextureMode>(texture_mode) != GPUTextureMode::Disabled);
-          const std::string batch_vs = shadergen.GenerateBatchVertexShader(textured);
-          // If we're at a Reserved_* texture_mode, build a fragment
-          // shader source for the equivalent non-reserved mode. The
-          // post-MD5 cache dedup will then short-circuit the GL
-          // compile/link work too.
-          const std::string fs = shadergen.GenerateBatchFragmentShader(
-            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(source_mode),
-            ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
-
-          const auto link_callback = [this, textured, use_binding_layout](GL::Program& prog) {
-            if (!use_binding_layout)
-            {
-              prog.BindAttribute(0, "a_pos");
-              prog.BindAttribute(1, "a_col0");
-              if (textured)
-              {
-                prog.BindAttribute(2, "a_texcoord");
-                prog.BindAttribute(3, "a_texpage");
-                prog.BindAttribute(4, "a_uv_limits");
-              }
-
-              if (!IsGLES() || m_supports_dual_source_blend)
-              {
-                if (m_supports_dual_source_blend)
-                {
-                  prog.BindFragDataIndexed(0, "o_col0");
-                  prog.BindFragDataIndexed(1, "o_col1");
-                }
-                else
-                {
-                  prog.BindFragData(0, "o_col0");
-                }
-              }
-            }
-          };
-
-          std::optional<GL::Program> prog = shader_cache.GetProgram(batch_vs, {}, fs, link_callback);
-          if (!prog)
-            return false;
-
-          if (!use_binding_layout)
+          for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
-            prog->BindUniformBlock("UBOBlock", 1);
-            if (textured)
-            {
-              prog->Bind();
-              prog->Uniform1i("samp0", 0);
-            }
+            const GL::Program* prog = GetBatchProgram(render_mode, texture_mode, ConvertToBoolUnchecked(dithering),
+                                                      ConvertToBoolUnchecked(interlacing));
+            if (!prog)
+              return false;
+            progress.Increment();
           }
-
-          m_render_programs[render_mode][texture_mode][dithering][interlacing] = std::move(*prog);
-
-          progress.Increment();
         }
       }
     }
   }
+  // For Lazy and Disabled: m_render_programs stays default-
+  // constructed (program id 0); each cell is filled on first draw
+  // by GetBatchProgram on the runloop thread.
 
   for (u8 depth_24bit = 0; depth_24bit < 2; depth_24bit++)
   {
@@ -1303,11 +1294,100 @@ bool GPU_HW_OpenGL::CompilePrograms()
   return true;
 }
 
+const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing)
+{
+  // Reserved_*Direct16Bit dedup. The fragment shader source for
+  // texture_mode 3 / 7 is byte-for-byte identical to 2 / 6 after
+  // macro expansion. Unlike the other backends we can't share a
+  // refcounted handle between slots (GL::Program is move-only and
+  // owns its GLuint via glDeleteProgram in its destructor); the
+  // best we can do is re-link the canonical source string into a
+  // separate program object. The disk-backed program cache hits on
+  // the second GetProgram call and reloads the linked binary
+  // instead of recompiling, so the duplicate is cheap.
+  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                      texture_mode;
+
+  GL::Program& slot = m_render_programs[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+  if (slot.IsValid())
+    return &slot;
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetBatchProgram called before CompilePrograms constructed the shadergen");
+    return nullptr;
+  }
+
+  const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
+  const std::string batch_vs = m_shadergen->GenerateBatchVertexShader(textured);
+  const std::string fs = m_shadergen->GenerateBatchFragmentShader(
+    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+
+  const bool use_binding_layout = m_use_binding_layout;
+  const auto link_callback = [this, textured, use_binding_layout](GL::Program& prog) {
+    if (!use_binding_layout)
+    {
+      prog.BindAttribute(0, "a_pos");
+      prog.BindAttribute(1, "a_col0");
+      if (textured)
+      {
+        prog.BindAttribute(2, "a_texcoord");
+        prog.BindAttribute(3, "a_texpage");
+        prog.BindAttribute(4, "a_uv_limits");
+      }
+
+      if (!IsGLES() || m_supports_dual_source_blend)
+      {
+        if (m_supports_dual_source_blend)
+        {
+          prog.BindFragDataIndexed(0, "o_col0");
+          prog.BindFragDataIndexed(1, "o_col1");
+        }
+        else
+        {
+          prog.BindFragData(0, "o_col0");
+        }
+      }
+    }
+  };
+
+  std::optional<GL::Program> prog = m_shader_cache.GetProgram(batch_vs, {}, fs, link_callback);
+  if (!prog)
+  {
+    Log_ErrorPrintf("Lazy batch program compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode, texture_mode,
+                    BoolToUInt8(dithering), BoolToUInt8(interlacing));
+    return nullptr;
+  }
+
+  if (!use_binding_layout)
+  {
+    prog->BindUniformBlock("UBOBlock", 1);
+    if (textured)
+    {
+      prog->Bind();
+      prog->Uniform1i("samp0", 0);
+    }
+  }
+
+  slot = std::move(*prog);
+  return &slot;
+}
+
 void GPU_HW_OpenGL::DrawBatchVertices(BatchRenderMode render_mode, u32 base_vertex, u32 num_vertices)
 {
-  const GL::Program& prog = m_render_programs[static_cast<u8>(render_mode)][static_cast<u8>(m_batch.texture_mode)]
-                                             [BoolToUInt8(m_batch.dithering)][BoolToUInt8(m_batch.interlacing)];
-  prog.Bind();
+  // Fetch the batch program via the lazy helper. In 'Enabled'
+  // precompile mode every slot was filled at CompilePrograms time
+  // so this is a fast IsValid() check + array index. In 'Lazy' /
+  // 'Disabled' mode the slot is compiled on the first use of that
+  // combination, then cached. Single-threaded - no mutex / no
+  // atomic - because the libretro hardware-renderer protocol only
+  // gives us one GL context bound to this thread.
+  const GL::Program* prog = GetBatchProgram(static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode),
+                                            m_batch.dithering, m_batch.interlacing);
+  if (!prog)
+    return;
+  prog->Bind();
 
   if (m_current_transparency_mode != m_batch.transparency_mode || m_current_render_mode != render_mode)
   {

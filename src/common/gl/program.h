@@ -34,6 +34,12 @@ public:
 
   void Bind() const;
 
+  // Returns true if the program has a non-zero linked GL handle.
+  // Used by the lazy-compile path in GPU_HW_OpenGL to distinguish a
+  // never-touched matrix slot (program id 0) from one that has
+  // already been compiled and is ready for Bind().
+  bool IsValid() const { return m_program_id != 0; }
+
   void Destroy();
 
   int RegisterUniform(const char* name);
