@@ -140,18 +140,31 @@ private:
   bool CompileShaders();
   void DestroyShaders();
 
-  // Lazy batch-fragment-shader compile path. The shader array starts
-  // all-null; GetBatchPixelShader fills a slot on demand (the first
-  // time the game dispatches a draw using that combination) and
-  // returns a non-owning pointer to the underlying ID3D11PixelShader.
-  // It also handles the texture-mode dedup (3->2 and 7->6) inline so
-  // the duplicate slots never hit the cache. Synchronization between
-  // the main thread and the background precompile worker (when the
-  // 'Lazy' precompile mode is selected) is via m_batch_shader_mutex
-  // around the cache + array access; ID3D11PixelShader* itself is
-  // free-threaded for the consumer side (PSSetShader). The fast path
-  // is one mutex lock per DrawBatchVertices call, which on a modern
-  // libc is ~20 ns uncontended.
+  // Lazy batch-fragment-shader compile path. The shader matrix
+  // starts all-null; GetBatchPixelShader fills a slot on demand
+  // (the first time the game dispatches a draw using that
+  // combination) and returns a non-owning pointer to the underlying
+  // ID3D11PixelShader. It also handles the texture-mode dedup
+  // (3->2 and 7->6) inline so the duplicate slots share their
+  // canonical ComPtr.
+  //
+  // Two-level synchronisation:
+  //   - FAST path (slot already filled): a single atomic
+  //     acquire-load from m_batch_pixel_shader_fastpath. No mutex,
+  //     no kernel call, no serialisation against the background
+  //     precompile worker. This is what DrawBatchVertices hits in
+  //     steady state.
+  //   - SLOW path (slot null after the atomic load): take
+  //     m_batch_shader_mutex, double-check the slot, compile via
+  //     m_shader_cache.GetPixelShader (which mutates its
+  //     unordered_map index and so requires external synchronisation),
+  //     publish the ComPtr into m_batch_pixel_shaders, and then
+  //     atomic-store the raw pointer into m_batch_pixel_shader_fastpath
+  //     so future fast-path readers see it.
+  //
+  // ID3D11PixelShader* itself is free-threaded for the consumer
+  // side (PSSetShader), so DrawBatchVertices can use the raw
+  // pointer returned here without further locking.
   ID3D11PixelShader* GetBatchPixelShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
 
   // Background-thread worker for 'Lazy' mode: walks the entire
@@ -213,20 +226,49 @@ private:
   std::array<ComPtr<ID3D11BlendState>, 5> m_batch_blend_states; // [transparency_mode]
   ComPtr<ID3D11InputLayout> m_batch_input_layout;
   std::array<ComPtr<ID3D11VertexShader>, 2> m_batch_vertex_shaders; // [textured]
+
+  // Batch pixel shader matrix. The ComPtr array owns the
+  // reference; the parallel atomic-raw-pointer array exists so
+  // DrawBatchVertices can sample a slot without taking any lock.
+  //
+  // m_batch_pixel_shaders holds the COM ownership and is only
+  // written under m_batch_shader_mutex (in GetBatchPixelShader's
+  // slow path). The shader stays alive for the lifetime of this
+  // GPU backend (until DestroyShaders walks the ComPtr array), so
+  // the raw pointer published into m_batch_pixel_shader_fastpath
+  // is valid until then.
+  //
+  // The Reserved_*Direct16Bit dedup at the matrix level copies
+  // the ComPtr (sharing one shader across two slots) and copies
+  // the raw pointer too. SafeDestroy is via ComPtr-reset on the
+  // owning array; the atomic array is just a view.
+  //
+  // Without this split the fast path took the same mutex the
+  // background precompile worker holds during 50-200 ms HLSL
+  // compiles, so concurrent main-thread draws would stall behind
+  // the worker for one whole shader compile per draw. With the
+  // split, DrawBatchVertices is lock-free on cache-hit and the
+  // worker can compile in the background unmolested.
   std::array<std::array<std::array<std::array<ComPtr<ID3D11PixelShader>, 2>, 2>, 9>, 4>
     m_batch_pixel_shaders; // [render_mode][texture_mode][dithering][interlacing]
+  std::array<std::array<std::array<std::array<std::atomic<ID3D11PixelShader*>, 2>, 2>, 9>, 4>
+    m_batch_pixel_shader_fastpath{}; // [render_mode][texture_mode][dithering][interlacing]
 
   // Persistent shader cache and shadergen instances for the lazy
   // / background-thread compile path. Both used to be locals in
   // CompileShaders(); now they live for the lifetime of this GPU
   // backend so GetBatchPixelShader can call into them at draw time.
-  // m_batch_shader_mutex serialises access to both the cache (its
-  // internal m_index unordered_map is not thread-safe on insert) and
-  // the m_batch_pixel_shaders array. The shadergen is stateless once
-  // constructed - all its parameters are baked in at construction -
-  // so reads under the mutex are safe; we re-construct it in
-  // CompileShaders whenever settings change and the matrix needs
-  // re-filling.
+  // m_batch_shader_mutex serialises the SLOW path of
+  // GetBatchPixelShader (cache mutation, ComPtr-array write, and
+  // the atomic-raw-pointer publish). The FAST path -
+  // DrawBatchVertices looking up an already-filled slot - reads
+  // m_batch_pixel_shader_fastpath with an atomic acquire-load and
+  // does not take this mutex; that's what keeps the runloop
+  // running while the background precompile worker is compiling
+  // other cells. The shadergen is stateless once constructed - all
+  // its parameters are baked in at construction - so reads under
+  // the mutex are safe; we re-construct it in CompileShaders
+  // whenever settings change and the matrix needs re-filling.
   std::mutex m_batch_shader_mutex;
   D3D11::ShaderCache m_shader_cache;
   std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;

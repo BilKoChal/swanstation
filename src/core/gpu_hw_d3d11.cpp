@@ -1211,16 +1211,37 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_
   // Apply the Reserved_*Direct16Bit dedup at the matrix level. The
   // shader source for texture_mode 3 / 7 is byte-for-byte identical
   // to 2 / 6 after macro expansion; storing the same ComPtr in both
-  // slots is safe (refcounted).
+  // slots is safe (refcounted), and storing the same raw pointer in
+  // both atomic fast-path slots is safe because the ComPtr keeps the
+  // shader alive for the lifetime of the GPU backend.
   const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
                          (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
+  // Fast path: lock-free atomic acquire-load of the caller's slot.
+  // If it's filled (the worker reached it first, or an earlier
+  // main-thread fault-in did), we're done with no mutex / kernel
+  // call / contention against the worker.
+  std::atomic<ID3D11PixelShader*>& fast_slot =
+    m_batch_pixel_shader_fastpath[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+  ID3D11PixelShader* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+    return existing;
+
+  // Slow path. Take the mutex; double-check the fast slot in case
+  // someone else just published while we were waiting; otherwise
+  // compile via m_shader_cache.GetPixelShader (mutex-protected
+  // because the cache's m_index unordered_map isn't thread-safe on
+  // insert), populate the canonical ComPtr slot, propagate to the
+  // dup slot if the request was for a Reserved_* texture mode, and
+  // publish the raw pointer back out through fast_slot via
+  // memory_order_release.
   std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
 
-  // If the dedup-redirected slot is already filled, propagate the
-  // ComPtr into the caller's slot (if it asked for a Reserved_ mode)
-  // and return the underlying pointer.
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+    return existing;
+
   ComPtr<ID3D11PixelShader>& canonical_slot =
     m_batch_pixel_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
 
@@ -1236,10 +1257,14 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_
     canonical_slot = m_shader_cache.GetPixelShader(m_device.Get(), ps);
     if (!canonical_slot)
     {
-      Log_ErrorPrintf("Lazy batch pixel shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)",
-                      render_mode, texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+      Log_ErrorPrintf("Lazy batch pixel shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
+                      texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
       return nullptr;
     }
+    // Publish the canonical raw pointer so future fast-path readers
+    // for the canonical slot don't have to take the mutex.
+    m_batch_pixel_shader_fastpath[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)].store(
+      canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
@@ -1250,6 +1275,10 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_
       dup_slot = canonical_slot;
   }
 
+  // Publish the caller's slot. For the canonical case this is a
+  // redundant store relative to the one above; for the dup case
+  // this is what makes the dup slot fast-path-reachable.
+  fast_slot.store(canonical_slot.Get(), std::memory_order_release);
   return canonical_slot.Get();
 }
 
@@ -1274,6 +1303,20 @@ void GPU_HW_D3D11::DestroyShaders()
   m_copy_pixel_shader.Reset();
   m_uv_quad_vertex_shader.Reset();
   m_screen_quad_vertex_shader.Reset();
+
+  // Clear the atomic fast-path array BEFORE dropping the ComPtr
+  // ownership so a hypothetical concurrent reader couldn't see a
+  // raw pointer pointing to a just-freed shader. By this point the
+  // worker is stopped (StopShaderCompileThread above) and the
+  // runloop isn't drawing (UpdateSettings is the only call site that
+  // goes through DestroyShaders, and it's on the runloop thread
+  // itself), so memory_order_relaxed is sufficient.
+  for (auto& a : m_batch_pixel_shader_fastpath)
+    for (auto& b : a)
+      for (auto& c : b)
+        for (auto& slot : c)
+          slot.store(nullptr, std::memory_order_relaxed);
+
   m_batch_pixel_shaders = {};
   m_batch_vertex_shaders = {};
   m_batch_input_layout.Reset();

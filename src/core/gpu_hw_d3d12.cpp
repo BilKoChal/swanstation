@@ -811,14 +811,43 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   // matrix level. Two slots end up holding the same ComPtr; ID3DBlob
   // is refcounted so sharing the reference across slots is safe and
   // the destructor on DestroyPipelines just drops the refcount twice.
+  // The parallel _fastpath atomic array gets the same raw pointer
+  // in both slots, which is safe because the ComPtr keeps the blob
+  // alive for the lifetime of the GPU backend.
   const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
                          (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
-  // Caller is responsible for holding m_batch_shader_mutex - this
-  // helper is only reached from GetBatchPipeline (which takes the
-  // lock) or from CompilePipelines's Enabled-mode loop which is
-  // single-threaded.
+  // Fast path: lock-free acquire-load. Both the worker (via
+  // GetBatchPipeline -> here) and the main thread (same) can read
+  // a slot concurrently without serialising against each other or
+  // each other's slow-path compiles.
+  std::atomic<ID3DBlob*>& fast_slot =
+    m_batch_fragment_shader_blobs_fastpath[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+  ID3DBlob* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+  {
+    // Build a temporary ComPtr that holds its own ref. The matrix
+    // ComPtr keeps the underlying object alive, so this is a
+    // straightforward AddRef on the way out.
+    ComPtr<ID3DBlob> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  // Slow path: take the mutex, double-check, compile if still null.
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3DBlob> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
   ComPtr<ID3DBlob>& canonical_slot =
     m_batch_fragment_shader_blobs[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
 
@@ -838,6 +867,10 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
                       texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
       return {};
     }
+    // Publish the canonical raw pointer so future fast-path readers
+    // for the canonical slot don't have to take the mutex.
+    m_batch_fragment_shader_blobs_fastpath[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)]
+      .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
@@ -848,6 +881,8 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
       dup_slot = canonical_slot;
   }
 
+  // Publish the caller's slot.
+  fast_slot.store(canonical_slot.Get(), std::memory_order_release);
   return canonical_slot;
 }
 
@@ -859,12 +894,48 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
   // dependent input to the PSO is the bound fragment shader (which
   // is itself dedup'd in GetBatchFragmentShader), the resulting PSO
   // for the Reserved_* modes is bit-identical to the canonical mode
-  // and we can share the ComPtr across both slots.
+  // and we can share the ComPtr across both slots. The atomic
+  // _fastpath array gets the same raw pointer in both slots, kept
+  // alive by the ComPtr for the lifetime of the GPU backend.
   const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
                          (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
+  // Fast path: lock-free acquire-load. DrawBatchVertices hits this
+  // once a slot is filled (either by the precompile worker or by
+  // an earlier main-thread fault-in). No mutex, no contention
+  // against the worker.
+  std::atomic<ID3D12PipelineState*>& fast_slot =
+    m_batch_pipelines_fastpath[depth_test][render_mode][texture_mode][transparency_mode][BoolToUInt8(dithering)]
+                              [BoolToUInt8(interlacing)];
+  ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  // Slow path. The fragment-shader fetch has its own internal
+  // lock-acquire-release; we call it WITHOUT holding our own
+  // m_batch_shader_mutex so a sibling helper isn't deadlocked
+  // when it tries to take the same lock.
+  ComPtr<ID3DBlob> fs_blob = GetBatchFragmentShader(render_mode, lookup_mode, dithering, interlacing);
+  if (!fs_blob)
+    return {};
+
   std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+
+  // Double-check the fast slot under the lock.
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
 
   ComPtr<ID3D12PipelineState>& canonical_slot =
     m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
@@ -872,11 +943,6 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
 
   if (!canonical_slot)
   {
-    // Need the bound fragment shader first.
-    ComPtr<ID3DBlob> fs_blob = GetBatchFragmentShader(render_mode, lookup_mode, dithering, interlacing);
-    if (!fs_blob)
-      return {};
-
     const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
 
     // Build a fresh local builder each fault-in so we don't carry
@@ -936,6 +1002,12 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
 
     D3D12::SetObjectNameFormatted(canonical_slot.Get(), "Batch Pipeline %u,%u,%u,%u,%u,%u", depth_test, render_mode,
                                   lookup_mode, transparency_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+
+    // Publish the canonical raw pointer for future fast-path
+    // readers of the canonical slot.
+    m_batch_pipelines_fastpath[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
+                              [BoolToUInt8(interlacing)]
+                                .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
@@ -947,6 +1019,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
       dup_slot = canonical_slot;
   }
 
+  // Publish the caller's slot.
+  fast_slot.store(canonical_slot.Get(), std::memory_order_release);
   return canonical_slot;
 }
 
@@ -957,6 +1031,17 @@ void GPU_HW_D3D12::DestroyPipelines()
   // to default-construct.
   StopShaderCompileThread();
   m_shadergen.reset();
+
+  // Clear the atomic fast-path views BEFORE dropping the ComPtr
+  // ownership so a hypothetical concurrent reader couldn't see a
+  // raw pointer pointing to a just-freed object. By this point the
+  // worker is stopped and the runloop isn't drawing (UpdateSettings
+  // is the only call site that runs DestroyPipelines, and it's on
+  // the runloop thread), so memory_order_relaxed is sufficient.
+  m_batch_pipelines_fastpath.enumerate(
+    [](std::atomic<ID3D12PipelineState*>& s) { s.store(nullptr, std::memory_order_relaxed); });
+  m_batch_fragment_shader_blobs_fastpath.enumerate(
+    [](std::atomic<ID3DBlob*>& s) { s.store(nullptr, std::memory_order_relaxed); });
 
   m_batch_pipelines = {};
   m_vram_fill_pipelines = {};

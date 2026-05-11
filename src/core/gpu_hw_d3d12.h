@@ -126,20 +126,29 @@ private:
 
   u32 m_current_uniform_buffer_offset = 0;
 
+  // Batch PSO matrix. The ComPtr array owns the reference; the
+  // parallel atomic-raw-pointer array exists so DrawBatchVertices
+  // can sample a slot without taking any lock. Same split as the
+  // D3D11 batch pixel shader matrix: m_batch_pipelines holds the
+  // COM ownership and is only written under m_batch_shader_mutex
+  // (in GetBatchPipeline's slow path); m_batch_pipelines_fastpath
+  // is the atomic view the runloop reads on the fast path.
+  //
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2, 5, 9, 4, 2> m_batch_pipelines;
+  DimensionalArray<std::atomic<ID3D12PipelineState*>, 2, 2, 5, 9, 4, 2> m_batch_pipelines_fastpath{};
 
-  // Persistent shader-cache + shadergen instances for the lazy and
-  // background-thread compile paths. Both used to be locals in
-  // CompilePipelines(); now they live for the lifetime of this GPU
-  // backend so the lazy helpers can call into them at draw time.
-  // The mutex serialises access to the cache (its index maps are
-  // not thread-safe on insert), to m_batch_vertex_shader_blobs /
-  // m_batch_fragment_shader_blobs (the shader-bytecode caches used
-  // both at precompile and at lazy PSO build time), and to
-  // m_batch_pipelines itself. m_shadergen is functionally
-  // stateless once constructed but we still pin its lifetime here
-  // because GetBatchFragmentShader calls into it under the lock.
+  // m_batch_shader_mutex serialises the SLOW path of the lazy
+  // helpers (cache mutation, ComPtr-array write, atomic-raw-pointer
+  // publish). The FAST path - DrawBatchVertices looking up an
+  // already-filled PSO slot, or GetBatchPipeline looking up an
+  // already-compiled fragment shader - reads the corresponding
+  // _fastpath atomic array with an acquire-load and does not take
+  // this mutex. That decoupling is what keeps the runloop running
+  // while the background precompile worker is compiling other
+  // cells. m_shadergen is functionally stateless once constructed
+  // but we still pin its lifetime here because the helpers' slow
+  // path calls into it under the lock.
   std::mutex m_batch_shader_mutex;
   D3D12::ShaderCache m_shader_cache;
   std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
@@ -156,8 +165,13 @@ private:
   // (render, texture, dithering, interlacing) only - the
   // depth/transparency dimensions of m_batch_pipelines don't enter
   // the fragment shader source.
+  //
+  // Same fast/slow-path split as m_batch_pipelines above:
+  // m_batch_fragment_shader_blobs owns the ComPtr; the parallel
+  // _fastpath array is the lock-free view.
   DimensionalArray<ComPtr<ID3DBlob>, 2> m_batch_vertex_shader_blobs;            // [textured]
   DimensionalArray<ComPtr<ID3DBlob>, 2, 2, 9, 4> m_batch_fragment_shader_blobs; // [render][texture][dither][interlace]
+  DimensionalArray<std::atomic<ID3DBlob*>, 2, 2, 9, 4> m_batch_fragment_shader_blobs_fastpath{};
 
   // [wrapped][interlaced]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2> m_vram_fill_pipelines;
