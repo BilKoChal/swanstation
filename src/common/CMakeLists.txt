@@ -65,6 +65,7 @@ add_library(common
   string.h
   string_util.cpp
   string_util.h
+  thread_priority.h
   timer.cpp
   timer.h
   types.h
@@ -107,6 +108,7 @@ if(WIN32)
     d3d11/stream_buffer.h
     d3d11/texture.cpp
     d3d11/texture.h
+    display.hlsl.h
     windows_headers.h
   )
   if(USE_D3D12)
