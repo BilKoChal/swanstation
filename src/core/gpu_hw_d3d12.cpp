@@ -6,6 +6,7 @@
 #include "common/d3d12/shader_cache.h"
 #include "common/d3d12/util.h"
 #include "common/log.h"
+#include "common/thread_priority.h"
 #include "common/timer.h"
 #include "gpu_hw_shadergen.h"
 #include "host_display.h"
@@ -768,6 +769,13 @@ void GPU_HW_D3D12::StopShaderCompileThread()
 
 void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
 {
+  // Lower this worker's scheduling priority to "below normal" so
+  // it doesn't compete with the runloop / CPU emulation / audio
+  // threads on CPU-contended systems. Best-effort: if the platform
+  // refuses we just keep going at default priority. See
+  // common/thread_priority.h for the per-platform mechanics.
+  ThreadPriority::LowerCurrentThreadPriority();
+
   // Walks the PSO matrix in (depth_test, render_mode,
   // transparency_mode, texture_mode, dithering, interlacing) order
   // - the same order CompilePipelines uses for the Enabled precompile

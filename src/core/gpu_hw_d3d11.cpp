@@ -3,6 +3,7 @@
 #include "common/display.hlsl.h"
 #include "common/log.h"
 #include "common/state_wrapper.h"
+#include "common/thread_priority.h"
 #include "common/timer.h"
 #include "gpu_hw_shadergen.h"
 #include "gpu_sw_backend.h"
@@ -1179,6 +1180,13 @@ void GPU_HW_D3D11::StopShaderCompileThread()
 
 void GPU_HW_D3D11::ShaderCompileThreadEntryPoint()
 {
+  // Lower this worker's scheduling priority to "below normal" so
+  // it doesn't compete with the runloop / CPU emulation / audio
+  // threads on CPU-contended systems. Best-effort: if the platform
+  // refuses we just keep going at default priority. See
+  // common/thread_priority.h for the per-platform mechanics.
+  ThreadPriority::LowerCurrentThreadPriority();
+
   // Walk the matrix in (render, texture, dither, interlace) order and
   // call GetBatchPixelShader on each cell. Each call takes
   // m_batch_shader_mutex internally; we don't hold a lock across the

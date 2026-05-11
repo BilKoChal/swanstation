@@ -1,6 +1,7 @@
 #include "gpu_hw_vulkan.h"
 #include "common/log.h"
 #include "common/state_wrapper.h"
+#include "common/thread_priority.h"
 #include "common/timer.h"
 #include "common/vulkan/builders.h"
 #include "common/vulkan/context.h"
@@ -1943,6 +1944,13 @@ void GPU_HW_Vulkan::StopShaderCompileThread()
 
 void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
 {
+  // Lower this worker's scheduling priority to "below normal" so
+  // it doesn't compete with the runloop / CPU emulation / audio
+  // threads on CPU-contended systems. Best-effort: if the platform
+  // refuses we just keep going at default priority. See
+  // common/thread_priority.h for the per-platform mechanics.
+  ThreadPriority::LowerCurrentThreadPriority();
+
   // Same nesting as the Enabled-mode precompile loop above. The quit
   // flag is checked between cells so DestroyPipelines can stop the
   // worker within at most one PSO compile of latency (Vulkan PSO
