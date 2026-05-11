@@ -5,9 +5,13 @@
 #include "common/vulkan/texture.h"
 #include "core/host_display.h"
 #include "gpu_hw.h"
+#include "gpu_hw_shadergen.h"
 #include "texture_replacements.h"
 #include <array>
+#include <atomic>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <tuple>
 #include <libretro.h>
 
@@ -146,6 +150,35 @@ private:
   bool CompilePipelines();
   void DestroyPipelines();
 
+  // Lazy batch-fragment-shader-module + PSO compile path. Same
+  // three-mode (Disabled / Enabled / Lazy) plumbing as the D3D11
+  // and D3D12 backends; see GPUShaderPrecompileMode in core/types.h
+  // for the user-facing semantics.
+  //
+  // Unlike D3D11 / D3D12, Vulkan can't share a refcounted resource
+  // wrapper between dispatch matrix slots, because both
+  // VkShaderModule and VkPipeline are raw handles destroyed via
+  // SafeDestroyShaderModule / SafeDestroyPipeline - two slots
+  // holding the same handle would double-call vkDestroy*. So the
+  // Reserved_*Direct16Bit dedup is applied at the *helper entry*
+  // (texture_mode 3 -> 2 and 7 -> 6 before the array index is
+  // computed) rather than by populating both slots. The dup slots
+  // for texture_mode 3 / 7 remain VK_NULL_HANDLE for the lifetime
+  // of the GPU backend; SafeDestroy* handles VK_NULL_HANDLE
+  // gracefully so DestroyPipelines doesn't trip on them.
+  VkShaderModule GetBatchFragmentShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
+  VkPipeline GetBatchPipeline(u8 depth_test, u8 render_mode, u8 texture_mode, u8 transparency_mode, bool dithering,
+                              bool interlacing);
+
+  // Background-thread worker for 'Lazy' mode: walks the full PSO
+  // matrix and calls GetBatchPipeline on each cell. Main thread
+  // can race ahead and fault in any slot it actually needs at draw
+  // time; the worker observes the filled slot under the lock and
+  // moves on. Quit flag checked between cells so DestroyPipelines
+  // can stop the worker within at most one PSO compile of latency.
+  void ShaderCompileThreadEntryPoint();
+  void StopShaderCompileThread();
+
   bool CreateTextureReplacementStreamBuffer();
 
   bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, u32 dst_x, u32 dst_y, u32 width, u32 height);
@@ -203,6 +236,34 @@ private:
 
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
   DimensionalArray<VkPipeline, 2, 2, 5, 9, 4, 3> m_batch_pipelines{};
+
+  // Persistent vertex / fragment shader modules and shadergen for
+  // the lazy and background-thread compile paths. These used to be
+  // locals in CompilePipelines and were leaked on success; now they
+  // live for the lifetime of this GPU backend so the lazy PSO
+  // builder can reach them at draw time, and DestroyPipelines tears
+  // them down properly via SafeDestroyShaderModule.
+  //
+  // Dup slots for texture_mode 3 / 7 stay VK_NULL_HANDLE; the
+  // helper-entry remap (see GetBatchFragmentShader) routes all
+  // accesses through the canonical slots 2 / 6.
+  //
+  // m_batch_shader_mutex serialises:
+  //   - g_vulkan_shader_cache mutations (its unordered_map indices
+  //     aren't thread-safe on insert)
+  //   - the VkPipelineCache passed to vkCreateGraphicsPipelines
+  //     (Vulkan spec: must be externally synchronised when shared
+  //     across threads)
+  //   - the m_batch_fragment_shaders / m_batch_pipelines matrix
+  //     writes
+  // Fast path: one uncontended mutex lock per DrawBatchVertices.
+  std::mutex m_batch_shader_mutex;
+  std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
+  std::thread m_shader_compile_thread;
+  std::atomic<bool> m_shader_compile_thread_quit{false};
+
+  DimensionalArray<VkShaderModule, 2> m_batch_vertex_shaders{};              // [textured]
+  DimensionalArray<VkShaderModule, 2, 2, 9, 4> m_batch_fragment_shaders{};   // [render][texture][dither][interlace]
 
   // [wrapped][interlaced]
   DimensionalArray<VkPipeline, 2, 2> m_vram_fill_pipelines{};

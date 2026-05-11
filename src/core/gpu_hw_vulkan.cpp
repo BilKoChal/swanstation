@@ -1448,20 +1448,38 @@ bool GPU_HW_Vulkan::CreateTextureBuffer()
 
 bool GPU_HW_Vulkan::CompilePipelines()
 {
+  // Make sure no previous background-compile worker is still alive
+  // (UpdateSettings triggers DestroyPipelines -> CompilePipelines).
+  StopShaderCompileThread();
+
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
 
-  GPU_HW_ShaderGen shadergen(m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading,
-                             m_true_color, m_scaled_dithering, m_texture_filtering, m_using_uv_limits,
-                             m_pgxp_depth_buffer, m_disable_color_perspective, m_supports_dual_source_blend);
+  m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
+    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+    m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+    m_supports_dual_source_blend);
+  GPU_HW_ShaderGen& shadergen = *m_shadergen;
 
-  ShaderCompileProgressTracker progress("Compiling Pipelines", 2 + (4 * 9 * 2 * 2) + (3 * 4 * 5 * 9 * 2 * 2) + 1 + 2 +
-                                                                 (2 * 2) + 2 + 1 + 1 + (2 * 3) + 1);
+  // Three-mode precompile control - see GPUShaderPrecompileMode in
+  // core/types.h.
+  const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+  const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+  const u32 batch_shader_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(4 * 9 * 2 * 2) : 0u;
+  const u32 batch_pipeline_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(3 * 4 * 5 * 9 * 2 * 2) : 0u;
 
-  // vertex shaders - [textured]
-  // fragment shaders - [render_mode][texture_mode][dithering][interlacing]
-  DimensionalArray<VkShaderModule, 2> batch_vertex_shaders{};
-  DimensionalArray<VkShaderModule, 2, 2, 9, 4> batch_fragment_shaders{};
+  ShaderCompileProgressTracker progress("Compiling Pipelines",
+                                        2 + batch_shader_progress_units + batch_pipeline_progress_units + 1 + 2 +
+                                          (2 * 2) + 2 + 1 + 1 + (2 * 3) + 1);
+
+  // The batch vertex and fragment shader-module arrays now live as
+  // members so the lazy PSO builder can reach them at draw time.
+  // Use local references for readability in the rest of this
+  // function (matching the previous structure).
+  auto& batch_vertex_shaders = m_batch_vertex_shaders;
+  auto& batch_fragment_shaders = m_batch_fragment_shaders;
 
   for (u8 textured = 0; textured < 2; textured++)
   {
@@ -1469,8 +1487,9 @@ bool GPU_HW_Vulkan::CompilePipelines()
     VkShaderModule shader = g_vulkan_shader_cache->GetVertexShader(vs);
     if (shader == VK_NULL_HANDLE)
     {
-      batch_vertex_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
-      batch_fragment_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
+      // DestroyPipelines takes care of partial state from a failed
+      // CompilePipelines via its enumerate(SafeDestroy*) sweeps,
+      // because the arrays we're filling here are now members.
       return false;
     }
 
@@ -1478,150 +1497,80 @@ bool GPU_HW_Vulkan::CompilePipelines()
     progress.Increment();
   }
 
-  for (u8 render_mode = 0; render_mode < 4; render_mode++)
-  {
-    for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
-    {
-      // See the comment in GPU_HW_D3D11::CompileShaders: shaders for
-      // Reserved_*Direct16Bit modes are bit-identical to their non-
-      // reserved counterparts. We can't share the resulting
-      // VkShaderModule handle between array slots safely because the
-      // error-path 'enumerate(SafeDestroyShaderModule)' calls would
-      // double-destroy, so for Vulkan we still call into
-      // GetFragmentShader for each slot - but we feed it the source
-      // string from the canonical (source_mode) slot, skipping the
-      // ~50ms GenerateBatchFragmentShader call. The shader cache
-      // hits on the second lookup and avoids the GLSL->SPIR-V
-      // compile too; only the cheap vkCreateShaderModule call runs.
-      // The PSO loop below does NOT dedup because VkPipeline shares
-      // the same enumerate-destroy hazard with no convenient
-      // refcounting alternative - the per-PSO win for ~22% of the
-      // pipeline matrix is left for a future commit that adds a
-      // proper ownership-tracking layer.
-      const u8 source_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                             (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
-                                                                                                          texture_mode;
-
-      for (u8 dithering = 0; dithering < 2; dithering++)
-      {
-        for (u8 interlacing = 0; interlacing < 2; interlacing++)
-        {
-          const std::string fs = shadergen.GenerateBatchFragmentShader(
-            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(source_mode),
-            ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
-
-          VkShaderModule shader = g_vulkan_shader_cache->GetFragmentShader(fs);
-          if (shader == VK_NULL_HANDLE)
-	  {
-            batch_vertex_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
-            batch_fragment_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
-            return false;
-	  }
-
-          batch_fragment_shaders[render_mode][texture_mode][dithering][interlacing] = shader;
-          progress.Increment();
-        }
-      }
-    }
-  }
-
-  Vulkan::GraphicsPipelineBuilder gpbuilder;
-
-  // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
-  for (u8 depth_test = 0; depth_test < 3; depth_test++)
+  // Batch fragment shader matrix and PSO matrix. Behaviour depends
+  // on g_settings.gpu_shader_precompile_mode (see core/types.h):
+  //
+  //   - Enabled : compile every batch shader-module and every PSO
+  //               right here, as in the historical implementation.
+  //   - Lazy    : leave the matrices empty; spawn a worker at the
+  //               end of CompilePipelines that fills them in the
+  //               background.
+  //   - Disabled: leave the matrices empty. GetBatchFragmentShader /
+  //               GetBatchPipeline fault each combo in on the main
+  //               thread the first time the game draws it.
+  //
+  // Both helpers handle the Reserved_*Direct16Bit dedup at the
+  // helper entry (remap texture_mode 3 -> 2 and 7 -> 6 before the
+  // array index), so the precompile loop doesn't need to special-
+  // case them - the entry for 3 / 7 simply forwards to the
+  // canonical slot.
+  if (precompile_sync)
   {
     for (u8 render_mode = 0; render_mode < 4; render_mode++)
     {
-      for (u8 transparency_mode = 0; transparency_mode < 5; transparency_mode++)
+      for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
       {
-        for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+        for (u8 dithering = 0; dithering < 2; dithering++)
         {
-          for (u8 dithering = 0; dithering < 2; dithering++)
+          for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
-            for (u8 interlacing = 0; interlacing < 2; interlacing++)
+            VkShaderModule shader =
+              GetBatchFragmentShader(render_mode, texture_mode, ConvertToBoolUnchecked(dithering),
+                                     ConvertToBoolUnchecked(interlacing));
+            if (shader == VK_NULL_HANDLE)
+              return false;
+            progress.Increment();
+          }
+        }
+      }
+    }
+
+    for (u8 depth_test = 0; depth_test < 3; depth_test++)
+    {
+      for (u8 render_mode = 0; render_mode < 4; render_mode++)
+      {
+        for (u8 transparency_mode = 0; transparency_mode < 5; transparency_mode++)
+        {
+          for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+          {
+            for (u8 dithering = 0; dithering < 2; dithering++)
             {
-              static constexpr std::array<VkCompareOp, 3> depth_test_values = {
-                VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_GREATER_OR_EQUAL, VK_COMPARE_OP_LESS_OR_EQUAL};
-              const bool textured = (static_cast<GPUTextureMode>(texture_mode) != GPUTextureMode::Disabled);
-
-              gpbuilder.SetPipelineLayout(m_batch_pipeline_layout);
-              gpbuilder.SetRenderPass(m_vram_render_pass, 0);
-
-              gpbuilder.AddVertexBuffer(0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX);
-              gpbuilder.AddVertexAttribute(0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(BatchVertex, x));
-              gpbuilder.AddVertexAttribute(1, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(BatchVertex, color));
-              if (textured)
+              for (u8 interlacing = 0; interlacing < 2; interlacing++)
               {
-                gpbuilder.AddVertexAttribute(2, 0, VK_FORMAT_R32_UINT, offsetof(BatchVertex, u));
-                gpbuilder.AddVertexAttribute(3, 0, VK_FORMAT_R32_UINT, offsetof(BatchVertex, texpage));
-                if (m_using_uv_limits)
-                  gpbuilder.AddVertexAttribute(4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(BatchVertex, uv_limits));
+                VkPipeline pipeline =
+                  GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
+                                   ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
+                if (pipeline == VK_NULL_HANDLE)
+                  return false;
+                progress.Increment();
               }
-
-              gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-              gpbuilder.SetVertexShader(batch_vertex_shaders[BoolToUInt8(textured)]);
-              gpbuilder.SetFragmentShader(batch_fragment_shaders[render_mode][texture_mode][dithering][interlacing]);
-
-              gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-              gpbuilder.SetDepthState(true, true, depth_test_values[depth_test]);
-              gpbuilder.SetNoBlendingState();
-              gpbuilder.SetMultisamples(m_multisamples, m_per_sample_shading);
-
-              if ((static_cast<GPUTransparencyMode>(transparency_mode) != GPUTransparencyMode::Disabled &&
-                   (static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
-                    static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque)) ||
-                  m_texture_filtering != GPUTextureFilter::Nearest)
-              {
-                if (m_supports_dual_source_blend)
-                {
-                  gpbuilder.SetBlendAttachment(
-                    0, true, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_SRC1_ALPHA,
-                    (static_cast<GPUTransparencyMode>(transparency_mode) ==
-                       GPUTransparencyMode::BackgroundMinusForeground &&
-                     static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
-                     static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque) ?
-                      VK_BLEND_OP_REVERSE_SUBTRACT :
-                      VK_BLEND_OP_ADD,
-                    VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD);
-                }
-                else
-                {
-                  const float factor = (static_cast<GPUTransparencyMode>(transparency_mode) ==
-                                        GPUTransparencyMode::HalfBackgroundPlusHalfForeground) ?
-                                         0.5f :
-                                         1.0f;
-                  gpbuilder.SetBlendAttachment(
-                    0, true, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_CONSTANT_ALPHA,
-                    (static_cast<GPUTransparencyMode>(transparency_mode) ==
-                       GPUTransparencyMode::BackgroundMinusForeground &&
-                     static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
-                     static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque) ?
-                      VK_BLEND_OP_REVERSE_SUBTRACT :
-                      VK_BLEND_OP_ADD,
-                    VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD);
-                  gpbuilder.SetBlendConstants(0.0f, 0.0f, 0.0f, factor);
-                }
-              }
-
-              gpbuilder.SetDynamicViewportAndScissorState();
-
-              VkPipeline pipeline = gpbuilder.Create(device, pipeline_cache);
-              if (pipeline == VK_NULL_HANDLE)
-	      {
-                batch_vertex_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
-                batch_fragment_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
-                return false;
-	      }
-
-              m_batch_pipelines[depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing] =
-                pipeline;
-              progress.Increment();
             }
           }
         }
       }
     }
   }
+  // For Lazy and Disabled: matrices stay empty here, filled on
+  // demand by the helpers. The background-thread launch for Lazy
+  // happens at the end of this function, after the rest of the
+  // non-batch pipelines are built.
+
+  // GraphicsPipelineBuilder used by all the non-batch pipelines
+  // below (fullscreen quad, VRAM fill/copy/write, downsampling,
+  // display). The batch pipelines build their own private
+  // gpbuilder inside GetBatchPipeline so this one doesn't carry
+  // any of their per-batch state.
+  Vulkan::GraphicsPipelineBuilder gpbuilder;
 
   VkShaderModule fullscreen_quad_vertex_shader =
     g_vulkan_shader_cache->GetVertexShader(shadergen.GenerateScreenQuadVertexShader());
@@ -1964,12 +1913,211 @@ bool GPU_HW_Vulkan::CompilePipelines()
 
 #undef UPDATE_PROGRESS
 
+  if (precompile_mode == GPUShaderPrecompileMode::Lazy)
+  {
+    // Kick off the background batch / PSO fill so gameplay can start
+    // immediately. The worker walks the full PSO matrix in
+    // (depth_test, render_mode, transparency_mode, texture_mode,
+    // dithering, interlacing) order, calling the same
+    // GetBatchPipeline the draw path uses; the main thread can race
+    // ahead and pre-fill any slot it actually needs at draw time, and
+    // the worker's recheck-under-lock pattern just observes the
+    // filled slot and moves on. DestroyPipelines signals
+    // m_shader_compile_thread_quit and joins.
+    m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+    m_shader_compile_thread = std::thread(&GPU_HW_Vulkan::ShaderCompileThreadEntryPoint, this);
+  }
+
   return true;
+}
+
+void GPU_HW_Vulkan::StopShaderCompileThread()
+{
+  if (!m_shader_compile_thread.joinable())
+    return;
+
+  m_shader_compile_thread_quit.store(true, std::memory_order_relaxed);
+  m_shader_compile_thread.join();
+  m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+}
+
+void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
+{
+  // Same nesting as the Enabled-mode precompile loop above. The quit
+  // flag is checked between cells so DestroyPipelines can stop the
+  // worker within at most one PSO compile of latency (Vulkan PSO
+  // compiles can be ~50-200 ms with the heavier texture filters).
+  for (u8 depth_test = 0; depth_test < 3; depth_test++)
+  {
+    for (u8 render_mode = 0; render_mode < 4; render_mode++)
+    {
+      for (u8 transparency_mode = 0; transparency_mode < 5; transparency_mode++)
+      {
+        for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+        {
+          for (u8 dithering = 0; dithering < 2; dithering++)
+          {
+            for (u8 interlacing = 0; interlacing < 2; interlacing++)
+            {
+              if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
+                return;
+
+              GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
+                               ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing)
+{
+  // Reserved_*Direct16Bit shader-source dedup, applied at the helper
+  // entry. Slots for texture_mode 3 / 7 are never written; all
+  // accesses route through the canonical slots 2 / 6. SafeDestroy*
+  // on the dup slots in DestroyPipelines is a VK_NULL_HANDLE no-op.
+  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                      texture_mode;
+
+  // Caller is responsible for holding m_batch_shader_mutex
+  // (GetBatchPipeline takes the lock; the Enabled-mode precompile
+  // path is single-threaded).
+  VkShaderModule& slot = m_batch_fragment_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+
+  if (slot == VK_NULL_HANDLE)
+  {
+    if (!m_shadergen)
+    {
+      Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
+      return VK_NULL_HANDLE;
+    }
+    const std::string fs = m_shadergen->GenerateBatchFragmentShader(
+      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+    slot = g_vulkan_shader_cache->GetFragmentShader(fs);
+    if (slot == VK_NULL_HANDLE)
+    {
+      Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
+                      texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+      return VK_NULL_HANDLE;
+    }
+  }
+
+  return slot;
+}
+
+VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 texture_mode, u8 transparency_mode,
+                                           bool dithering, bool interlacing)
+{
+  // Reserved_*Direct16Bit PSO dedup, applied at the helper entry.
+  // Slots for texture_mode 3 / 7 are never written; all accesses
+  // route through the canonical slots 2 / 6.
+  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                      texture_mode;
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+
+  VkPipeline& slot = m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
+                                      [BoolToUInt8(interlacing)];
+
+  if (slot != VK_NULL_HANDLE)
+    return slot;
+
+  // Need the bound fragment shader first.
+  VkShaderModule fs = GetBatchFragmentShader(render_mode, lookup_mode, dithering, interlacing);
+  if (fs == VK_NULL_HANDLE)
+    return VK_NULL_HANDLE;
+
+  static constexpr std::array<VkCompareOp, 3> depth_test_values = {
+    VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_GREATER_OR_EQUAL, VK_COMPARE_OP_LESS_OR_EQUAL};
+  const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
+
+  Vulkan::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetPipelineLayout(m_batch_pipeline_layout);
+  gpbuilder.SetRenderPass(m_vram_render_pass, 0);
+
+  gpbuilder.AddVertexBuffer(0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX);
+  gpbuilder.AddVertexAttribute(0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(BatchVertex, x));
+  gpbuilder.AddVertexAttribute(1, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(BatchVertex, color));
+  if (textured)
+  {
+    gpbuilder.AddVertexAttribute(2, 0, VK_FORMAT_R32_UINT, offsetof(BatchVertex, u));
+    gpbuilder.AddVertexAttribute(3, 0, VK_FORMAT_R32_UINT, offsetof(BatchVertex, texpage));
+    if (m_using_uv_limits)
+      gpbuilder.AddVertexAttribute(4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(BatchVertex, uv_limits));
+  }
+
+  gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+  gpbuilder.SetVertexShader(m_batch_vertex_shaders[BoolToUInt8(textured)]);
+  gpbuilder.SetFragmentShader(fs);
+
+  gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+  gpbuilder.SetDepthState(true, true, depth_test_values[depth_test]);
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetMultisamples(m_multisamples, m_per_sample_shading);
+
+  if ((static_cast<GPUTransparencyMode>(transparency_mode) != GPUTransparencyMode::Disabled &&
+       (static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
+        static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque)) ||
+      m_texture_filtering != GPUTextureFilter::Nearest)
+  {
+    if (m_supports_dual_source_blend)
+    {
+      gpbuilder.SetBlendAttachment(
+        0, true, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_SRC1_ALPHA,
+        (static_cast<GPUTransparencyMode>(transparency_mode) == GPUTransparencyMode::BackgroundMinusForeground &&
+         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
+         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque) ?
+          VK_BLEND_OP_REVERSE_SUBTRACT :
+          VK_BLEND_OP_ADD,
+        VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD);
+    }
+    else
+    {
+      const float factor =
+        (static_cast<GPUTransparencyMode>(transparency_mode) == GPUTransparencyMode::HalfBackgroundPlusHalfForeground) ?
+          0.5f :
+          1.0f;
+      gpbuilder.SetBlendAttachment(
+        0, true, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_CONSTANT_ALPHA,
+        (static_cast<GPUTransparencyMode>(transparency_mode) == GPUTransparencyMode::BackgroundMinusForeground &&
+         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
+         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque) ?
+          VK_BLEND_OP_REVERSE_SUBTRACT :
+          VK_BLEND_OP_ADD,
+        VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD);
+      gpbuilder.SetBlendConstants(0.0f, 0.0f, 0.0f, factor);
+    }
+  }
+
+  gpbuilder.SetDynamicViewportAndScissorState();
+
+  VkPipeline pipeline = gpbuilder.Create(g_vulkan_context->GetDevice(), g_vulkan_shader_cache->GetPipelineCache());
+  if (pipeline == VK_NULL_HANDLE)
+  {
+    Log_ErrorPrintf("Lazy batch PSO compile failed for (dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)", depth_test,
+                    render_mode, texture_mode, transparency_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+    return VK_NULL_HANDLE;
+  }
+
+  slot = pipeline;
+  return slot;
 }
 
 void GPU_HW_Vulkan::DestroyPipelines()
 {
+  // Tear down the background-compile worker before destroying the
+  // matrix - the worker writes into m_batch_fragment_shaders and
+  // m_batch_pipelines, both of which we're about to enumerate-destroy.
+  StopShaderCompileThread();
+  m_shadergen.reset();
+
   m_batch_pipelines.enumerate(Vulkan::Util::SafeDestroyPipeline);
+  m_batch_fragment_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
+  m_batch_vertex_shaders.enumerate(Vulkan::Util::SafeDestroyShaderModule);
 
   m_vram_fill_pipelines.enumerate(Vulkan::Util::SafeDestroyPipeline);
 
@@ -1996,11 +2144,17 @@ void GPU_HW_Vulkan::DrawBatchVertices(BatchRenderMode render_mode, u32 base_vert
 
   VkCommandBuffer cmdbuf = g_vulkan_context->GetCurrentCommandBuffer();
 
+  // Fetch the batch PSO via the lazy helper. Behaviour matches the
+  // D3D11 / D3D12 backends: Enabled mode pre-fills every slot at
+  // CompilePipelines time so this is a fast mutex-protected pointer
+  // load, Lazy mode either grabs the worker's result or compiles on
+  // the main thread on race, Disabled compiles on every first use.
+  //
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
   const u8 depth_test = m_batch.use_depth_buffer ? static_cast<u8>(2) : BoolToUInt8(m_batch.check_mask_before_draw);
   VkPipeline pipeline =
-    m_batch_pipelines[depth_test][static_cast<u8>(render_mode)][static_cast<u8>(m_batch.texture_mode)][static_cast<u8>(
-      m_batch.transparency_mode)][BoolToUInt8(m_batch.dithering)][BoolToUInt8(m_batch.interlacing)];
+    GetBatchPipeline(depth_test, static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode),
+                     static_cast<u8>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
   vkCmdDraw(cmdbuf, num_vertices, 1, base_vertex, 0);
