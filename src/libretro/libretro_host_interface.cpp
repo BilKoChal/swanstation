@@ -465,7 +465,105 @@ std::string HostInterface::GetStringSettingValue(const char* section, const char
 }
 
 void HostInterface::DisplayLoadingScreen(const char* message, int progress_min /*= -1*/,
-		                                 int progress_max /*= -1*/, int progress_value /*= -1*/) {}
+		                                 int progress_max /*= -1*/, int progress_value /*= -1*/)
+{
+  // Render progress feedback through the libretro frontend so that
+  // long-running setup steps (shader precompilation, texture preload)
+  // don't look like the core has hung.
+  //
+  // The DuckStation HostInterface contract is documented at the
+  // top of host_interface.h: this is called repeatedly during
+  // bounded long operations with (current, total) progress counters,
+  // and is throttled by the caller to ~10 Hz. Callers in
+  // swanstation are:
+  //
+  //   - GPU_HW::ShaderCompileProgressTracker::Increment (every
+  //     compiled shader, throttled to >=100ms)
+  //   - texture_replacements.cpp preload loop (every replacement
+  //     texture)
+  //   - HostInterfaceProgressCallback (legacy generic progress)
+  //
+  // For the libretro target, the cleanest mapping is
+  // RETRO_ENVIRONMENT_SET_MESSAGE_EXT with type =
+  // RETRO_MESSAGE_TYPE_PROGRESS, which RetroArch renders as a
+  // dedicated progress widget in the upper-right corner rather
+  // than a generic OSD line. When the frontend's message interface
+  // version is too old to support EXT (libretro_msg_interface_version
+  // == 0, i.e. cores running on RA builds pre-2020 or other
+  // frontends that haven't adopted v1), fall back to plain
+  // SET_MESSAGE with the formatted progress text in the message
+  // body, so the user still sees "Compiling Shaders 47/112"
+  // instead of a frozen window.
+  if (!message || !*message)
+    return;
+
+  // Compute progress percentage. The DisplayLoadingScreen contract
+  // passes progress_min as the starting count (typically 0) and
+  // progress_max as the total; -1 across the trio means
+  // 'indeterminate', which RetroArch represents with progress = -1
+  // on SET_MESSAGE_EXT.
+  int progress_pct = -1;
+  if (progress_max > 0 && progress_value >= 0 && progress_value <= progress_max)
+  {
+    progress_pct = static_cast<int>(
+      (static_cast<long>(progress_value) * 100l) / static_cast<long>(progress_max));
+    if (progress_pct < 0)
+      progress_pct = 0;
+    else if (progress_pct > 100)
+      progress_pct = 100;
+  }
+
+  // Build the displayed string. Including the percentage in the
+  // text body matters even when SET_MESSAGE_EXT is available,
+  // because the libretro spec explicitly says progress is a hint
+  // - some frontends (and RetroArch with certain notification
+  // styles) drop the progress widget and only show the text.
+  char text[256];
+  if (progress_max > 0 && progress_value >= 0)
+  {
+    std::snprintf(text, sizeof(text), "%s %d/%d", message, progress_value, progress_max);
+  }
+  else
+  {
+    std::snprintf(text, sizeof(text), "%s", message);
+  }
+  text[sizeof(text) - 1] = '\0';
+
+  if (libretro_msg_interface_version >= 1)
+  {
+    retro_message_ext msg = {};
+    msg.msg = text;
+    // 1000 ms duration with ~10 Hz update cadence means each frame
+    // of the progress is overwritten by the next one well before
+    // it expires, and the widget stays visible smoothly. The last
+    // call (after CompileShaders returns) ages out naturally after
+    // one second.
+    msg.duration = 1000u;
+    // Priority 3 matches what the libretro header documents as
+    // 'frontend-generated notifications' tier; shader compilation
+    // is roughly that level of importance and we don't want to
+    // outrank game-relevant messages with lower priority later.
+    msg.priority = 3u;
+    msg.level = RETRO_LOG_INFO;
+    msg.target = RETRO_MESSAGE_TARGET_OSD;
+    msg.type = RETRO_MESSAGE_TYPE_PROGRESS;
+    msg.progress = static_cast<int8_t>(progress_pct);
+    g_retro_environment_callback(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
+    return;
+  }
+
+  // Fallback for frontends without SET_MESSAGE_EXT. The text
+  // already contains 'N/M', so the user gets the same information
+  // (minus the progress widget).
+  retro_message legacy = {};
+  legacy.msg = text;
+  // SET_MESSAGE measures duration in frames; assume the
+  // ~60 fps NTSC throttle if the system isn't running yet (we're
+  // most often called from CompileShaders during boot, before
+  // System::GetThrottleFrequency() can return a real value).
+  legacy.frames = 60u;
+  g_retro_environment_callback(RETRO_ENVIRONMENT_SET_MESSAGE, &legacy);
+}
 
 
 void HostInterface::AddOSDMessage(std::string message, float duration /*= 2.0f*/)
