@@ -84,6 +84,40 @@ enum class GPUDownsampleMode : u8
   Count
 };
 
+// Controls when batch fragment shaders / PSOs are built. There are
+// 144 batch fragment shader permutations on D3D11 / OpenGL and up to
+// 2160 PSO permutations on Vulkan, but most games only ever dispatch a
+// small subset of them at runtime. The historical behaviour was to
+// compile the entire matrix at GPU init - which is what 'Enabled' does
+// - and that's where the multi-second 'libretro looks hung' stall on
+// texture-filter changes comes from.
+//
+//   - Disabled: no precompile at GPU init. Each batch shader / PSO is
+//     compiled on the main thread the first time the game actually
+//     dispatches a draw using that combination, then cached. The user
+//     trades the single multi-second stall for a series of small
+//     first-use hitches spread across early gameplay. Lowest startup
+//     latency; useful on low-end hardware and for users who don't use
+//     the heavier filters (JINC2/xBR/Bilinear).
+//   - Enabled: the historical behaviour. CompileShaders walks the full
+//     matrix synchronously at GPU init. RetroArch is blocked the whole
+//     time. After that there are no per-draw hitches at all. Useful
+//     for benchmarking and for users who want a single up-front cost.
+//   - Lazy: compile on a background thread while gameplay starts
+//     immediately. Each combo the game actually needs is faulted in
+//     on the main thread if the background thread hasn't reached it
+//     yet (worst case: same hitch as Disabled for that one combo),
+//     otherwise the entry is just picked up. After the background
+//     thread finishes, behaviour is identical to Enabled.
+//     This is the default.
+enum class GPUShaderPrecompileMode : u8
+{
+  Disabled,
+  Enabled,
+  Lazy,
+  Count
+};
+
 enum class DisplayCropMode : u8
 {
   None,

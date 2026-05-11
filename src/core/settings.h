@@ -74,6 +74,7 @@ struct Settings
   bool gpu_scaled_dithering = false;
   GPUTextureFilter gpu_texture_filter = GPUTextureFilter::Nearest;
   GPUDownsampleMode gpu_downsample_mode = GPUDownsampleMode::Disabled;
+  GPUShaderPrecompileMode gpu_shader_precompile_mode = GPUShaderPrecompileMode::Lazy;
   bool gpu_disable_interlacing = true;
   bool gpu_force_ntsc_timings = false;
   bool gpu_widescreen_hack = false;
@@ -221,6 +222,9 @@ struct Settings
   static std::optional<GPUDownsampleMode> ParseDownsampleModeName(const char* str);
   static const char* GetDownsampleModeName(GPUDownsampleMode mode);
   static const char* GetDownsampleModeDisplayName(GPUDownsampleMode mode);
+
+  static std::optional<GPUShaderPrecompileMode> ParseShaderPrecompileMode(const char* str);
+  static const char* GetShaderPrecompileModeName(GPUShaderPrecompileMode mode);
 
   static std::optional<DisplayCropMode> ParseDisplayCropMode(const char* str);
   static const char* GetDisplayCropModeName(DisplayCropMode crop_mode);

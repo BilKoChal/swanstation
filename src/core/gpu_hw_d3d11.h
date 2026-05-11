@@ -4,11 +4,15 @@
 #include "common/d3d11/stream_buffer.h"
 #include "common/d3d11/texture.h"
 #include "gpu_hw.h"
+#include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "texture_replacements.h"
 #include <array>
+#include <atomic>
 #include <d3d11.h>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <tuple>
 #include <wrl/client.h>
 #include <libretro.h>
@@ -135,6 +139,29 @@ private:
 
   bool CompileShaders();
   void DestroyShaders();
+
+  // Lazy batch-fragment-shader compile path. The shader array starts
+  // all-null; GetBatchPixelShader fills a slot on demand (the first
+  // time the game dispatches a draw using that combination) and
+  // returns a non-owning pointer to the underlying ID3D11PixelShader.
+  // It also handles the texture-mode dedup (3->2 and 7->6) inline so
+  // the duplicate slots never hit the cache. Synchronization between
+  // the main thread and the background precompile worker (when the
+  // 'Lazy' precompile mode is selected) is via m_batch_shader_mutex
+  // around the cache + array access; ID3D11PixelShader* itself is
+  // free-threaded for the consumer side (PSSetShader). The fast path
+  // is one mutex lock per DrawBatchVertices call, which on a modern
+  // libc is ~20 ns uncontended.
+  ID3D11PixelShader* GetBatchPixelShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
+
+  // Background-thread worker for 'Lazy' mode: walks the entire
+  // (render_mode, texture_mode, dithering, interlacing) matrix and
+  // calls GetBatchPixelShader on each slot. The main thread can
+  // race ahead and pre-populate any slots it actually needs; the
+  // worker just skips already-filled slots.
+  void ShaderCompileThreadEntryPoint();
+  void StopShaderCompileThread();
+
   void SetViewport(u32 x, u32 y, u32 width, u32 height);
   void SetScissor(u32 x, u32 y, u32 width, u32 height);
   void SetViewportAndScissor(u32 x, u32 y, u32 width, u32 height);
@@ -188,6 +215,23 @@ private:
   std::array<ComPtr<ID3D11VertexShader>, 2> m_batch_vertex_shaders; // [textured]
   std::array<std::array<std::array<std::array<ComPtr<ID3D11PixelShader>, 2>, 2>, 9>, 4>
     m_batch_pixel_shaders; // [render_mode][texture_mode][dithering][interlacing]
+
+  // Persistent shader cache and shadergen instances for the lazy
+  // / background-thread compile path. Both used to be locals in
+  // CompileShaders(); now they live for the lifetime of this GPU
+  // backend so GetBatchPixelShader can call into them at draw time.
+  // m_batch_shader_mutex serialises access to both the cache (its
+  // internal m_index unordered_map is not thread-safe on insert) and
+  // the m_batch_pixel_shaders array. The shadergen is stateless once
+  // constructed - all its parameters are baked in at construction -
+  // so reads under the mutex are safe; we re-construct it in
+  // CompileShaders whenever settings change and the matrix needs
+  // re-filling.
+  std::mutex m_batch_shader_mutex;
+  D3D11::ShaderCache m_shader_cache;
+  std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
+  std::thread m_shader_compile_thread;
+  std::atomic<bool> m_shader_compile_thread_quit{false};
 
   ComPtr<ID3D11VertexShader> m_screen_quad_vertex_shader;
   ComPtr<ID3D11VertexShader> m_uv_quad_vertex_shader;

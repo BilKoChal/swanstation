@@ -928,16 +928,48 @@ void GPU_HW_D3D11::DestroyStateObjects()
 
 bool GPU_HW_D3D11::CompileShaders()
 {
-  D3D11::ShaderCache shader_cache;
-  shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), m_device->GetFeatureLevel(), SHADER_CACHE_VERSION,
-                    false);
+  // Make sure no previous background-compile worker is still alive
+  // from a prior CompileShaders call (UpdateSettings triggers
+  // DestroyShaders -> CompileShaders, and the worker from the
+  // previous incarnation has to be joined before we start a new one
+  // so it doesn't keep writing into the matrix the new run is about
+  // to fill in).
+  StopShaderCompileThread();
 
-  GPU_HW_ShaderGen shadergen(m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading,
-                             m_true_color, m_scaled_dithering, m_texture_filtering, m_using_uv_limits,
-                             m_pgxp_depth_buffer, m_disable_color_perspective, m_supports_dual_source_blend);
+  // Open the disk-backed shader cache the first time we get here; on
+  // subsequent calls (UpdateSettings -> DestroyShaders ->
+  // CompileShaders) the cache instance still holds the index from
+  // last time and the underlying disk file hasn't moved, so we don't
+  // want to re-read it. Re-opening would double-count every entry in
+  // m_index and leak the previous RFILE* handles, since
+  // ShaderCache::Open has no guard of its own.
+  if (!m_shader_cache.IsOpen())
+  {
+    m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), m_device->GetFeatureLevel(), SHADER_CACHE_VERSION,
+                        false);
+  }
+  // Convenience local reference so the rest of this function reads
+  // the same way it always has. The lazy-compile helpers below also
+  // touch m_shader_cache via the member.
+  D3D11::ShaderCache& shader_cache = m_shader_cache;
+
+  m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
+    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+    m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+    m_supports_dual_source_blend);
+  GPU_HW_ShaderGen& shadergen = *m_shadergen;
+
+  // Whether to walk the full batch-fragment-shader matrix
+  // synchronously from this thread, hand it to a background thread,
+  // or skip it entirely. See the comment on GPUShaderPrecompileMode
+  // in core/types.h.
+  const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+  const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+  const u32 batch_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(4 * 9 * 2 * 2) : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Shaders",
-                                        1 + 1 + 2 + (4 * 9 * 2 * 2) + 1 + (2 * 2) + 4 + (2 * 3) + 1);
+                                        1 + 1 + 2 + batch_progress_units + 1 + (2 * 2) + 4 + (2 * 3) + 1);
 
   // input layout
   {
@@ -985,55 +1017,48 @@ bool GPU_HW_D3D11::CompileShaders()
     progress.Increment();
   }
 
-  for (u8 render_mode = 0; render_mode < 4; render_mode++)
+  // Batch fragment shader matrix. Behaviour depends on
+  // g_settings.gpu_shader_precompile_mode:
+  //
+  //   - Enabled : compile every slot right here, like before. Old
+  //               behaviour preserved.
+  //   - Lazy    : leave the matrix empty for now; spawn a worker at
+  //               the end of CompileShaders that fills it in
+  //               background.
+  //   - Disabled: leave the matrix empty. GetBatchPixelShader will
+  //               fault each combo in synchronously the first time
+  //               the game dispatches a draw using it.
+  //
+  // GetBatchPixelShader handles the Reserved_*Direct16Bit dedup
+  // internally, so the precompile loop here doesn't need to special-
+  // case those - it'll call GetBatchPixelShader and the second
+  // duplicate will be a cheap cache hit / pointer copy.
+  if (precompile_sync)
   {
-    for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+    for (u8 render_mode = 0; render_mode < 4; render_mode++)
     {
-      // Reserved_Direct16Bit (3) and Reserved_RawDirect16Bit (7) produce
-      // shaders that are byte-for-byte identical to Direct16Bit (2) and
-      // RawDirect16Bit (6) after macro expansion: GPU_HW_ShaderGen's
-      // GenerateBatchFragmentShader masks the RawTextureBit out of
-      // texture_mode and only consults the result via the PALETTE,
-      // PALETTE_4_BIT, and PALETTE_8_BIT macros - all three of which
-      // evaluate to false for any of {Direct16Bit, Reserved_Direct16Bit,
-      // RawDirect16Bit, Reserved_RawDirect16Bit}. The disk-backed
-      // shader cache already deduplicates at the MD5 level, but
-      // reaching that fast-path still requires (a) calling
-      // GenerateBatchFragmentShader, which builds ~3000 lines of HLSL
-      // every iteration, and (b) MD5-hashing that output to compute
-      // the cache key. Short-circuit at the dispatch matrix instead
-      // so the slots for 3 and 7 inherit the compiled object pointer
-      // directly from 2 and 6, eliminating those two cost centres.
-      const u8 source_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                             (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
-                                                                                                          texture_mode;
-
-      for (u8 dithering = 0; dithering < 2; dithering++)
+      for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
       {
-        for (u8 interlacing = 0; interlacing < 2; interlacing++)
+        for (u8 dithering = 0; dithering < 2; dithering++)
         {
-          if (source_mode != texture_mode)
+          for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
-            m_batch_pixel_shaders[render_mode][texture_mode][dithering][interlacing] =
-              m_batch_pixel_shaders[render_mode][source_mode][dithering][interlacing];
+            ID3D11PixelShader* shader = GetBatchPixelShader(render_mode, texture_mode,
+                                                            ConvertToBoolUnchecked(dithering),
+                                                            ConvertToBoolUnchecked(interlacing));
+            if (!shader)
+              return false;
+
             progress.Increment();
-            continue;
           }
-
-          const std::string ps = shadergen.GenerateBatchFragmentShader(
-            static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(texture_mode),
-            ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
-
-          m_batch_pixel_shaders[render_mode][texture_mode][dithering][interlacing] =
-            shader_cache.GetPixelShader(m_device.Get(), ps);
-          if (!m_batch_pixel_shaders[render_mode][texture_mode][dithering][interlacing])
-            return false;
-
-          progress.Increment();
         }
       }
     }
   }
+  // For Lazy and Disabled: m_batch_pixel_shaders stays empty here;
+  // each slot fills in on first use via GetBatchPixelShader. The
+  // background-thread launch for Lazy happens after the rest of the
+  // non-batch shaders are built, near the end of this function.
 
   m_copy_pixel_shader = shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateCopyFragmentShader());
   if (!m_copy_pixel_shader)
@@ -1125,11 +1150,117 @@ bool GPU_HW_D3D11::CompileShaders()
 
 #undef UPDATE_PROGRESS
 
+  if (precompile_mode == GPUShaderPrecompileMode::Lazy)
+  {
+    // Kick off the background-thread batch-fragment-shader fill so
+    // gameplay can start while the rest of the matrix compiles. The
+    // worker just walks the (render, texture, dither, interlace)
+    // matrix in order, calling the same GetBatchPixelShader helper
+    // the draw path uses, so any slot the game touches in the
+    // meantime is just skipped here (the recheck under the mutex
+    // sees it's already filled). DestroyShaders signals
+    // m_shader_compile_thread_quit and joins.
+    m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+    m_shader_compile_thread = std::thread(&GPU_HW_D3D11::ShaderCompileThreadEntryPoint, this);
+  }
+
   return true;
+}
+
+void GPU_HW_D3D11::StopShaderCompileThread()
+{
+  if (!m_shader_compile_thread.joinable())
+    return;
+
+  m_shader_compile_thread_quit.store(true, std::memory_order_relaxed);
+  m_shader_compile_thread.join();
+  m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+}
+
+void GPU_HW_D3D11::ShaderCompileThreadEntryPoint()
+{
+  // Walk the matrix in (render, texture, dither, interlace) order and
+  // call GetBatchPixelShader on each cell. Each call takes
+  // m_batch_shader_mutex internally; we don't hold a lock across the
+  // loop so the main thread can still race ahead and pre-fill any
+  // slots it actually needs at draw time without waiting for the
+  // worker to reach them. The quit flag is checked between cells so
+  // DestroyShaders can bring the worker down within at most one
+  // shader-compile worth of latency.
+  for (u8 render_mode = 0; render_mode < 4; render_mode++)
+  {
+    for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+    {
+      for (u8 dithering = 0; dithering < 2; dithering++)
+      {
+        for (u8 interlacing = 0; interlacing < 2; interlacing++)
+        {
+          if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
+            return;
+
+          GetBatchPixelShader(render_mode, texture_mode, ConvertToBoolUnchecked(dithering),
+                              ConvertToBoolUnchecked(interlacing));
+        }
+      }
+    }
+  }
+}
+
+ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing)
+{
+  // Apply the Reserved_*Direct16Bit dedup at the matrix level. The
+  // shader source for texture_mode 3 / 7 is byte-for-byte identical
+  // to 2 / 6 after macro expansion; storing the same ComPtr in both
+  // slots is safe (refcounted).
+  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+                                                                                                      texture_mode;
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+
+  // If the dedup-redirected slot is already filled, propagate the
+  // ComPtr into the caller's slot (if it asked for a Reserved_ mode)
+  // and return the underlying pointer.
+  ComPtr<ID3D11PixelShader>& canonical_slot =
+    m_batch_pixel_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+
+  if (!canonical_slot)
+  {
+    if (!m_shadergen)
+    {
+      Log_ErrorPrint("GetBatchPixelShader called before CompileShaders constructed the shadergen");
+      return nullptr;
+    }
+    const std::string ps = m_shadergen->GenerateBatchFragmentShader(
+      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+    canonical_slot = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+    if (!canonical_slot)
+    {
+      Log_ErrorPrintf("Lazy batch pixel shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)",
+                      render_mode, texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+      return nullptr;
+    }
+  }
+
+  if (lookup_mode != texture_mode)
+  {
+    ComPtr<ID3D11PixelShader>& dup_slot =
+      m_batch_pixel_shaders[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+    if (!dup_slot)
+      dup_slot = canonical_slot;
+  }
+
+  return canonical_slot.Get();
 }
 
 void GPU_HW_D3D11::DestroyShaders()
 {
+  // Tear the background compile thread down before clearing the
+  // matrix - otherwise the worker would be writing into ComPtrs we're
+  // about to default-construct.
+  StopShaderCompileThread();
+  m_shadergen.reset();
+
   m_downsample_composite_pixel_shader.Reset();
   m_downsample_blur_pass_pixel_shader.Reset();
   m_downsample_mid_pass_pixel_shader.Reset();
@@ -1255,10 +1386,18 @@ void GPU_HW_D3D11::DrawBatchVertices(BatchRenderMode render_mode, u32 base_verte
 
   m_context->VSSetShader(m_batch_vertex_shaders[BoolToUInt8(textured)].Get(), nullptr, 0);
 
-  m_context->PSSetShader(m_batch_pixel_shaders[static_cast<u8>(render_mode)][static_cast<u8>(m_batch.texture_mode)]
-                                              [BoolToUInt8(m_batch.dithering)][BoolToUInt8(m_batch.interlacing)]
-                                                .Get(),
-                         nullptr, 0);
+  // Fetch the batch pixel shader via the lazy helper. In 'Enabled'
+  // precompile mode every slot was already filled at CompileShaders
+  // time so this is a fast mutex-protected pointer load. In 'Lazy'
+  // mode this either gets the already-compiled shader (background
+  // thread reached it first) or compiles it now on the main thread
+  // (game raced ahead of the worker). In 'Disabled' mode it always
+  // compiles on miss. The mutex guards both the cache and the
+  // matrix; cost is ~20 ns uncontended per modern std::mutex impl.
+  ID3D11PixelShader* batch_pixel_shader =
+    GetBatchPixelShader(static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode), m_batch.dithering,
+                        m_batch.interlacing);
+  m_context->PSSetShader(batch_pixel_shader, nullptr, 0);
 
   const GPUTransparencyMode transparency_mode =
     (render_mode == BatchRenderMode::OnlyOpaque) ? GPUTransparencyMode::Disabled : m_batch.transparency_mode;

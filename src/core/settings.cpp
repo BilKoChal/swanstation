@@ -171,6 +171,10 @@ void Settings::Load(LibretroSettingsInterface& si)
     ParseDownsampleModeName(
       si.GetStringValue("GPU", "DownsampleMode", GetDownsampleModeName(DEFAULT_GPU_DOWNSAMPLE_MODE)).c_str())
       .value_or(DEFAULT_GPU_DOWNSAMPLE_MODE);
+  gpu_shader_precompile_mode =
+    ParseShaderPrecompileMode(
+      si.GetStringValue("GPU", "ShaderPrecompile", GetShaderPrecompileModeName(GPUShaderPrecompileMode::Lazy)).c_str())
+      .value_or(GPUShaderPrecompileMode::Lazy);
   gpu_disable_interlacing = si.GetBoolValue("GPU", "DisableInterlacing", true);
   gpu_force_ntsc_timings = si.GetBoolValue("GPU", "ForceNTSCTimings", false);
   gpu_widescreen_hack = si.GetBoolValue("GPU", "WidescreenHack", false);
@@ -475,6 +479,27 @@ std::optional<GPUDownsampleMode> Settings::ParseDownsampleModeName(const char* s
 const char* Settings::GetDownsampleModeName(GPUDownsampleMode mode)
 {
   return s_downsample_mode_names[static_cast<int>(mode)];
+}
+
+static constexpr auto s_shader_precompile_mode_names = make_array("Disabled", "Enabled", "Lazy");
+
+std::optional<GPUShaderPrecompileMode> Settings::ParseShaderPrecompileMode(const char* str)
+{
+  int index = 0;
+  for (const char* name : s_shader_precompile_mode_names)
+  {
+    if (StringUtil::Strcasecmp(name, str) == 0)
+      return static_cast<GPUShaderPrecompileMode>(index);
+
+    index++;
+  }
+
+  return std::nullopt;
+}
+
+const char* Settings::GetShaderPrecompileModeName(GPUShaderPrecompileMode mode)
+{
+  return s_shader_precompile_mode_names[static_cast<int>(mode)];
 }
 
 static std::array<const char*, 3> s_display_crop_mode_names = {{"None", "Overscan", "Borders"}};

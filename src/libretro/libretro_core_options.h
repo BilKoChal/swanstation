@@ -701,6 +701,25 @@ struct retro_core_option_v2_definition option_defs_us[] = {
      {NULL, NULL},
    },
    "Disabled"},
+  {"swanstation_GPU_ShaderPrecompile",
+   "Shader Precompilation",
+   NULL,
+   "Controls when the hardware renderer's batch fragment shaders are compiled. "
+   "'Lazy' (default) compiles them on a background thread while gameplay starts immediately; "
+   "the previous frontend-blocking behaviour is preserved as 'Enabled'. "
+   "'Disabled' skips precompilation entirely and compiles each shader on the main thread "
+   "the first time the game actually dispatches a draw using it - lowest startup latency, "
+   "but brief stutters can occur during early gameplay when new shader permutations are "
+   "encountered. Changing the texture filter recompiles the matrix and pays this cost again.",
+   NULL,
+   "display",
+   {
+     {"Lazy", "Lazy (background thread, default)"},
+     {"Enabled", "Enabled (block until done, like old behaviour)"},
+     {"Disabled", "Disabled (compile on first use)"},
+     {NULL, NULL},
+   },
+   "Lazy"},
   {"swanstation_Display_ShowOSDMessages",
    "Display OSD Messages",
    NULL,
