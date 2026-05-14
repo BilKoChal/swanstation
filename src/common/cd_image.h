@@ -218,18 +218,12 @@ public:
   // Accessors.
   const std::string& GetFileName() const { return m_filename; }
   LBA GetPositionOnDisc() const { return m_position_on_disc; }
-  Position GetMSFPositionOnDisc() const { return Position::FromLBA(m_position_on_disc); }
-  LBA GetPositionInTrack() const { return m_position_in_track; }
-  Position GetMSFPositionInTrack() const { return Position::FromLBA(m_position_in_track); }
   LBA GetLBACount() const { return m_lba_count; }
-  uint32_t GetIndexNumber() const { return m_current_index->index_number; }
   uint32_t GetTrackNumber() const { return m_current_index->track_number; }
   uint32_t GetTrackCount() const { return static_cast<uint32_t>(m_tracks.size()); }
   Position GetTrackStartMSFPosition(uint8_t track) const;
   LBA GetTrackLength(uint8_t track) const;
   TrackMode GetTrackMode(uint8_t track) const;
-  LBA GetTrackIndexPosition(uint8_t track, uint8_t index) const;
-  LBA GetTrackIndexLength(uint8_t track, uint8_t index) const;
   uint32_t GetFirstTrackNumber() const { return m_tracks.front().track_number; }
   uint32_t GetLastTrackNumber() const { return m_tracks.back().track_number; }
   uint32_t GetIndexCount() const { return static_cast<uint32_t>(m_indices.size()); }
@@ -310,10 +304,9 @@ private:
   // Position on disc.
   LBA m_position_on_disc = 0;
 
-  // Position in track/index.
+  // Position in index.
   const Index* m_current_index = nullptr;
   LBA m_position_in_index = 0;
-  LBA m_position_in_track = 0;
 
   OpenFlags m_open_flags;
 };

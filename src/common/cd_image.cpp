@@ -87,28 +87,6 @@ CDImage::TrackMode CDImage::GetTrackMode(uint8_t track) const
   return m_tracks[track - 1].mode;
 }
 
-CDImage::LBA CDImage::GetTrackIndexPosition(uint8_t track, uint8_t index) const
-{
-  for (const Index& current_index : m_indices)
-  {
-    if (current_index.track_number == track && current_index.index_number == index)
-      return current_index.start_lba_on_disc;
-  }
-
-  return m_lba_count;
-}
-
-CDImage::LBA CDImage::GetTrackIndexLength(uint8_t track, uint8_t index) const
-{
-  for (const Index& current_index : m_indices)
-  {
-    if (current_index.track_number == track && current_index.index_number == index)
-      return current_index.length;
-  }
-
-  return 0;
-}
-
 const CDImage::CDImage::Track& CDImage::GetTrack(uint32_t track) const
 {
   return m_tracks[track - 1];
@@ -141,7 +119,6 @@ bool CDImage::Seek(LBA lba)
   m_current_index = new_index;
   m_position_on_disc = lba;
   m_position_in_index = new_index_offset;
-  m_position_in_track = new_index->start_lba_in_track + new_index_offset;
   return true;
 }
 
@@ -252,7 +229,6 @@ bool CDImage::ReadRawSector(void* buffer, SubChannelQ* subq)
 
   m_position_on_disc++;
   m_position_in_index++;
-  m_position_in_track++;
   return true;
 }
 
@@ -311,7 +287,6 @@ void CDImage::ClearTOC()
   m_tracks.clear();
   m_current_index = nullptr;
   m_position_in_index = 0;
-  m_position_in_track = 0;
   m_position_on_disc = 0;
 }
 
@@ -322,7 +297,6 @@ void CDImage::CopyTOC(const CDImage* image)
   m_tracks = image->m_tracks;
   m_current_index = nullptr;
   m_position_in_index = 0;
-  m_position_in_track = 0;
   m_position_on_disc = 0;
 }
 
