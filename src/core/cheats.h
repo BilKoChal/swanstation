@@ -1,25 +1,11 @@
 #pragma once
 #include "common/bitfield.h"
 #include "types.h"
-#include <optional>
 #include <string>
 #include <vector>
 
 struct CheatCode
 {
-  enum class Type : uint8_t
-  {
-    Gameshark,
-    Count
-  };
-
-  enum class Activation : uint8_t
-  {
-    Manual,
-    EndFrame,
-    Count,
-  };
-
   enum class InstructionCode : uint8_t
   {
     Nop = 0x00,
@@ -104,69 +90,24 @@ struct CheatCode
     BitField<uint64_t, uint8_t, 0, 8> value8;
   };
 
-  std::string group;
   std::string description;
   std::vector<Instruction> instructions;
-  std::string comments;
-  Type type = Type::Gameshark;
-  Activation activation = Activation::EndFrame;
   bool enabled = false;
 
   ALWAYS_INLINE bool Valid() const { return !instructions.empty() && !description.empty(); }
-  ALWAYS_INLINE bool IsManuallyActivated() const { return (activation == Activation::Manual); }
-
-  std::string GetInstructionsAsString() const;
-  bool SetInstructionsFromString(const std::string& str);
 
   uint32_t GetNextNonConditionalInstruction(uint32_t index) const;
 
   void Apply() const;
-  void ApplyOnDisable() const;
-
-  static const char* GetTypeName(Type type);
-  static const char* GetTypeDisplayName(Type type);
-  static std::optional<Type> ParseTypeName(const char* str);
-
-  static const char* GetActivationName(Activation activation);
-  static const char* GetActivationDisplayName(Activation activation);
-  static std::optional<Activation> ParseActivationName(const char* str);
 };
 
 class CheatList final
 {
 public:
-  enum class Format
-  {
-    Autodetect,
-    PCSXR,
-    Libretro,
-    EPSXe,
-    Count
-  };
-
   CheatList();
   ~CheatList();
 
-  ALWAYS_INLINE const CheatCode& GetCode(uint32_t i) const { return m_codes[i]; }
-  ALWAYS_INLINE CheatCode& GetCode(uint32_t i) { return m_codes[i]; }
-  ALWAYS_INLINE uint32_t GetCodeCount() const { return static_cast<uint32_t>(m_codes.size()); }
-  ALWAYS_INLINE bool IsCodeEnabled(uint32_t index) const { return m_codes[index].enabled; }
-
-  ALWAYS_INLINE bool GetMasterEnable() const { return m_master_enable; }
-  ALWAYS_INLINE void SetMasterEnable(bool enable) { m_master_enable = enable; }
-
-  const CheatCode* FindCode(const char* name) const;
-  const CheatCode* FindCode(const char* group, const char* name) const;
-
-  void AddCode(CheatCode cc);
   void SetCode(uint32_t index, CheatCode cc);
-  void RemoveCode(uint32_t i);
-
-  uint32_t GetEnabledCodeCount() const;
-  std::vector<std::string> GetCodeGroups() const;
-  void EnableCode(uint32_t index);
-  void DisableCode(uint32_t index);
-  void SetCodeEnabled(uint32_t index, bool state);
 
   static bool ParseLibretroCheat(CheatCode* cc, const char* line);
 
@@ -179,136 +120,8 @@ public:
   // released).
   static void ResetSharedScratchRegisters();
 
-  bool LoadFromPCSXRString(const std::string& str);
-  bool LoadFromLibretroString(const std::string& str);
-  bool LoadFromEPSXeString(const std::string& str);
-
   void Apply();
-
-  void ApplyCode(uint32_t index);
-
-  void MergeList(const CheatList& cl);
 
 private:
   std::vector<CheatCode> m_codes;
-  bool m_master_enable = true;
-};
-
-class MemoryScan
-{
-public:
-  enum class Operator
-  {
-    Equal,
-    NotEqual,
-    GreaterThan,
-    GreaterEqual,
-    LessThan,
-    LessEqual,
-    IncreasedBy,
-    DecreasedBy,
-    ChangedBy,
-    EqualLast,
-    NotEqualLast,
-    GreaterThanLast,
-    GreaterEqualLast,
-    LessThanLast,
-    LessEqualLast,
-    Any
-  };
-
-  struct Result
-  {
-    PhysicalMemoryAddress address;
-    uint32_t value;
-    uint32_t last_value;
-    bool value_changed;
-
-    bool Filter(Operator op, uint32_t comp_value, bool is_signed) const;
-    void UpdateValue(MemoryAccessSize size, bool is_signed);
-  };
-
-  using ResultVector = std::vector<Result>;
-
-  MemoryScan();
-  ~MemoryScan();
-
-  uint32_t GetValue() const { return m_value; }
-  bool GetValueSigned() const { return m_signed; }
-  MemoryAccessSize GetSize() const { return m_size; }
-  Operator GetOperator() const { return m_operator; }
-  PhysicalMemoryAddress GetStartAddress() const { return m_start_address; }
-  PhysicalMemoryAddress GetEndAddress() const { return m_end_address; }
-  const ResultVector& GetResults() const { return m_results; }
-  const Result& GetResult(uint32_t index) const { return m_results[index]; }
-  uint32_t GetResultCount() const { return static_cast<uint32_t>(m_results.size()); }
-
-  void SetValue(uint32_t value) { m_value = value; }
-  void SetValueSigned(bool s) { m_signed = s; }
-  void SetSize(MemoryAccessSize size) { m_size = size; }
-  void SetOperator(Operator op) { m_operator = op; }
-  void SetStartAddress(PhysicalMemoryAddress addr) { m_start_address = addr; }
-  void SetEndAddress(PhysicalMemoryAddress addr) { m_end_address = addr; }
-
-  void ResetSearch();
-  void Search();
-  void SearchAgain();
-  void UpdateResultsValues();
-
-  void SetResultValue(uint32_t index, uint32_t value);
-
-private:
-  void SearchBytes();
-  void SearchHalfwords();
-  void SearchWords();
-
-  uint32_t m_value = 0;
-  MemoryAccessSize m_size = MemoryAccessSize::HalfWord;
-  Operator m_operator = Operator::Equal;
-  PhysicalMemoryAddress m_start_address = 0;
-  PhysicalMemoryAddress m_end_address = 0x200000;
-  ResultVector m_results;
-  bool m_signed = false;
-};
-
-class MemoryWatchList
-{
-public:
-  MemoryWatchList();
-  ~MemoryWatchList();
-
-  struct Entry
-  {
-    std::string description;
-    uint32_t address;
-    uint32_t value;
-    MemoryAccessSize size;
-    bool is_signed;
-    bool freeze;
-    bool changed;
-  };
-
-  using EntryVector = std::vector<Entry>;
-
-  const Entry* GetEntryByAddress(uint32_t address) const;
-  const EntryVector& GetEntries() const { return m_entries; }
-  const Entry& GetEntry(uint32_t index) const { return m_entries[index]; }
-  uint32_t GetEntryCount() const { return static_cast<uint32_t>(m_entries.size()); }
-
-  bool AddEntry(std::string description, uint32_t address, MemoryAccessSize size, bool is_signed, bool freeze);
-  void RemoveEntry(uint32_t index);
-  bool RemoveEntryByDescription(const char* description);
-  bool RemoveEntryByAddress(uint32_t address);
-
-  void SetEntryDescription(uint32_t index, std::string description);
-  void SetEntryFreeze(uint32_t index, bool freeze);
-  void SetEntryValue(uint32_t index, uint32_t value);
-
-  void UpdateValues();
-
-private:
-  static void SetEntryValue(Entry* entry, uint32_t value);
-  static void UpdateEntryValue(Entry* entry);
-
-  EntryVector m_entries;
 };
