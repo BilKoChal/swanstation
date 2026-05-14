@@ -1,8 +1,8 @@
 #pragma once
 #include "gpu_backend.h"
+#include <algorithm>
 #include <array>
-#include <memory>
-#include <vector>
+#include <tuple>
 
 class GPU_SW_Backend final : public GPUBackend
 {
