@@ -71,7 +71,7 @@ GPUBackendDrawPolygonCommand* GPUBackend::NewDrawPolygonCommand(u32 num_vertices
   const u32 size = sizeof(GPUBackendDrawPolygonCommand) + (num_vertices * sizeof(GPUBackendDrawPolygonCommand::Vertex));
   GPUBackendDrawPolygonCommand* cmd =
     static_cast<GPUBackendDrawPolygonCommand*>(AllocateCommand(GPUBackendCommandType::DrawPolygon, size));
-  cmd->num_vertices = Truncate16(num_vertices);
+  cmd->num_vertices = static_cast<u16>(num_vertices);
   return cmd;
 }
 
@@ -86,7 +86,7 @@ GPUBackendDrawLineCommand* GPUBackend::NewDrawLineCommand(u32 num_vertices)
   const u32 size = sizeof(GPUBackendDrawLineCommand) + (num_vertices * sizeof(GPUBackendDrawLineCommand::Vertex));
   GPUBackendDrawLineCommand* cmd =
     static_cast<GPUBackendDrawLineCommand*>(AllocateCommand(GPUBackendCommandType::DrawLine, size));
-  cmd->num_vertices = Truncate16(num_vertices);
+  cmd->num_vertices = static_cast<u16>(num_vertices);
   return cmd;
 }
 
@@ -266,7 +266,7 @@ void GPUBackend::HandleCommand(const GPUBackendCommand* cmd)
     {
       FlushRender();
       const GPUBackendFillVRAMCommand* ccmd = static_cast<const GPUBackendFillVRAMCommand*>(cmd);
-      FillVRAM(ZeroExtend32(ccmd->x), ZeroExtend32(ccmd->y), ZeroExtend32(ccmd->width), ZeroExtend32(ccmd->height),
+      FillVRAM(static_cast<u32>(ccmd->x), static_cast<u32>(ccmd->y), static_cast<u32>(ccmd->width), static_cast<u32>(ccmd->height),
                ccmd->color, ccmd->params);
     }
     break;
@@ -275,7 +275,7 @@ void GPUBackend::HandleCommand(const GPUBackendCommand* cmd)
     {
       FlushRender();
       const GPUBackendUpdateVRAMCommand* ccmd = static_cast<const GPUBackendUpdateVRAMCommand*>(cmd);
-      UpdateVRAM(ZeroExtend32(ccmd->x), ZeroExtend32(ccmd->y), ZeroExtend32(ccmd->width), ZeroExtend32(ccmd->height),
+      UpdateVRAM(static_cast<u32>(ccmd->x), static_cast<u32>(ccmd->y), static_cast<u32>(ccmd->width), static_cast<u32>(ccmd->height),
                  ccmd->data, ccmd->params);
     }
     break;
@@ -284,8 +284,8 @@ void GPUBackend::HandleCommand(const GPUBackendCommand* cmd)
     {
       FlushRender();
       const GPUBackendCopyVRAMCommand* ccmd = static_cast<const GPUBackendCopyVRAMCommand*>(cmd);
-      CopyVRAM(ZeroExtend32(ccmd->src_x), ZeroExtend32(ccmd->src_y), ZeroExtend32(ccmd->dst_x),
-               ZeroExtend32(ccmd->dst_y), ZeroExtend32(ccmd->width), ZeroExtend32(ccmd->height), ccmd->params);
+      CopyVRAM(static_cast<u32>(ccmd->src_x), static_cast<u32>(ccmd->src_y), static_cast<u32>(ccmd->dst_x),
+               static_cast<u32>(ccmd->dst_y), static_cast<u32>(ccmd->width), static_cast<u32>(ccmd->height), ccmd->params);
     }
     break;
 

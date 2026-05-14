@@ -149,7 +149,7 @@ bool NeGcon::Transfer(const u8 data_in, u8* data_out)
     {
       if (data_in == 0x42)
       {
-        *data_out = Truncate8(ID);
+        *data_out = static_cast<u8>(ID);
         m_transfer_state = TransferState::IDMSB;
         return true;
       }
@@ -160,49 +160,49 @@ bool NeGcon::Transfer(const u8 data_in, u8* data_out)
 
     case TransferState::IDMSB:
     {
-      *data_out = Truncate8(ID >> 8);
+      *data_out = static_cast<u8>(ID >> 8);
       m_transfer_state = TransferState::ButtonsLSB;
       return true;
     }
 
     case TransferState::ButtonsLSB:
     {
-      *data_out = Truncate8(m_button_state);
+      *data_out = static_cast<u8>(m_button_state);
       m_transfer_state = TransferState::ButtonsMSB;
       return true;
     }
 
     case TransferState::ButtonsMSB:
     {
-      *data_out = Truncate8(m_button_state >> 8);
+      *data_out = static_cast<u8>(m_button_state >> 8);
       m_transfer_state = TransferState::AnalogSteering;
       return true;
     }
 
     case TransferState::AnalogSteering:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::Steering)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::Steering)]);
       m_transfer_state = TransferState::AnalogI;
       return true;
     }
 
     case TransferState::AnalogI:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::I)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::I)]);
       m_transfer_state = TransferState::AnalogII;
       return true;
     }
 
     case TransferState::AnalogII:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::II)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::II)]);
       m_transfer_state = TransferState::AnalogL;
       return true;
     }
 
     case TransferState::AnalogL:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::L)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::L)]);
       m_transfer_state = TransferState::Idle;
       break;
     }

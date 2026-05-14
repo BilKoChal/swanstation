@@ -199,7 +199,7 @@ bool GPU::HandleInterruptRequestCommand()
 bool GPU::HandleSetDrawModeCommand()
 {
   const u32 param = FifoPop() & 0x00FFFFFFu;
-  SetDrawMode(Truncate16(param));
+  SetDrawMode(static_cast<u16>(param));
   AddCommandTicks(1);
   EndCommand();
   return true;
@@ -256,8 +256,9 @@ bool GPU::HandleSetDrawingAreaBottomRightCommand()
 bool GPU::HandleSetDrawingOffsetCommand()
 {
   const u32 param = FifoPop() & 0x00FFFFFFu;
-  const s32 x = SignExtendN<11, s32>(param & 0x7FFu);
-  const s32 y = SignExtendN<11, s32>((param >> 11) & 0x7FFu);
+  // Sign-extend 11-bit drawing offset to s32.
+  const s32 x = static_cast<s32>((param & 0x7FFu) << 21) >> 21;
+  const s32 y = static_cast<s32>(((param >> 11) & 0x7FFu) << 21) >> 21;
   if (m_drawing_offset.x != x || m_drawing_offset.y != y)
   {
     FlushRender();
@@ -303,17 +304,16 @@ bool GPU::HandleRenderPolygonCommand()
 
   // setup time
   static constexpr u16 s_setup_time[2][2][2] = {{{46, 226}, {334, 496}}, {{82, 262}, {370, 532}}};
-  const TickCount setup_ticks = static_cast<TickCount>(ZeroExtend32(
-    s_setup_time[BoolToUInt8(rc.quad_polygon)][BoolToUInt8(rc.shading_enable)][BoolToUInt8(rc.texture_enable)]));
+  const TickCount setup_ticks = static_cast<TickCount>(static_cast<u32>(s_setup_time[BoolToUInt8(rc.quad_polygon)][BoolToUInt8(rc.shading_enable)][BoolToUInt8(rc.texture_enable)]));
   AddCommandTicks(setup_ticks);
 
   // set draw state up
   if (rc.texture_enable)
   {
-    const u16 texpage_attribute = Truncate16((rc.shading_enable ? FifoPeek(5) : FifoPeek(4)) >> 16);
+    const u16 texpage_attribute = static_cast<u16>((rc.shading_enable ? FifoPeek(5) : FifoPeek(4)) >> 16);
     SetDrawMode((texpage_attribute & GPUDrawModeReg::POLYGON_TEXPAGE_MASK) |
                 (m_draw_mode.mode_reg.bits & ~GPUDrawModeReg::POLYGON_TEXPAGE_MASK));
-    SetTexturePalette(Truncate16(FifoPeek(2) >> 16));
+    SetTexturePalette(static_cast<u16>(FifoPeek(2) >> 16));
   }
 
   m_render_command.bits = rc.bits;
@@ -336,7 +336,7 @@ bool GPU::HandleRenderRectangleCommand()
     SynchronizeCRTC();
 
   if (rc.texture_enable)
-    SetTexturePalette(Truncate16(FifoPeek(2) >> 16));
+    SetTexturePalette(static_cast<u16>(FifoPeek(2) >> 16));
 
   const TickCount setup_ticks = 16;
   AddCommandTicks(setup_ticks);
@@ -387,7 +387,7 @@ bool GPU::HandleRenderPolyLineCommand()
   // FifoPopRange(m_blit_buffer.data(), words_to_pop);
   m_blit_buffer.reserve(words_to_pop);
   for (u32 i = 0; i < words_to_pop; i++)
-    m_blit_buffer.push_back(Truncate32(FifoPop()));
+    m_blit_buffer.push_back(static_cast<u32>(FifoPop()));
 
   // polyline goes via a different path through the blit buffer
   m_blitter_state = BlitterState::DrawingPolyLine;
@@ -435,10 +435,10 @@ bool GPU::HandleCopyRectangleCPUToVRAMCommand()
   m_blitter_state = BlitterState::WritingVRAM;
   m_blit_buffer.reserve(num_words);
   m_blit_remaining_words = num_words;
-  m_vram_transfer.x = Truncate16(dst_x);
-  m_vram_transfer.y = Truncate16(dst_y);
-  m_vram_transfer.width = Truncate16(copy_width);
-  m_vram_transfer.height = Truncate16(copy_height);
+  m_vram_transfer.x = static_cast<u16>(dst_x);
+  m_vram_transfer.y = static_cast<u16>(dst_y);
+  m_vram_transfer.width = static_cast<u16>(copy_width);
+  m_vram_transfer.height = static_cast<u16>(copy_height);
   return true;
 }
 
@@ -456,7 +456,7 @@ void GPU::FinishVRAMWrite()
   }
   else
   {
-    const u32 num_pixels = ZeroExtend32(m_vram_transfer.width) * ZeroExtend32(m_vram_transfer.height);
+    const u32 num_pixels = static_cast<u32>(m_vram_transfer.width) * static_cast<u32>(m_vram_transfer.height);
     const u32 num_words = (num_pixels + 1) / 2;
     const u32 transferred_words = num_words - m_blit_remaining_words;
     const u32 transferred_pixels = transferred_words * 2;
@@ -467,7 +467,7 @@ void GPU::FinishVRAMWrite()
     {
       UpdateVRAM(m_vram_transfer.x, m_vram_transfer.y, m_vram_transfer.width, transferred_full_rows, blit_ptr,
                  m_GPUSTAT.set_mask_while_drawing, m_GPUSTAT.check_mask_before_draw);
-      blit_ptr += (ZeroExtend32(m_vram_transfer.width) * transferred_full_rows) * sizeof(u16);
+      blit_ptr += (static_cast<u32>(m_vram_transfer.width) * transferred_full_rows) * sizeof(u16);
     }
     if (transferred_width_last_row > 0)
     {
@@ -486,10 +486,10 @@ bool GPU::HandleCopyRectangleVRAMToCPUCommand()
   CHECK_COMMAND_SIZE(3);
   m_fifo.RemoveOne();
 
-  m_vram_transfer.x = Truncate16(FifoPeek() & VRAM_WIDTH_MASK);
-  m_vram_transfer.y = Truncate16((FifoPop() >> 16) & VRAM_HEIGHT_MASK);
-  m_vram_transfer.width = ((Truncate16(FifoPeek()) - 1) & VRAM_WIDTH_MASK) + 1;
-  m_vram_transfer.height = ((Truncate16(FifoPop() >> 16) - 1) & VRAM_HEIGHT_MASK) + 1;
+  m_vram_transfer.x = static_cast<u16>(FifoPeek() & VRAM_WIDTH_MASK);
+  m_vram_transfer.y = static_cast<u16>((FifoPop() >> 16) & VRAM_HEIGHT_MASK);
+  m_vram_transfer.width = ((static_cast<u16>(FifoPeek()) - 1) & VRAM_WIDTH_MASK) + 1;
+  m_vram_transfer.height = ((static_cast<u16>(FifoPop() >> 16) - 1) & VRAM_HEIGHT_MASK) + 1;
 
   // all rendering should be done first...
   FlushRender();

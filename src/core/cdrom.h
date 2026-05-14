@@ -48,8 +48,8 @@ public:
   ALWAYS_INLINE std::tuple<s16, s16> GetAudioFrame()
   {
     const u32 frame = m_audio_fifo.IsEmpty() ? 0u : m_audio_fifo.Pop();
-    const s16 left = static_cast<s16>(Truncate16(frame));
-    const s16 right = static_cast<s16>(Truncate16(frame >> 16));
+    const s16 left = static_cast<s16>(static_cast<u16>(frame));
+    const s16 right = static_cast<s16>(static_cast<u16>(frame >> 16));
     const s16 left_out = SaturateVolume(ApplyVolume(left, m_cd_audio_volume_matrix[0][0]) +
                                         ApplyVolume(right, m_cd_audio_volume_matrix[1][0]));
     const s16 right_out = SaturateVolume(ApplyVolume(left, m_cd_audio_volume_matrix[0][1]) +
@@ -227,11 +227,11 @@ private:
   ALWAYS_INLINE bool HasPendingAsyncInterrupt() const { return m_pending_async_interrupt != 0; }
   ALWAYS_INLINE void AddCDAudioFrame(s16 left, s16 right)
   {
-    m_audio_fifo.Push(ZeroExtend32(static_cast<u16>(left)) | (ZeroExtend32(static_cast<u16>(right)) << 16));
+    m_audio_fifo.Push(static_cast<u32>(static_cast<u16>(left)) | (static_cast<u32>(static_cast<u16>(right)) << 16));
   }
   ALWAYS_INLINE static constexpr s32 ApplyVolume(s16 sample, u8 volume)
   {
-    return s32(sample) * static_cast<s32>(ZeroExtend32(volume)) >> 7;
+    return s32(sample) * static_cast<s32>(static_cast<u32>(volume)) >> 7;
   }
 
   ALWAYS_INLINE static constexpr s16 SaturateVolume(s32 volume)

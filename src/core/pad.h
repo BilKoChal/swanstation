@@ -96,7 +96,7 @@ private:
 
   ALWAYS_INLINE bool CanTransfer() const { return m_transmit_buffer_full && m_JOY_CTRL.SELECT && m_JOY_CTRL.TXEN; }
 
-  ALWAYS_INLINE TickCount GetTransferTicks() const { return static_cast<TickCount>(ZeroExtend32(m_JOY_BAUD) * 8); }
+  ALWAYS_INLINE TickCount GetTransferTicks() const { return static_cast<TickCount>(static_cast<u32>(m_JOY_BAUD) * 8); }
 
   // From @JaCzekanski
   // ACK lasts ~96 ticks or approximately 2.84us at master clock (not implemented).

@@ -156,7 +156,7 @@ void MDEC::UpdateStatus()
   m_status.data_in_fifo_full = m_data_in_fifo.IsFull();
 
   m_status.command_busy = (m_state != State::Idle);
-  m_status.parameter_words_remaining = Truncate16((m_remaining_halfwords / 2) - 1);
+  m_status.parameter_words_remaining = static_cast<u16>((m_remaining_halfwords / 2) - 1);
   m_status.current_block = (m_current_block + 4) % NUM_BLOCKS;
 
   // we always want data in if it's enabled
@@ -191,8 +191,8 @@ u32 MDEC::ReadDataRegister()
 
 void MDEC::WriteCommandRegister(u32 value)
 {
-  m_data_in_fifo.Push(Truncate16(value));
-  m_data_in_fifo.Push(Truncate16(value >> 16));
+  m_data_in_fifo.Push(static_cast<u16>(value));
+  m_data_in_fifo.Push(static_cast<u16>(value >> 16));
 
   Execute();
 }
@@ -209,7 +209,7 @@ void MDEC::Execute()
           goto finished;
 
         // first word
-        const CommandWord cw{ZeroExtend32(m_data_in_fifo.Peek(0)) | (ZeroExtend32(m_data_in_fifo.Peek(1)) << 16)};
+        const CommandWord cw{static_cast<u32>(m_data_in_fifo.Peek(0)) | (static_cast<u32>(m_data_in_fifo.Peek(1)) << 16)};
         m_status.data_output_depth = cw.data_output_depth;
         m_status.data_output_signed = cw.data_output_signed;
         m_status.data_output_bit15 = cw.data_output_bit15;
@@ -221,7 +221,7 @@ void MDEC::Execute()
         switch (cw.command)
         {
           case Command::DecodeMacroblock:
-            num_words = ZeroExtend32(cw.parameter_word_count.GetValue());
+            num_words = static_cast<u32>(cw.parameter_word_count.GetValue());
             new_state = State::DecodingMacroblock;
             break;
 
@@ -495,7 +495,7 @@ void MDEC::CopyOutBlock()
     {
       if (!g_settings.use_old_mdec_routines)
       {
-        const u32 a = ZeroExtend32(m_status.data_output_bit15.GetValue()) << 15;
+        const u32 a = static_cast<u32>(m_status.data_output_bit15.GetValue()) << 15;
         for (u32 i = 0; i < static_cast<u32>(m_block_rgb.size());)
         {
 #define E8TO5(color) (std::min<u32>((((color) + 4) >> 3), 0x1F))
@@ -517,22 +517,22 @@ void MDEC::CopyOutBlock()
       }
       else
       {
-        const u16 a = ZeroExtend16(m_status.data_output_bit15.GetValue()) << 15;
+        const u16 a = static_cast<u16>(m_status.data_output_bit15.GetValue()) << 15;
         for (u32 i = 0; i < static_cast<u32>(m_block_rgb.size());)
         {
           u32 color = m_block_rgb[i++];
-          u16 r = Truncate16((color >> 3) & 0x1Fu);
-          u16 g = Truncate16((color >> 11) & 0x1Fu);
-          u16 b = Truncate16((color >> 19) & 0x1Fu);
+          u16 r = static_cast<u16>((color >> 3) & 0x1Fu);
+          u16 g = static_cast<u16>((color >> 11) & 0x1Fu);
+          u16 b = static_cast<u16>((color >> 19) & 0x1Fu);
           const u16 color15a = r | (g << 5) | (b << 10) | (a << 15);
 
           color = m_block_rgb[i++];
-          r = Truncate16((color >> 3) & 0x1Fu);
-          g = Truncate16((color >> 11) & 0x1Fu);
-          b = Truncate16((color >> 19) & 0x1Fu);
+          r = static_cast<u16>((color >> 3) & 0x1Fu);
+          g = static_cast<u16>((color >> 11) & 0x1Fu);
+          b = static_cast<u16>((color >> 19) & 0x1Fu);
           const u16 color15b = r | (g << 5) | (b << 10) | (a << 15);
 
-          m_data_out_fifo.Push(ZeroExtend32(color15a) | (ZeroExtend32(color15b) << 16));
+          m_data_out_fifo.Push(static_cast<u32>(color15a) | (static_cast<u32>(color15b) << 16));
         }
       }
     }
@@ -580,10 +580,10 @@ bool MDEC::DecodeRLE_Old(s16* blk, const u8* qt)
     m_current_coefficient = 0;
     m_current_q_scale = (n >> 10) & 0x3F;
     s32 val =
-      SignExtendN<10, s32>(static_cast<s32>(n & 0x3FF)) * static_cast<s32>(ZeroExtend32(qt[m_current_coefficient]));
+      (static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) * static_cast<s32>(static_cast<u32>(qt[m_current_coefficient]));
 
     if (m_current_q_scale == 0)
-      val = SignExtendN<10, s32>(static_cast<s32>(n & 0x3FF)) * 2;
+      val = (static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) * 2;
 
     val = std::clamp(val, -0x400, 0x3FF);
     if (m_current_q_scale > 0)
@@ -600,13 +600,13 @@ bool MDEC::DecodeRLE_Old(s16* blk, const u8* qt)
     m_current_coefficient += ((n >> 10) & 0x3F) + 1;
     if (m_current_coefficient < 64)
     {
-      s32 val = (SignExtendN<10, s32>(static_cast<s32>(n & 0x3FF)) *
-                   static_cast<s32>(ZeroExtend32(qt[m_current_coefficient])) * static_cast<s32>(m_current_q_scale) +
+      s32 val = ((static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) *
+                   static_cast<s32>(static_cast<u32>(qt[m_current_coefficient])) * static_cast<s32>(m_current_q_scale) +
                  4) /
                 8;
 
       if (m_current_q_scale == 0)
-        val = SignExtendN<10, s32>(static_cast<s32>(n & 0x3FF)) * 2;
+        val = (static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) * 2;
 
       val = std::clamp(val, -0x400, 0x3FF);
       if (m_current_q_scale > 0)
@@ -647,7 +647,7 @@ void MDEC::IDCT_Old(s16* blk)
         sum += s64(temp_buffer[u + y * 8]) * s32(m_scale_table[u * 8 + x]);
 
       blk[x + y * 8] =
-        static_cast<s16>(std::clamp<s32>(SignExtendN<9, s32>((sum >> 32) + ((sum >> 31) & 1)), -128, 127));
+        static_cast<s16>(std::clamp<s32>((static_cast<s32>(static_cast<u32>((sum >> 32) + ((sum >> 31) & 1)) << 23) >> 23), -128, 127));
     }
   }
 }
@@ -672,9 +672,9 @@ void MDEC::YUVToRGB_Old(u32 xx, u32 yy, const std::array<s16, 64>& Crblk, const 
       G = static_cast<s16>(std::clamp(static_cast<int>(Y) + G, -128, 127)) + addval;
       B = static_cast<s16>(std::clamp(static_cast<int>(Y) + B, -128, 127)) + addval;
 
-      m_block_rgb[(x + xx) + ((y + yy) * 16)] = ZeroExtend32(static_cast<u16>(R)) |
-                                                (ZeroExtend32(static_cast<u16>(G)) << 8) |
-                                                (ZeroExtend32(static_cast<u16>(B)) << 16);
+      m_block_rgb[(x + xx) + ((y + yy) * 16)] = static_cast<u32>(static_cast<u16>(R)) |
+                                                (static_cast<u32>(static_cast<u16>(G)) << 8) |
+                                                (static_cast<u32>(static_cast<u16>(B)) << 16);
     }
   }
 }
@@ -711,7 +711,7 @@ bool MDEC::DecodeRLE_New(s16* blk, const u8* qt)
     m_current_q_scale = n >> 10;
 
     // Store the DCT blocks with an additional 4 bits of precision.
-    const s32 val = SignExtendN<10, s32>(static_cast<s32>(n));
+    const s32 val = (static_cast<s32>(static_cast<u32>(n) << 22) >> 22);
     const s32 coeff = (m_current_q_scale == 0) ? (val << 5) : (((val * qt[0]) << 4) + (val ? ((val < 0) ? 8 : -8) : 0));
     blk[zigzag[0]] = static_cast<s16>(std::clamp(coeff, -0x4000, 0x3FFF));
   }
@@ -724,7 +724,7 @@ bool MDEC::DecodeRLE_New(s16* blk, const u8* qt)
     m_current_coefficient += ((n >> 10) + 1);
     if (m_current_coefficient < 64)
     {
-      const s32 val = SignExtendN<10, s32>(n);
+      const s32 val = (static_cast<s32>(static_cast<u32>(n) << 22) >> 22);
       const s32 scq = static_cast<s32>(m_current_q_scale * qt[m_current_coefficient]);
       const s32 coeff = (scq == 0) ? (val << 5) : ((((val * scq) >> 3) << 4) + (val ? ((val < 0) ? 8 : -8) : 0));
       blk[zigzag[m_current_coefficient]] = static_cast<s16>(std::clamp(coeff, -0x4000, 0x3FFF));
@@ -762,7 +762,7 @@ void MDEC::IDCT_New(s16* blk)
       s32 sum = 0;
       for (u32 z = 0; z < 8; z++)
         sum += (temp[x * 8 + z] * s32(m_scale_table[z * 8 + y])) / 8;
-      blk[x * 8 + y] = static_cast<s16>(std::clamp(SignExtendN<9, s32>((sum + 0x4000) >> 15), -128, 127));
+      blk[x * 8 + y] = static_cast<s16>(std::clamp((static_cast<s32>(static_cast<u32>((sum + 0x4000) >> 15) << 23) >> 23), -128, 127));
     }
   }
 }
@@ -780,11 +780,11 @@ void MDEC::YUVToRGB_New(u32 xx, u32 yy, const std::array<s16, 64>& Crblk, const 
       const s32 Y = Yblk[x + y * 8];
 
       // BT.601 YUV->RGB coefficients, rounding from Mednafen.
-      const s32 r = std::clamp(SignExtendN<9, s32>(Y + (((359 * Cr) + 0x80) >> 8)), -128, 127) + addval;
+      const s32 r = std::clamp((static_cast<s32>(static_cast<u32>(Y + (((359 * Cr) + 0x80) >> 8)) << 23) >> 23), -128, 127) + addval;
       const s32 g =
-        std::clamp(SignExtendN<9, s32>(Y + ((((-88 * Cb) & ~0x1F) + ((-183 * Cr) & ~0x07) + 0x80) >> 8)), -128, 127) +
+        std::clamp((static_cast<s32>(static_cast<u32>(Y + ((((-88 * Cb) & ~0x1F) + ((-183 * Cr) & ~0x07) + 0x80) >> 8)) << 23) >> 23), -128, 127) +
         addval;
-      const s32 b = std::clamp(SignExtendN<9, s32>(Y + (((454 * Cb) + 0x80) >> 8)), -128, 127) + addval;
+      const s32 b = std::clamp((static_cast<s32>(static_cast<u32>(Y + (((454 * Cb) + 0x80) >> 8)) << 23) >> 23), -128, 127) + addval;
 
       m_block_rgb[(x + xx) + ((y + yy) * 16)] =
         static_cast<u32>(r) | (static_cast<u32>(g) << 8) | (static_cast<u32>(b) << 16);
@@ -796,7 +796,7 @@ void MDEC::YUVToMono(const std::array<s16, 64>& Yblk)
 {
   const s32 addval = m_status.data_output_signed ? 0 : 0x80;
   for (u32 i = 0; i < 64; i++)
-    m_block_rgb[i] = static_cast<u32>(std::clamp(SignExtendN<9, s32>(Yblk[i]), -128, 127) + addval);
+    m_block_rgb[i] = static_cast<u32>(std::clamp((static_cast<s32>(static_cast<u32>(Yblk[i]) << 23) >> 23), -128, 127) + addval);
 }
 
 void MDEC::HandleSetQuantTableCommand()

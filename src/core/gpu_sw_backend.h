@@ -35,7 +35,7 @@ protected:
 
     void Set(u8 r_, u8 g_, u8 b_, bool c_ = false)
     {
-      bits = (ZeroExtend16(r_)) | (ZeroExtend16(g_) << 5) | (ZeroExtend16(b_) << 10) | (static_cast<u16>(c_) << 15);
+      bits = (static_cast<u16>(r_)) | (static_cast<u16>(g_) << 5) | (static_cast<u16>(b_) << 10) | (static_cast<u16>(c_) << 15);
     }
 
     void ClampAndSet(u8 r_, u8 g_, u8 b_, bool c_ = false)
@@ -45,30 +45,30 @@ protected:
 
     void SetRGB24(u32 rgb24, bool c_ = false)
     {
-      bits = Truncate16(((rgb24 >> 3) & 0x1F) | (((rgb24 >> 11) & 0x1F) << 5) | (((rgb24 >> 19) & 0x1F) << 10)) |
+      bits = static_cast<u16>(((rgb24 >> 3) & 0x1F) | (((rgb24 >> 11) & 0x1F) << 5) | (((rgb24 >> 19) & 0x1F) << 10)) |
              (static_cast<u16>(c_) << 15);
     }
 
     void SetRGB24(u8 r8, u8 g8, u8 b8, bool c_ = false)
     {
-      bits = (ZeroExtend16(r8 >> 3)) | (ZeroExtend16(g8 >> 3) << 5) | (ZeroExtend16(b8 >> 3) << 10) |
+      bits = (static_cast<u16>(r8 >> 3)) | (static_cast<u16>(g8 >> 3) << 5) | (static_cast<u16>(b8 >> 3) << 10) |
              (static_cast<u16>(c_) << 15);
     }
 
     void SetRGB24Dithered(u32 x, u32 y, u8 r8, u8 g8, u8 b8, bool c_ = false)
     {
       const s32 offset = DITHER_MATRIX[y & 3][x & 3];
-      r8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(ZeroExtend32(r8)) + offset, 0, 255));
-      g8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(ZeroExtend32(g8)) + offset, 0, 255));
-      b8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(ZeroExtend32(b8)) + offset, 0, 255));
+      r8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(static_cast<u32>(r8)) + offset, 0, 255));
+      g8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(static_cast<u32>(g8)) + offset, 0, 255));
+      b8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(static_cast<u32>(b8)) + offset, 0, 255));
       SetRGB24(r8, g8, b8, c_);
     }
 
     u32 ToRGB24() const
     {
-      const u32 r_ = ZeroExtend32(r.GetValue());
-      const u32 g_ = ZeroExtend32(g.GetValue());
-      const u32 b_ = ZeroExtend32(b.GetValue());
+      const u32 r_ = static_cast<u32>(r.GetValue());
+      const u32 g_ = static_cast<u32>(g.GetValue());
+      const u32 b_ = static_cast<u32>(b.GetValue());
 
       return ((r_ << 3) | (r_ & 7)) | (((g_ << 3) | (g_ & 7)) << 8) | (((b_ << 3) | (b_ & 7)) << 16);
     }

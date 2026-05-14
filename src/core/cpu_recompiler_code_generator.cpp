@@ -230,8 +230,8 @@ Value CodeGenerator::ConvertValueSize(const Value& value, RegSize size, bool sig
         switch (value.size)
         {
           case RegSize_8:
-            return Value::FromConstantU16(sign_extend ? SignExtend16(Truncate8(value.constant_value)) :
-                                                        ZeroExtend16(Truncate8(value.constant_value)));
+            return Value::FromConstantU16(sign_extend ? static_cast<u16>(static_cast<s8>(value.constant_value)) :
+                                                        static_cast<u16>(static_cast<u8>(value.constant_value)));
 
           default:
             return Value::FromConstantU16(value.constant_value & 0xFFFF);
@@ -244,11 +244,11 @@ Value CodeGenerator::ConvertValueSize(const Value& value, RegSize size, bool sig
         switch (value.size)
         {
           case RegSize_8:
-            return Value::FromConstantU32(sign_extend ? SignExtend32(Truncate8(value.constant_value)) :
-                                                        ZeroExtend32(Truncate8(value.constant_value)));
+            return Value::FromConstantU32(sign_extend ? static_cast<u32>(static_cast<s8>(value.constant_value)) :
+                                                        static_cast<u32>(static_cast<u8>(value.constant_value)));
           case RegSize_16:
-            return Value::FromConstantU32(sign_extend ? SignExtend32(Truncate16(value.constant_value)) :
-                                                        ZeroExtend32(Truncate16(value.constant_value)));
+            return Value::FromConstantU32(sign_extend ? static_cast<u32>(static_cast<s16>(value.constant_value)) :
+                                                        static_cast<u32>(static_cast<u16>(value.constant_value)));
 
           case RegSize_32:
             return value;
@@ -325,13 +325,13 @@ Value CodeGenerator::AddValues(const Value& lhs, const Value& rhs, bool set_flag
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -376,13 +376,13 @@ Value CodeGenerator::SubValues(const Value& lhs, const Value& rhs, bool set_flag
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -429,7 +429,7 @@ std::pair<Value, Value> CodeGenerator::MulValues(const Value& lhs, const Value& 
         else
           res = u16(u8(lhs.constant_value)) * u16(u8(rhs.constant_value));
 
-        return std::make_pair(Value::FromConstantU8(Truncate8(res >> 8)), Value::FromConstantU8(Truncate8(res)));
+        return std::make_pair(Value::FromConstantU8(static_cast<u8>(res >> 8)), Value::FromConstantU8(static_cast<u8>(res)));
       }
 
       case RegSize_16:
@@ -440,7 +440,7 @@ std::pair<Value, Value> CodeGenerator::MulValues(const Value& lhs, const Value& 
         else
           res = u32(u16(lhs.constant_value)) * u32(u16(rhs.constant_value));
 
-        return std::make_pair(Value::FromConstantU16(Truncate16(res >> 16)), Value::FromConstantU16(Truncate16(res)));
+        return std::make_pair(Value::FromConstantU16(static_cast<u16>(res >> 16)), Value::FromConstantU16(static_cast<u16>(res)));
       }
 
       case RegSize_32:
@@ -451,7 +451,7 @@ std::pair<Value, Value> CodeGenerator::MulValues(const Value& lhs, const Value& 
         else
           res = u64(u32(lhs.constant_value)) * u64(u32(rhs.constant_value));
 
-        return std::make_pair(Value::FromConstantU32(Truncate32(res >> 32)), Value::FromConstantU32(Truncate32(res)));
+        return std::make_pair(Value::FromConstantU32(static_cast<u32>(res >> 32)), Value::FromConstantU32(static_cast<u32>(res)));
       }
       break;
 
@@ -488,13 +488,13 @@ Value CodeGenerator::ShlValues(const Value& lhs, const Value& rhs, bool assume_a
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -533,13 +533,13 @@ Value CodeGenerator::ShrValues(const Value& lhs, const Value& rhs, bool assume_a
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -578,15 +578,15 @@ Value CodeGenerator::SarValues(const Value& lhs, const Value& rhs, bool assume_a
     {
       case RegSize_8:
         return Value::FromConstantU8(
-          static_cast<u8>(static_cast<s8>(Truncate8(lhs.constant_value)) >> (rhs.constant_value & 0x1F)));
+          static_cast<u8>(static_cast<s8>(static_cast<u8>(lhs.constant_value)) >> (rhs.constant_value & 0x1F)));
 
       case RegSize_16:
         return Value::FromConstantU16(
-          static_cast<u16>(static_cast<s16>(Truncate16(lhs.constant_value)) >> (rhs.constant_value & 0x1F)));
+          static_cast<u16>(static_cast<s16>(static_cast<u16>(lhs.constant_value)) >> (rhs.constant_value & 0x1F)));
 
       case RegSize_32:
         return Value::FromConstantU32(
-          static_cast<u32>(static_cast<s32>(Truncate32(lhs.constant_value)) >> (rhs.constant_value & 0x1F)));
+          static_cast<u32>(static_cast<s32>(static_cast<u32>(lhs.constant_value)) >> (rhs.constant_value & 0x1F)));
 
       case RegSize_64:
         return Value::FromConstantU64(
@@ -626,13 +626,13 @@ Value CodeGenerator::OrValues(const Value& lhs, const Value& rhs)
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -675,15 +675,15 @@ void CodeGenerator::OrValueInPlace(Value& lhs, const Value& rhs)
     switch (lhs.size)
     {
       case RegSize_8:
-        lhs = Value::FromConstantU8(Truncate8(new_cv));
+        lhs = Value::FromConstantU8(static_cast<u8>(new_cv));
         break;
 
       case RegSize_16:
-        lhs = Value::FromConstantU16(Truncate16(new_cv));
+        lhs = Value::FromConstantU16(static_cast<u16>(new_cv));
         break;
 
       case RegSize_32:
-        lhs = Value::FromConstantU32(Truncate32(new_cv));
+        lhs = Value::FromConstantU32(static_cast<u32>(new_cv));
         break;
 
       case RegSize_64:
@@ -722,13 +722,13 @@ Value CodeGenerator::AndValues(const Value& lhs, const Value& rhs)
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -767,15 +767,15 @@ void CodeGenerator::AndValueInPlace(Value& lhs, const Value& rhs)
     switch (lhs.size)
     {
       case RegSize_8:
-        lhs = Value::FromConstantU8(Truncate8(new_cv));
+        lhs = Value::FromConstantU8(static_cast<u8>(new_cv));
         break;
 
       case RegSize_16:
-        lhs = Value::FromConstantU16(Truncate16(new_cv));
+        lhs = Value::FromConstantU16(static_cast<u16>(new_cv));
         break;
 
       case RegSize_32:
-        lhs = Value::FromConstantU32(Truncate32(new_cv));
+        lhs = Value::FromConstantU32(static_cast<u32>(new_cv));
         break;
 
       case RegSize_64:
@@ -817,13 +817,13 @@ Value CodeGenerator::XorValues(const Value& lhs, const Value& rhs)
     switch (lhs.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -867,13 +867,13 @@ Value CodeGenerator::NotValue(const Value& val)
     switch (val.size)
     {
       case RegSize_8:
-        return Value::FromConstantU8(Truncate8(new_cv));
+        return Value::FromConstantU8(static_cast<u8>(new_cv));
 
       case RegSize_16:
-        return Value::FromConstantU16(Truncate16(new_cv));
+        return Value::FromConstantU16(static_cast<u16>(new_cv));
 
       case RegSize_32:
-        return Value::FromConstantU32(Truncate32(new_cv));
+        return Value::FromConstantU32(static_cast<u32>(new_cv));
 
       case RegSize_64:
         return Value::FromConstantU64(new_cv);
@@ -2234,7 +2234,7 @@ bool CodeGenerator::Compile_Branch(const CodeBlockInstruction& cbi)
       if (branch_target.IsConstant())
       {
         Log_WarningPrintf("Misaligned constant target branch 0x%08X, this is strange",
-                          Truncate32(branch_target.constant_value));
+                          static_cast<u32>(branch_target.constant_value));
       }
       else
       {

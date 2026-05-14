@@ -80,7 +80,7 @@ void SPU::Reset()
   m_reverb_on_register = 0;
   m_reverb_registers = {};
   m_reverb_registers.mBASE = 0;
-  m_reverb_base_address = m_reverb_current_address = ZeroExtend32(m_reverb_registers.mBASE) << 2;
+  m_reverb_base_address = m_reverb_current_address = static_cast<u32>(m_reverb_registers.mBASE) << 2;
   m_reverb_downsample_buffer = {};
   m_reverb_upsample_buffer = {};
   m_reverb_resample_buffer_position = 0;
@@ -195,40 +195,40 @@ u16 SPU::ReadRegister(u32 offset)
       return m_reverb_registers.vROUT;
 
     case 0x1F801D88 - SPU_BASE:
-      return Truncate16(m_key_on_register);
+      return static_cast<u16>(m_key_on_register);
 
     case 0x1F801D8A - SPU_BASE:
-      return Truncate16(m_key_on_register >> 16);
+      return static_cast<u16>(m_key_on_register >> 16);
 
     case 0x1F801D8C - SPU_BASE:
-      return Truncate16(m_key_off_register);
+      return static_cast<u16>(m_key_off_register);
 
     case 0x1F801D8E - SPU_BASE:
-      return Truncate16(m_key_off_register >> 16);
+      return static_cast<u16>(m_key_off_register >> 16);
 
     case 0x1F801D90 - SPU_BASE:
-      return Truncate16(m_pitch_modulation_enable_register);
+      return static_cast<u16>(m_pitch_modulation_enable_register);
 
     case 0x1F801D92 - SPU_BASE:
-      return Truncate16(m_pitch_modulation_enable_register >> 16);
+      return static_cast<u16>(m_pitch_modulation_enable_register >> 16);
 
     case 0x1F801D94 - SPU_BASE:
-      return Truncate16(m_noise_mode_register);
+      return static_cast<u16>(m_noise_mode_register);
 
     case 0x1F801D96 - SPU_BASE:
-      return Truncate16(m_noise_mode_register >> 16);
+      return static_cast<u16>(m_noise_mode_register >> 16);
 
     case 0x1F801D98 - SPU_BASE:
-      return Truncate16(m_reverb_on_register);
+      return static_cast<u16>(m_reverb_on_register);
 
     case 0x1F801D9A - SPU_BASE:
-      return Truncate16(m_reverb_on_register >> 16);
+      return static_cast<u16>(m_reverb_on_register >> 16);
 
     case 0x1F801D9C - SPU_BASE:
-      return Truncate16(m_endx_register);
+      return static_cast<u16>(m_endx_register);
 
     case 0x1F801D9E - SPU_BASE:
-      return Truncate16(m_endx_register >> 16);
+      return static_cast<u16>(m_endx_register >> 16);
 
     case 0x1F801DA2 - SPU_BASE:
       return m_reverb_registers.mBASE;
@@ -331,35 +331,35 @@ void SPU::WriteRegister(u32 offset, u16 value)
     case 0x1F801D88 - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_key_on_register = (m_key_on_register & 0xFFFF0000) | ZeroExtend32(value);
+      m_key_on_register = (m_key_on_register & 0xFFFF0000) | static_cast<u32>(value);
     }
     break;
 
     case 0x1F801D8A - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_key_on_register = (m_key_on_register & 0x0000FFFF) | (ZeroExtend32(value) << 16);
+      m_key_on_register = (m_key_on_register & 0x0000FFFF) | (static_cast<u32>(value) << 16);
     }
     break;
 
     case 0x1F801D8C - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_key_off_register = (m_key_off_register & 0xFFFF0000) | ZeroExtend32(value);
+      m_key_off_register = (m_key_off_register & 0xFFFF0000) | static_cast<u32>(value);
     }
     break;
 
     case 0x1F801D8E - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_key_off_register = (m_key_off_register & 0x0000FFFF) | (ZeroExtend32(value) << 16);
+      m_key_off_register = (m_key_off_register & 0x0000FFFF) | (static_cast<u32>(value) << 16);
     }
     break;
 
     case 0x1F801D90 - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_pitch_modulation_enable_register = (m_pitch_modulation_enable_register & 0xFFFF0000) | ZeroExtend32(value);
+      m_pitch_modulation_enable_register = (m_pitch_modulation_enable_register & 0xFFFF0000) | static_cast<u32>(value);
     }
     break;
 
@@ -367,35 +367,35 @@ void SPU::WriteRegister(u32 offset, u16 value)
     {
       GeneratePendingSamples();
       m_pitch_modulation_enable_register =
-        (m_pitch_modulation_enable_register & 0x0000FFFF) | (ZeroExtend32(value) << 16);
+        (m_pitch_modulation_enable_register & 0x0000FFFF) | (static_cast<u32>(value) << 16);
     }
     break;
 
     case 0x1F801D94 - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_noise_mode_register = (m_noise_mode_register & 0xFFFF0000) | ZeroExtend32(value);
+      m_noise_mode_register = (m_noise_mode_register & 0xFFFF0000) | static_cast<u32>(value);
     }
     break;
 
     case 0x1F801D96 - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_noise_mode_register = (m_noise_mode_register & 0x0000FFFF) | (ZeroExtend32(value) << 16);
+      m_noise_mode_register = (m_noise_mode_register & 0x0000FFFF) | (static_cast<u32>(value) << 16);
     }
     break;
 
     case 0x1F801D98 - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_reverb_on_register = (m_reverb_on_register & 0xFFFF0000) | ZeroExtend32(value);
+      m_reverb_on_register = (m_reverb_on_register & 0xFFFF0000) | static_cast<u32>(value);
     }
     break;
 
     case 0x1F801D9A - SPU_BASE:
     {
       GeneratePendingSamples();
-      m_reverb_on_register = (m_reverb_on_register & 0x0000FFFF) | (ZeroExtend32(value) << 16);
+      m_reverb_on_register = (m_reverb_on_register & 0x0000FFFF) | (static_cast<u32>(value) << 16);
     }
     break;
 
@@ -403,7 +403,7 @@ void SPU::WriteRegister(u32 offset, u16 value)
     {
       GeneratePendingSamples();
       m_reverb_registers.mBASE = value;
-      m_reverb_base_address = ZeroExtend32(value << 2) & 0x3FFFFu;
+      m_reverb_base_address = static_cast<u32>(value << 2) & 0x3FFFFu;
       m_reverb_current_address = m_reverb_base_address;
     }
     break;
@@ -430,7 +430,7 @@ void SPU::WriteRegister(u32 offset, u16 value)
     {
       m_transfer_event->InvokeEarly();
       m_transfer_address_reg = value;
-      m_transfer_address = ZeroExtend32(value) * 8;
+      m_transfer_address = static_cast<u32>(value) * 8;
       if (IsRAMIRQTriggerable() && CheckRAMIRQ(m_transfer_address))
       {
         SPU_TriggerRAMIRQ();
@@ -671,7 +671,7 @@ void SPU::CheckForLateRAMIRQs()
 
 void SPU::WriteToCaptureBuffer(u32 index, s16 value)
 {
-  const u32 ram_address = (index * CAPTURE_BUFFER_SIZE_PER_CHANNEL) | ZeroExtend16(m_capture_buffer_position);
+  const u32 ram_address = (index * CAPTURE_BUFFER_SIZE_PER_CHANNEL) | static_cast<u16>(m_capture_buffer_position);
   std::memcpy(&m_ram[ram_address], &value, sizeof(value));
   if (IsRAMIRQTriggerable() && CheckRAMIRQ(ram_address))
   {
@@ -1181,7 +1181,7 @@ void SPU::Voice::DecodeBlock(const ADPCMBlock& block)
   for (u32 i = 0; i < NUM_SAMPLES_PER_ADPCM_BLOCK; i++)
   {
     // extend 4-bit to 16-bit, apply shift from header and mix in previous samples
-    s32 sample = s32(static_cast<s16>(ZeroExtend16(block.GetNibble(i)) << 12) >> shift);
+    s32 sample = s32(static_cast<s16>(static_cast<u16>(block.GetNibble(i)) << 12) >> shift);
     sample += (last_samples[0] * filter_pos) >> 6;
     sample += (last_samples[1] * filter_neg) >> 6;
 
@@ -1263,7 +1263,7 @@ s32 SPU::Voice::Interpolate() const
   };
 
   const u8 i  = counter.interpolation_index;
-  const u32 s = NUM_SAMPLES_FROM_LAST_ADPCM_BLOCK + ZeroExtend32(counter.sample_index.GetValue());
+  const u32 s = NUM_SAMPLES_FROM_LAST_ADPCM_BLOCK + static_cast<u32>(counter.sample_index.GetValue());
 
   s32 out     = s32(gauss[0x0FF - i]) * s32(current_block_samples[s - 3]);
   out        += s32(gauss[0x1FF - i]) * s32(current_block_samples[s - 2]);
@@ -1274,7 +1274,7 @@ s32 SPU::Voice::Interpolate() const
 
 void SPU::ReadADPCMBlock(u16 address, ADPCMBlock* block)
 {
-  u32 ram_address = (ZeroExtend32(address) * 8) & RAM_MASK;
+  u32 ram_address = (static_cast<u32>(address) * 8) & RAM_MASK;
   if (IsRAMIRQTriggerable() && (CheckRAMIRQ(ram_address) || CheckRAMIRQ((ram_address + 8) & RAM_MASK)))
   {
     SPU_TriggerRAMIRQ();
@@ -1344,7 +1344,7 @@ ALWAYS_INLINE_RELEASE std::tuple<s32, s32> SPU::SampleVoice(u32 voice_index)
   if (IsPitchModulationEnabled(voice_index))
   {
     const s32 factor = std::clamp<s32>(m_voices[voice_index - 1].last_volume, -0x8000, 0x7FFF) + 0x8000;
-    step = Truncate16(static_cast<u32>((SignExtend32(step) * factor) >> 15));
+    step = static_cast<u16>((static_cast<u32>(static_cast<s16>(step)) * factor) >> 15);
   }
   step = std::min<u16>(step, 0x3FFF);
 

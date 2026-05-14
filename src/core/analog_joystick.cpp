@@ -171,7 +171,7 @@ bool AnalogJoystick::Transfer(const u8 data_in, u8* data_out)
     {
       if (data_in == 0x42)
       {
-        *data_out = Truncate8(GetID());
+        *data_out = static_cast<u8>(GetID());
         m_transfer_state = TransferState::IDMSB;
         return true;
       }
@@ -182,21 +182,21 @@ bool AnalogJoystick::Transfer(const u8 data_in, u8* data_out)
 
     case TransferState::IDMSB:
     {
-      *data_out = Truncate8(GetID() >> 8);
+      *data_out = static_cast<u8>(GetID() >> 8);
       m_transfer_state = TransferState::ButtonsLSB;
       return true;
     }
 
     case TransferState::ButtonsLSB:
     {
-      *data_out = Truncate8(m_button_state);
+      *data_out = static_cast<u8>(m_button_state);
       m_transfer_state = TransferState::ButtonsMSB;
       return true;
     }
 
     case TransferState::ButtonsMSB:
     {
-      *data_out = Truncate8(m_button_state >> 8);
+      *data_out = static_cast<u8>(m_button_state >> 8);
 
       m_transfer_state = m_analog_mode ? TransferState::RightAxisX : TransferState::Idle;
       return m_analog_mode;
@@ -204,28 +204,28 @@ bool AnalogJoystick::Transfer(const u8 data_in, u8* data_out)
 
     case TransferState::RightAxisX:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::RightX)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::RightX)]);
       m_transfer_state = TransferState::RightAxisY;
       return true;
     }
 
     case TransferState::RightAxisY:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::RightY)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::RightY)]);
       m_transfer_state = TransferState::LeftAxisX;
       return true;
     }
 
     case TransferState::LeftAxisX:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::LeftX)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::LeftX)]);
       m_transfer_state = TransferState::LeftAxisY;
       return true;
     }
 
     case TransferState::LeftAxisY:
     {
-      *data_out = Truncate8(m_axis_state[static_cast<u8>(Axis::LeftY)]);
+      *data_out = static_cast<u8>(m_axis_state[static_cast<u8>(Axis::LeftY)]);
       m_transfer_state = TransferState::Idle;
       return false;
     }

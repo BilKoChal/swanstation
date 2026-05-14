@@ -222,8 +222,8 @@ u32 Pad::ReadRegister(u32 offset)
       m_receive_buffer_full = false;
       UpdateJoyStat();
 
-      return (ZeroExtend32(value) | (ZeroExtend32(value) << 8) | (ZeroExtend32(value) << 16) |
-              (ZeroExtend32(value) << 24));
+      return (static_cast<u32>(value) | (static_cast<u32>(value) << 8) | (static_cast<u32>(value) << 16) |
+              (static_cast<u32>(value) << 24));
     }
 
     case 0x04: // JOY_STAT
@@ -237,13 +237,13 @@ u32 Pad::ReadRegister(u32 offset)
     }
 
     case 0x08: // JOY_MODE
-      return ZeroExtend32(m_JOY_MODE.bits);
+      return static_cast<u32>(m_JOY_MODE.bits);
 
     case 0x0A: // JOY_CTRL
-      return ZeroExtend32(m_JOY_CTRL.bits);
+      return static_cast<u32>(m_JOY_CTRL.bits);
 
     case 0x0E: // JOY_BAUD
-      return ZeroExtend32(m_JOY_BAUD);
+      return static_cast<u32>(m_JOY_BAUD);
 
     default:
       break;
@@ -257,7 +257,7 @@ void Pad::WriteRegister(u32 offset, u32 value)
   {
     case 0x00: // JOY_DATA
     {
-      m_transmit_buffer = Truncate8(value);
+      m_transmit_buffer = static_cast<u8>(value);
       m_transmit_buffer_full = true;
 
       if (!IsTransmitting() && CanTransfer())
@@ -268,7 +268,7 @@ void Pad::WriteRegister(u32 offset, u32 value)
 
     case 0x0A: // JOY_CTRL
     {
-      m_JOY_CTRL.bits = Truncate16(value);
+      m_JOY_CTRL.bits = static_cast<u16>(value);
       if (m_JOY_CTRL.RESET)
         SoftReset();
 
@@ -298,13 +298,13 @@ void Pad::WriteRegister(u32 offset, u32 value)
 
     case 0x08: // JOY_MODE
     {
-      m_JOY_MODE.bits = Truncate16(value);
+      m_JOY_MODE.bits = static_cast<u16>(value);
       return;
     }
 
     case 0x0E:
     {
-      m_JOY_BAUD = Truncate16(value);
+      m_JOY_BAUD = static_cast<u16>(value);
       return;
     }
 

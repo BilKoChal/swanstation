@@ -19,10 +19,10 @@ TextureReplacements g_texture_replacements;
 
 static constexpr u32 VRAMRGBA5551ToRGBA8888(u16 color)
 {
-  u8 r = Truncate8(color & 31);
-  u8 g = Truncate8((color >> 5) & 31);
-  u8 b = Truncate8((color >> 10) & 31);
-  u8 a = Truncate8((color >> 15) & 1);
+  u8 r = static_cast<u8>(color & 31);
+  u8 g = static_cast<u8>((color >> 5) & 31);
+  u8 b = static_cast<u8>((color >> 10) & 31);
+  u8 a = static_cast<u8>((color >> 15) & 1);
 
   // 00012345 -> 1234545
   b = (b << 3) | (b & 0b111);
@@ -30,7 +30,7 @@ static constexpr u32 VRAMRGBA5551ToRGBA8888(u16 color)
   r = (r << 3) | (r & 0b111);
   a = a ? 255 : 0;
 
-  return ZeroExtend32(r) | (ZeroExtend32(g) << 8) | (ZeroExtend32(b) << 16) | (ZeroExtend32(a) << 24);
+  return static_cast<u32>(r) | (static_cast<u32>(g) << 8) | (static_cast<u32>(b) << 16) | (static_cast<u32>(a) << 24);
 }
 
 std::string TextureReplacementHash::ToString() const

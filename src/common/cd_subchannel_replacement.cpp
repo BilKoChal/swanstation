@@ -26,7 +26,7 @@ static constexpr u32 MSFToLBA(u8 minute_bcd, u8 second_bcd, u8 frame_bcd)
   const u8 second = PackedBCDToBinary(second_bcd);
   const u8 frame = PackedBCDToBinary(frame_bcd);
 
-  return (ZeroExtend32(minute) * 60 * 75) + (ZeroExtend32(second) * 75) + ZeroExtend32(frame);
+  return (static_cast<u32>(minute) * 60 * 75) + (static_cast<u32>(second) * 75) + static_cast<u32>(frame);
 }
 
 bool CDSubChannelReplacement::LoadSBI(const char* path)
@@ -77,8 +77,8 @@ bool CDSubChannelReplacement::LoadSBI(const char* path)
 
     // generate an invalid crc by flipping all bits from the valid crc (will never collide)
     const u16 crc = subq.ComputeCRC(subq.data) ^ 0xFFFF;
-    subq.data[10] = Truncate8(crc);
-    subq.data[11] = Truncate8(crc >> 8);
+    subq.data[10] = static_cast<u8>(crc);
+    subq.data[11] = static_cast<u8>(crc >> 8);
 
     m_replacement_subq.emplace(lba, subq);
   }

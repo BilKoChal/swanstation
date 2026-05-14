@@ -135,10 +135,10 @@ static u32 GetControllerAnalogBits()
     analog = controller->GetAnalogInputBytes();
     if (analog.has_value())
     {
-      l_ypos = Truncate8((analog.value() & 0xFF000000u) >> 24);
-      l_xpos = Truncate8((analog.value() & 0x00FF0000u) >> 16);
-      r_ypos = Truncate8((analog.value() & 0x0000FF00u) >> 8);
-      r_xpos = Truncate8(analog.value() & 0x000000FFu);
+      l_ypos = static_cast<u8>(analog.value() >> 24);
+      l_xpos = static_cast<u8>(analog.value() >> 16);
+      r_ypos = static_cast<u8>(analog.value() >> 8);
+      r_xpos = static_cast<u8>(analog.value());
       if (l_ypos < 0x50)
         bits |= 0x100000;
       else if (l_ypos > 0xA0)
@@ -944,8 +944,8 @@ void CheatCode::Apply() const
       case InstructionCode::ExtConstantWriteIfMatchWithRestore16:
       {
         const u16 value = DoMemoryRead<u16>(inst.address);
-        const u16 comparevalue = Truncate16(inst.value32 >> 16);
-        const u16 newvalue = Truncate16(inst.value32 & 0xFFFFu);
+        const u16 comparevalue = static_cast<u16>(inst.value32 >> 16);
+        const u16 newvalue = static_cast<u16>(inst.value32);
         if (value == comparevalue)
           DoMemoryWrite<u16>(inst.address, newvalue);
 
@@ -956,10 +956,10 @@ void CheatCode::Apply() const
       case InstructionCode::ExtConstantForceRange8:
       {
         const u8 value = DoMemoryRead<u8>(inst.address);
-        const u8 min = Truncate8(inst.value32 & 0x000000FFu);
-        const u8 max = Truncate8((inst.value32 & 0x0000FF00u) >> 8);
-        const u8 overmin = Truncate8((inst.value32 & 0x00FF0000u) >> 16);
-        const u8 overmax = Truncate8((inst.value32 & 0xFF000000u) >> 24);
+        const u8 min = static_cast<u8>(inst.value32);
+        const u8 max = static_cast<u8>(inst.value32 >> 8);
+        const u8 overmin = static_cast<u8>(inst.value32 >> 16);
+        const u8 overmax = static_cast<u8>(inst.value32 >> 24);
         if ((value < min) || (value < min && min == 0x00u && max < 0xFEu))
           DoMemoryWrite<u8>(inst.address, overmin); // also handles a min value of 0x00
         else if (value > max)
@@ -971,8 +971,8 @@ void CheatCode::Apply() const
       case InstructionCode::ExtConstantForceRangeLimits16:
       {
         const u16 value = DoMemoryRead<u16>(inst.address);
-        const u16 min = Truncate16(inst.value32 & 0x0000FFFFu);
-        const u16 max = Truncate16((inst.value32 & 0xFFFF0000u) >> 16);
+        const u16 min = static_cast<u16>(inst.value32);
+        const u16 max = static_cast<u16>(inst.value32 >> 16);
         if ((value < min) || (value < min && min == 0x0000u && max < 0xFFFEu))
           DoMemoryWrite<u16>(inst.address, min); // also handles a min value of 0x0000
         else if (value > max)
@@ -984,8 +984,8 @@ void CheatCode::Apply() const
       case InstructionCode::ExtConstantForceRangeRollRound16:
       {
         const u16 value = DoMemoryRead<u16>(inst.address);
-        const u16 min = Truncate16(inst.value32 & 0x0000FFFFu);
-        const u16 max = Truncate16((inst.value32 & 0xFFFF0000u) >> 16);
+        const u16 min = static_cast<u16>(inst.value32);
+        const u16 max = static_cast<u16>(inst.value32 >> 16);
         if ((value < min) || (value < min && min == 0x0000u && max < 0xFFFEu))
           DoMemoryWrite<u16>(inst.address, max); // also handles a min value of 0x0000
         else if (value > max)
@@ -996,12 +996,12 @@ void CheatCode::Apply() const
 
       case InstructionCode::ExtConstantForceRange16:
       {
-        const u16 min = Truncate16(inst.value32 & 0x0000FFFFu);
-        const u16 max = Truncate16((inst.value32 & 0xFFFF0000u) >> 16);
+        const u16 min = static_cast<u16>(inst.value32);
+        const u16 max = static_cast<u16>(inst.value32 >> 16);
         const u16 value = DoMemoryRead<u16>(inst.address);
         const Instruction& inst2 = instructions[index + 1];
-        const u16 overmin = Truncate16(inst2.value32 & 0x0000FFFFu);
-        const u16 overmax = Truncate16((inst2.value32 & 0xFFFF0000u) >> 16);
+        const u16 overmin = static_cast<u16>(inst2.value32);
+        const u16 overmax = static_cast<u16>(inst2.value32 >> 16);
 
         if ((value < min) || (value < min && min == 0x0000u && max < 0xFFFEu))
           DoMemoryWrite<u16>(inst.address, overmin); // also handles a min value of 0x0000
@@ -1013,8 +1013,8 @@ void CheatCode::Apply() const
 
       case InstructionCode::ExtConstantSwap16:
       {
-        const u16 value1 = Truncate16(inst.value32 & 0x0000FFFFu);
-        const u16 value2 = Truncate16((inst.value32 & 0xFFFF0000u) >> 16);
+        const u16 value1 = static_cast<u16>(inst.value32);
+        const u16 value2 = static_cast<u16>(inst.value32 >> 16);
         const u16 value = DoMemoryRead<u16>(inst.address);
 
         if (value == value1)
@@ -1038,42 +1038,42 @@ void CheatCode::Apply() const
         const Instruction& inst4 = instructions[index + 3];
         const Instruction& inst5 = instructions[index + 4];
 
-        const u32 offset = Truncate16(inst.value32 & 0x0000FFFFu) << 1;
-        const u8 wildcard = Truncate8((inst.value32 & 0x00FF0000u) >> 16);
+        const u32 offset = static_cast<u16>(inst.value32) << 1;
+        const u8 wildcard = static_cast<u8>(inst.value32 >> 16);
         const u32 minaddress = inst.address - offset;
         const u32 maxaddress = inst.address + offset;
-        const u8 f1 = Truncate8((inst2.first & 0xFF000000u) >> 24);
-        const u8 f2 = Truncate8((inst2.first & 0x00FF0000u) >> 16);
-        const u8 f3 = Truncate8((inst2.first & 0x0000FF00u) >> 8);
-        const u8 f4 = Truncate8(inst2.first & 0x000000FFu);
-        const u8 f5 = Truncate8((inst2.value32 & 0xFF000000u) >> 24);
-        const u8 f6 = Truncate8((inst2.value32 & 0x00FF0000u) >> 16);
-        const u8 f7 = Truncate8((inst2.value32 & 0x0000FF00u) >> 8);
-        const u8 f8 = Truncate8(inst2.value32 & 0x000000FFu);
-        const u8 f9 = Truncate8((inst3.first & 0xFF000000u) >> 24);
-        const u8 f10 = Truncate8((inst3.first & 0x00FF0000u) >> 16);
-        const u8 f11 = Truncate8((inst3.first & 0x0000FF00u) >> 8);
-        const u8 f12 = Truncate8(inst3.first & 0x000000FFu);
-        const u8 f13 = Truncate8((inst3.value32 & 0xFF000000u) >> 24);
-        const u8 f14 = Truncate8((inst3.value32 & 0x00FF0000u) >> 16);
-        const u8 f15 = Truncate8((inst3.value32 & 0x0000FF00u) >> 8);
-        const u8 f16 = Truncate8(inst3.value32 & 0x000000FFu);
-        const u8 r1 = Truncate8((inst4.first & 0xFF000000u) >> 24);
-        const u8 r2 = Truncate8((inst4.first & 0x00FF0000u) >> 16);
-        const u8 r3 = Truncate8((inst4.first & 0x0000FF00u) >> 8);
-        const u8 r4 = Truncate8(inst4.first & 0x000000FFu);
-        const u8 r5 = Truncate8((inst4.value32 & 0xFF000000u) >> 24);
-        const u8 r6 = Truncate8((inst4.value32 & 0x00FF0000u) >> 16);
-        const u8 r7 = Truncate8((inst4.value32 & 0x0000FF00u) >> 8);
-        const u8 r8 = Truncate8(inst4.value32 & 0x000000FFu);
-        const u8 r9 = Truncate8((inst5.first & 0xFF000000u) >> 24);
-        const u8 r10 = Truncate8((inst5.first & 0x00FF0000u) >> 16);
-        const u8 r11 = Truncate8((inst5.first & 0x0000FF00u) >> 8);
-        const u8 r12 = Truncate8(inst5.first & 0x000000FFu);
-        const u8 r13 = Truncate8((inst5.value32 & 0xFF000000u) >> 24);
-        const u8 r14 = Truncate8((inst5.value32 & 0x00FF0000u) >> 16);
-        const u8 r15 = Truncate8((inst5.value32 & 0x0000FF00u) >> 8);
-        const u8 r16 = Truncate8(inst5.value32 & 0x000000FFu);
+        const u8 f1 = static_cast<u8>(inst2.first >> 24);
+        const u8 f2 = static_cast<u8>(inst2.first >> 16);
+        const u8 f3 = static_cast<u8>(inst2.first >> 8);
+        const u8 f4 = static_cast<u8>(inst2.first);
+        const u8 f5 = static_cast<u8>(inst2.value32 >> 24);
+        const u8 f6 = static_cast<u8>(inst2.value32 >> 16);
+        const u8 f7 = static_cast<u8>(inst2.value32 >> 8);
+        const u8 f8 = static_cast<u8>(inst2.value32);
+        const u8 f9 = static_cast<u8>(inst3.first >> 24);
+        const u8 f10 = static_cast<u8>(inst3.first >> 16);
+        const u8 f11 = static_cast<u8>(inst3.first >> 8);
+        const u8 f12 = static_cast<u8>(inst3.first);
+        const u8 f13 = static_cast<u8>(inst3.value32 >> 24);
+        const u8 f14 = static_cast<u8>(inst3.value32 >> 16);
+        const u8 f15 = static_cast<u8>(inst3.value32 >> 8);
+        const u8 f16 = static_cast<u8>(inst3.value32);
+        const u8 r1 = static_cast<u8>(inst4.first >> 24);
+        const u8 r2 = static_cast<u8>(inst4.first >> 16);
+        const u8 r3 = static_cast<u8>(inst4.first >> 8);
+        const u8 r4 = static_cast<u8>(inst4.first);
+        const u8 r5 = static_cast<u8>(inst4.value32 >> 24);
+        const u8 r6 = static_cast<u8>(inst4.value32 >> 16);
+        const u8 r7 = static_cast<u8>(inst4.value32 >> 8);
+        const u8 r8 = static_cast<u8>(inst4.value32);
+        const u8 r9 = static_cast<u8>(inst5.first >> 24);
+        const u8 r10 = static_cast<u8>(inst5.first >> 16);
+        const u8 r11 = static_cast<u8>(inst5.first >> 8);
+        const u8 r12 = static_cast<u8>(inst5.first);
+        const u8 r13 = static_cast<u8>(inst5.value32 >> 24);
+        const u8 r14 = static_cast<u8>(inst5.value32 >> 16);
+        const u8 r15 = static_cast<u8>(inst5.value32 >> 8);
+        const u8 r16 = static_cast<u8>(inst5.value32);
 
         for (u32 address = minaddress; address <= maxaddress; address += 2)
         {
@@ -1225,33 +1225,33 @@ void CheatCode::Apply() const
       case InstructionCode::ExtCheatRegisters: // 51
       {
         const u32 poke_value = inst.value32;
-        const u8 cht_reg_no1 = Truncate8(inst.address & 0xFFu);
-        const u8 cht_reg_no2 = Truncate8((inst.address & 0xFF00u) >> 8);
-        const u8 cht_reg_no3 = Truncate8(inst.value32 & 0xFFu);
-        const u8 sub_type = Truncate8((inst.address & 0xFF0000u) >> 16);
+        const u8 cht_reg_no1 = static_cast<u8>(inst.address);
+        const u8 cht_reg_no2 = static_cast<u8>(inst.address >> 8);
+        const u8 cht_reg_no3 = static_cast<u8>(inst.value32);
+        const u8 sub_type = static_cast<u8>(inst.address >> 16);
 
         switch (sub_type)
         {
           case 0x00: // Write the u8 from cht_register[cht_reg_no1] to address
-            DoMemoryWrite<u8>(inst.value32, Truncate8(cht_register[cht_reg_no1]) & 0xFFu);
+            DoMemoryWrite<u8>(inst.value32, static_cast<u8>(cht_register[cht_reg_no1]) & 0xFFu);
             break;
           case 0x01: // Read the u8 from address to cht_register[cht_reg_no1]
             cht_register[cht_reg_no1] = DoMemoryRead<u8>(inst.value32);
             break;
           case 0x02: // Write the u8 from address field to the address stored in cht_register[cht_reg_no1]
-            DoMemoryWrite<u8>(cht_register[cht_reg_no1], Truncate8(poke_value & 0xFFu));
+            DoMemoryWrite<u8>(cht_register[cht_reg_no1], static_cast<u8>(poke_value));
             break;
           case 0x03: // Write the u8 from cht_register[cht_reg_no2] to cht_register[cht_reg_no1]
                      // and add the u8 from the address field to it
-            cht_register[cht_reg_no1] = Truncate8(cht_register[cht_reg_no2] & 0xFFu) + Truncate8(poke_value & 0xFFu);
+            cht_register[cht_reg_no1] = static_cast<u8>(cht_register[cht_reg_no2]) + static_cast<u8>(poke_value);
             break;
           case 0x04: // Write the u8 from the value stored in cht_register[cht_reg_no2] + poke_value to the address
                      // stored in cht_register[cht_reg_no1]
             DoMemoryWrite<u8>(cht_register[cht_reg_no1],
-                              Truncate8(cht_register[cht_reg_no2] & 0xFFu) + Truncate8(poke_value & 0xFFu));
+                              static_cast<u8>(cht_register[cht_reg_no2]) + static_cast<u8>(poke_value));
             break;
           case 0x05: // Write the u8 poke value to cht_register[cht_reg_no1]
-            cht_register[cht_reg_no1] = Truncate8(poke_value & 0xFFu);
+            cht_register[cht_reg_no1] = static_cast<u8>(poke_value);
             break;
           case 0x06: // Read the u8 value from the address (cht_register[cht_reg_no2] + poke_value) to
                      // cht_register[cht_reg_no1]
@@ -1259,26 +1259,26 @@ void CheatCode::Apply() const
             break;
 
           case 0x40: // Write the u16 from cht_register[cht_reg_no1] to address
-            DoMemoryWrite<u16>(inst.value32, Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+            DoMemoryWrite<u16>(inst.value32, static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x41: // Read the u16 from address to cht_register[cht_reg_no1]
             cht_register[cht_reg_no1] = DoMemoryRead<u16>(inst.value32);
             break;
           case 0x42: // Write the u16 from address field to the address stored in cht_register[cht_reg_no1]
-            DoMemoryWrite<u16>(cht_register[cht_reg_no1], Truncate16(poke_value & 0xFFFFu));
+            DoMemoryWrite<u16>(cht_register[cht_reg_no1], static_cast<u16>(poke_value));
             break;
           case 0x43: // Write the u16 from cht_register[cht_reg_no2] to cht_register[cht_reg_no1]
                      // and add the u16 from the address field to it
             cht_register[cht_reg_no1] =
-              Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) + Truncate16(poke_value & 0xFFFFu);
+              static_cast<u16>(cht_register[cht_reg_no2]) + static_cast<u16>(poke_value);
             break;
           case 0x44: // Write the u16 from the value stored in cht_register[cht_reg_no2] + poke_value to the address
                      // stored in cht_register[cht_reg_no1]
             DoMemoryWrite<u16>(cht_register[cht_reg_no1],
-                               Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) + Truncate16(poke_value & 0xFFFFu));
+                               static_cast<u16>(cht_register[cht_reg_no2]) + static_cast<u16>(poke_value));
             break;
           case 0x45: // Write the u16 poke value to cht_register[cht_reg_no1]
-            cht_register[cht_reg_no1] = Truncate16(poke_value & 0xFFFFu);
+            cht_register[cht_reg_no1] = static_cast<u16>(poke_value);
             break;
           case 0x46: // Read the u16 value from the address (cht_register[cht_reg_no2] + poke_value) to
                      // cht_register[cht_reg_no1]
@@ -1406,8 +1406,8 @@ void CheatCode::Apply() const
             }
             for (;;)
             {
-              const u8 totalConds = Truncate8(instructions[index - 1].value32 & 0x000000FFu);
-              const u8 conditionType = Truncate8(instructions[index - 1].address & 0x000000FFu);
+              const u8 totalConds = static_cast<u8>(instructions[index - 1].value32);
+              const u8 conditionType = static_cast<u8>(instructions[index - 1].address);
 
               bool conditions_check;
 
@@ -1475,9 +1475,9 @@ void CheatCode::Apply() const
                     case InstructionCode::ExtBitCompareButtons: // D7
                     {
                       const u32 frame_compare_value = instructions[index].address & 0xFFFFu;
-                      const u8 cht_reg_no = Truncate8((instructions[index].value32 & 0xFF000000u) >> 24);
+                      const u8 cht_reg_no = static_cast<u8>(instructions[index].value32 >> 24);
                       const bool bit_comparison_type = ((instructions[index].address & 0x100000u) >> 20);
-                      const u8 frame_comparison = Truncate8((instructions[index].address & 0xF0000u) >> 16);
+                      const u8 frame_comparison = static_cast<u8>((instructions[index].address & 0xF0000u) >> 16);
                       const u32 check_value = (instructions[index].value32 & 0xFFFFFFu);
                       const u32 value1 = GetControllerButtonBits();
                       const u32 value2 = GetControllerAnalogBits();
@@ -1587,9 +1587,9 @@ void CheatCode::Apply() const
                     case InstructionCode::ExtBitCompareButtons: // D7
                     {
                       const u32 frame_compare_value = instructions[index].address & 0xFFFFu;
-                      const u8 cht_reg_no = Truncate8((instructions[index].value32 & 0xFF000000u) >> 24);
+                      const u8 cht_reg_no = static_cast<u8>(instructions[index].value32 >> 24);
                       const bool bit_comparison_type = ((instructions[index].address & 0x100000u) >> 20);
-                      const u8 frame_comparison = Truncate8((instructions[index].address & 0xF0000u) >> 16);
+                      const u8 frame_comparison = static_cast<u8>((instructions[index].address & 0xF0000u) >> 16);
                       const u32 check_value = (instructions[index].value32 & 0xFFFFFFu);
                       const u32 value1 = GetControllerButtonBits();
                       const u32 value2 = GetControllerAnalogBits();
@@ -1717,9 +1717,9 @@ void CheatCode::Apply() const
         index++;
         bool activate_codes;
         const u32 frame_compare_value = inst.address & 0xFFFFu;
-        const u8 cht_reg_no = Truncate8((inst.value32 & 0xFF000000u) >> 24);
+        const u8 cht_reg_no = static_cast<u8>(inst.value32 >> 24);
         const bool bit_comparison_type = ((inst.address & 0x100000u) >> 20);
-        const u8 frame_comparison = Truncate8((inst.address & 0xF0000u) >> 16);
+        const u8 frame_comparison = static_cast<u8>((inst.address & 0xF0000u) >> 16);
         const u32 check_value = (inst.value32 & 0xFFFFFFu);
         const u32 value1 = GetControllerButtonBits();
         const u32 value2 = GetControllerAnalogBits();
@@ -1779,97 +1779,97 @@ void CheatCode::Apply() const
       {
         index++;
         bool activate_codes = false;
-        const u8 cht_reg_no1 = Truncate8(inst.address & 0xFFu);
-        const u8 cht_reg_no2 = Truncate8((inst.address & 0xFF00u) >> 8);
-        const u8 sub_type = Truncate8((inst.first & 0xFF0000u) >> 16);
+        const u8 cht_reg_no1 = static_cast<u8>(inst.address);
+        const u8 cht_reg_no2 = static_cast<u8>(inst.address >> 8);
+        const u8 sub_type = static_cast<u8>(inst.first >> 16);
 
         switch (sub_type)
         {
           case 0x00:
             activate_codes =
-              (Truncate8(cht_register[cht_reg_no2] & 0xFFu) == Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+              (static_cast<u8>(cht_register[cht_reg_no2]) == static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x01:
             activate_codes =
-              (Truncate8(cht_register[cht_reg_no2] & 0xFFu) != Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+              (static_cast<u8>(cht_register[cht_reg_no2]) != static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x02:
             activate_codes =
-              (Truncate8(cht_register[cht_reg_no2] & 0xFFu) > Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+              (static_cast<u8>(cht_register[cht_reg_no2]) > static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x03:
             activate_codes =
-              (Truncate8(cht_register[cht_reg_no2] & 0xFFu) >= Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+              (static_cast<u8>(cht_register[cht_reg_no2]) >= static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x04:
             activate_codes =
-              (Truncate8(cht_register[cht_reg_no2] & 0xFFu) < Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+              (static_cast<u8>(cht_register[cht_reg_no2]) < static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x05:
             activate_codes =
-              (Truncate8(cht_register[cht_reg_no2] & 0xFFu) <= Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+              (static_cast<u8>(cht_register[cht_reg_no2]) <= static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x06:
             activate_codes =
-              ((Truncate8(cht_register[cht_reg_no2] & 0xFFu) & Truncate8(cht_register[cht_reg_no1] & 0xFFu)) ==
-               (Truncate8(cht_register[cht_reg_no1] & 0xFFu)));
+              ((static_cast<u8>(cht_register[cht_reg_no2]) & static_cast<u8>(cht_register[cht_reg_no1])) ==
+               (static_cast<u8>(cht_register[cht_reg_no1])));
             break;
           case 0x07:
             activate_codes =
-              ((Truncate8(cht_register[cht_reg_no2] & 0xFFu) & Truncate8(cht_register[cht_reg_no1] & 0xFFu)) !=
-               (Truncate8(cht_register[cht_reg_no1] & 0xFFu)));
+              ((static_cast<u8>(cht_register[cht_reg_no2]) & static_cast<u8>(cht_register[cht_reg_no1])) !=
+               (static_cast<u8>(cht_register[cht_reg_no1])));
             break;
           case 0x0A:
             activate_codes =
-              ((Truncate8(cht_register[cht_reg_no2] & 0xFFu) & Truncate8(cht_register[cht_reg_no1] & 0xFFu)) ==
-               (Truncate8(cht_register[cht_reg_no2] & 0xFFu)));
+              ((static_cast<u8>(cht_register[cht_reg_no2]) & static_cast<u8>(cht_register[cht_reg_no1])) ==
+               (static_cast<u8>(cht_register[cht_reg_no2])));
             break;
           case 0x0B:
             activate_codes =
-              ((Truncate8(cht_register[cht_reg_no2] & 0xFFu) & Truncate8(cht_register[cht_reg_no1] & 0xFFu)) !=
-               (Truncate8(cht_register[cht_reg_no2] & 0xFFu)));
+              ((static_cast<u8>(cht_register[cht_reg_no2]) & static_cast<u8>(cht_register[cht_reg_no1])) !=
+               (static_cast<u8>(cht_register[cht_reg_no2])));
             break;
           case 0x10:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) == inst.value8);
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) == inst.value8);
             break;
           case 0x11:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) != inst.value8);
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) != inst.value8);
             break;
           case 0x12:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) > inst.value8);
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) > inst.value8);
             break;
           case 0x13:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) >= inst.value8);
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) >= inst.value8);
             break;
           case 0x14:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) < inst.value8);
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) < inst.value8);
             break;
           case 0x15:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) <= inst.value8);
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) <= inst.value8);
             break;
           case 0x16:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & inst.value8) == inst.value8);
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & inst.value8) == inst.value8);
             break;
           case 0x17:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & inst.value8) != inst.value8);
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & inst.value8) != inst.value8);
             break;
           case 0x18:
             activate_codes =
-              ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) > inst.value8) &&
-               (Truncate8(cht_register[cht_reg_no1] & 0xFFu) < Truncate8((inst.value32 & 0xFF0000u) >> 16)));
+              ((static_cast<u8>(cht_register[cht_reg_no1]) > inst.value8) &&
+               (static_cast<u8>(cht_register[cht_reg_no1]) < static_cast<u8>(inst.value32 >> 16)));
             break;
           case 0x19:
             activate_codes =
-              ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) >= inst.value8) &&
-               (Truncate8(cht_register[cht_reg_no1] & 0xFFu) <= Truncate8((inst.value32 & 0xFF0000u) >> 16)));
+              ((static_cast<u8>(cht_register[cht_reg_no1]) >= inst.value8) &&
+               (static_cast<u8>(cht_register[cht_reg_no1]) <= static_cast<u8>(inst.value32 >> 16)));
             break;
           case 0x1A:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no2] & 0xFFu) & inst.value8) ==
-                              Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no2]) & inst.value8) ==
+                              static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x1B:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & inst.value8) !=
-                              Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & inst.value8) !=
+                              static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x20:
             activate_codes =
@@ -1904,12 +1904,12 @@ void CheatCode::Apply() const
           case 0x28:
             activate_codes =
               ((DoMemoryRead<u8>(cht_register[cht_reg_no1]) > inst.value8) &&
-               (DoMemoryRead<u8>(cht_register[cht_reg_no1]) < Truncate8((inst.value32 & 0xFF0000u) >> 16)));
+               (DoMemoryRead<u8>(cht_register[cht_reg_no1]) < static_cast<u8>(inst.value32 >> 16)));
             break;
           case 0x29:
             activate_codes =
               ((DoMemoryRead<u8>(cht_register[cht_reg_no1]) >= inst.value8) &&
-               (DoMemoryRead<u8>(cht_register[cht_reg_no1]) <= Truncate8((inst.value32 & 0xFF0000u) >> 16)));
+               (DoMemoryRead<u8>(cht_register[cht_reg_no1]) <= static_cast<u8>(inst.value32 >> 16)));
             break;
           case 0x2A:
             activate_codes = ((DoMemoryRead<u8>(cht_register[cht_reg_no1]) & inst.value8) ==
@@ -1920,121 +1920,121 @@ void CheatCode::Apply() const
                               DoMemoryRead<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x30:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) == DoMemoryRead<u8>(inst.value32));
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) == DoMemoryRead<u8>(inst.value32));
             break;
           case 0x31:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) != DoMemoryRead<u8>(inst.value32));
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) != DoMemoryRead<u8>(inst.value32));
             break;
           case 0x32:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) > DoMemoryRead<u8>(inst.value32));
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) > DoMemoryRead<u8>(inst.value32));
             break;
           case 0x33:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) >= DoMemoryRead<u8>(inst.value32));
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) >= DoMemoryRead<u8>(inst.value32));
             break;
           case 0x34:
-            activate_codes = (Truncate8(cht_register[cht_reg_no1] & 0xFFu) < DoMemoryRead<u8>(inst.value32));
+            activate_codes = (static_cast<u8>(cht_register[cht_reg_no1]) < DoMemoryRead<u8>(inst.value32));
             break;
           case 0x36:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & DoMemoryRead<u8>(inst.value32)) ==
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & DoMemoryRead<u8>(inst.value32)) ==
                               DoMemoryRead<u8>(inst.value32));
             break;
           case 0x37:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & DoMemoryRead<u8>(inst.value32)) !=
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & DoMemoryRead<u8>(inst.value32)) !=
                               DoMemoryRead<u8>(inst.value32));
             break;
           case 0x3A:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & DoMemoryRead<u8>(inst.value32)) ==
-                              Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & DoMemoryRead<u8>(inst.value32)) ==
+                              static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x3B:
-            activate_codes = ((Truncate8(cht_register[cht_reg_no1] & 0xFFu) & DoMemoryRead<u8>(inst.value32)) !=
-                              Truncate8(cht_register[cht_reg_no1] & 0xFFu));
+            activate_codes = ((static_cast<u8>(cht_register[cht_reg_no1]) & DoMemoryRead<u8>(inst.value32)) !=
+                              static_cast<u8>(cht_register[cht_reg_no1]));
             break;
           case 0x40:
             activate_codes =
-              (Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) == Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              (static_cast<u16>(cht_register[cht_reg_no2]) == static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x41:
             activate_codes =
-              (Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) != Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              (static_cast<u16>(cht_register[cht_reg_no2]) != static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x42:
             activate_codes =
-              (Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) > Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              (static_cast<u16>(cht_register[cht_reg_no2]) > static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x43:
             activate_codes =
-              (Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) >= Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              (static_cast<u16>(cht_register[cht_reg_no2]) >= static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x44:
             activate_codes =
-              (Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) < Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              (static_cast<u16>(cht_register[cht_reg_no2]) < static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x45:
             activate_codes =
-              (Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) <= Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              (static_cast<u16>(cht_register[cht_reg_no2]) <= static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x46:
             activate_codes =
-              ((Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) & Truncate16(cht_register[cht_reg_no1] & 0xFFFFu)) ==
-               Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              ((static_cast<u16>(cht_register[cht_reg_no2]) & static_cast<u16>(cht_register[cht_reg_no1])) ==
+               static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x47:
             activate_codes =
-              ((Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) & Truncate16(cht_register[cht_reg_no1] & 0xFFFFu)) !=
-               Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+              ((static_cast<u16>(cht_register[cht_reg_no2]) & static_cast<u16>(cht_register[cht_reg_no1])) !=
+               static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x4A:
             activate_codes =
-              ((Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) & Truncate16(cht_register[cht_reg_no1] & 0xFFFFu)) ==
-               Truncate16(cht_register[cht_reg_no2] & 0xFFFFu));
+              ((static_cast<u16>(cht_register[cht_reg_no2]) & static_cast<u16>(cht_register[cht_reg_no1])) ==
+               static_cast<u16>(cht_register[cht_reg_no2]));
             break;
           case 0x4B:
             activate_codes =
-              ((Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) & Truncate16(cht_register[cht_reg_no1] & 0xFFFFu)) !=
-               Truncate16(cht_register[cht_reg_no2] & 0xFFFFu));
+              ((static_cast<u16>(cht_register[cht_reg_no2]) & static_cast<u16>(cht_register[cht_reg_no1])) !=
+               static_cast<u16>(cht_register[cht_reg_no2]));
             break;
           case 0x50:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) == inst.value16);
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) == inst.value16);
             break;
           case 0x51:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) != inst.value16);
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) != inst.value16);
             break;
           case 0x52:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) > inst.value16);
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) > inst.value16);
             break;
           case 0x53:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) >= inst.value16);
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) >= inst.value16);
             break;
           case 0x54:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) < inst.value16);
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) < inst.value16);
             break;
           case 0x55:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) <= inst.value16);
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) <= inst.value16);
             break;
           case 0x56:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & inst.value16) == inst.value16);
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & inst.value16) == inst.value16);
             break;
           case 0x57:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & inst.value16) != inst.value16);
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & inst.value16) != inst.value16);
             break;
           case 0x58:
             activate_codes =
-              ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) > inst.value16) &&
-               (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) < Truncate16((inst.value32 & 0xFFFF0000u) >> 16)));
+              ((static_cast<u16>(cht_register[cht_reg_no1]) > inst.value16) &&
+               (static_cast<u16>(cht_register[cht_reg_no1]) < static_cast<u16>(inst.value32 >> 16)));
             break;
           case 0x59:
             activate_codes =
-              ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) >= inst.value16) &&
-               (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) <= Truncate16((inst.value32 & 0xFFFF0000u) >> 16)));
+              ((static_cast<u16>(cht_register[cht_reg_no1]) >= inst.value16) &&
+               (static_cast<u16>(cht_register[cht_reg_no1]) <= static_cast<u16>(inst.value32 >> 16)));
             break;
           case 0x5A:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no2] & 0xFFFFu) & inst.value16) ==
-                              Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no2]) & inst.value16) ==
+                              static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x5B:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & inst.value16) !=
-                              Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & inst.value16) !=
+                              static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x60:
             activate_codes =
@@ -2069,12 +2069,12 @@ void CheatCode::Apply() const
           case 0x68:
             activate_codes =
               ((DoMemoryRead<u16>(cht_register[cht_reg_no1]) > inst.value16) &&
-               (DoMemoryRead<u16>(cht_register[cht_reg_no1]) < Truncate16((inst.value32 & 0xFFFF0000u) >> 16)));
+               (DoMemoryRead<u16>(cht_register[cht_reg_no1]) < static_cast<u16>(inst.value32 >> 16)));
             break;
           case 0x69:
             activate_codes =
               ((DoMemoryRead<u16>(cht_register[cht_reg_no1]) >= inst.value16) &&
-               (DoMemoryRead<u16>(cht_register[cht_reg_no1]) <= Truncate16((inst.value32 & 0xFFFF0000u) >> 16)));
+               (DoMemoryRead<u16>(cht_register[cht_reg_no1]) <= static_cast<u16>(inst.value32 >> 16)));
             break;
           case 0x6A:
             activate_codes = ((DoMemoryRead<u16>(cht_register[cht_reg_no1]) & inst.value16) ==
@@ -2085,35 +2085,35 @@ void CheatCode::Apply() const
                               DoMemoryRead<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x70:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) == DoMemoryRead<u16>(inst.value32));
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) == DoMemoryRead<u16>(inst.value32));
             break;
           case 0x71:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) != DoMemoryRead<u16>(inst.value32));
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) != DoMemoryRead<u16>(inst.value32));
             break;
           case 0x72:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) > DoMemoryRead<u16>(inst.value32));
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) > DoMemoryRead<u16>(inst.value32));
             break;
           case 0x73:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) >= DoMemoryRead<u16>(inst.value32));
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) >= DoMemoryRead<u16>(inst.value32));
             break;
           case 0x74:
-            activate_codes = (Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) < DoMemoryRead<u16>(inst.value32));
+            activate_codes = (static_cast<u16>(cht_register[cht_reg_no1]) < DoMemoryRead<u16>(inst.value32));
             break;
           case 0x76:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & DoMemoryRead<u16>(inst.value32)) ==
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & DoMemoryRead<u16>(inst.value32)) ==
                               DoMemoryRead<u16>(inst.value32));
             break;
           case 0x77:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & DoMemoryRead<u16>(inst.value32)) !=
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & DoMemoryRead<u16>(inst.value32)) !=
                               DoMemoryRead<u16>(inst.value32));
             break;
           case 0x7A:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & DoMemoryRead<u16>(inst.value32)) ==
-                              Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & DoMemoryRead<u16>(inst.value32)) ==
+                              static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x7B:
-            activate_codes = ((Truncate16(cht_register[cht_reg_no1] & 0xFFFFu) & DoMemoryRead<u16>(inst.value32)) !=
-                              Truncate16(cht_register[cht_reg_no1] & 0xFFFFu));
+            activate_codes = ((static_cast<u16>(cht_register[cht_reg_no1]) & DoMemoryRead<u16>(inst.value32)) !=
+                              static_cast<u16>(cht_register[cht_reg_no1]));
             break;
           case 0x80:
             activate_codes = (cht_register[cht_reg_no2] == cht_register[cht_reg_no1]);
@@ -2288,7 +2288,7 @@ void CheatCode::Apply() const
 
         const u32 slide_count = (inst.first >> 8) & 0xFFu;
         const u32 address_increment = inst.first & 0xFFu;
-        const u16 value_increment = Truncate16(inst.second);
+        const u16 value_increment = static_cast<u16>(inst.second);
         const Instruction& inst2 = instructions[index + 1];
         const InstructionCode write_type = inst2.code;
         u32 address = inst2.address;
@@ -2298,7 +2298,7 @@ void CheatCode::Apply() const
         {
           for (u32 i = 0; i < slide_count; i++)
           {
-            DoMemoryWrite<u8>(address, Truncate8(value));
+            DoMemoryWrite<u8>(address, static_cast<u8>(value));
             address += address_increment;
             value += value_increment;
           }
@@ -2331,7 +2331,7 @@ void CheatCode::Apply() const
 
         const u32 slide_count = inst.first & 0xFFFFu;
         const u32 address_change = (inst.second >> 16) & 0xFFFFu;
-        const u16 value_change = Truncate16(inst.second);
+        const u16 value_change = static_cast<u16>(inst.second);
         const Instruction& inst2 = instructions[index + 1];
         const InstructionCode write_type = inst2.code;
         const bool address_change_negative = (inst.first >> 20) & 0x1u;
@@ -2343,7 +2343,7 @@ void CheatCode::Apply() const
         {
           for (u32 i = 0; i < slide_count; i++)
           {
-            DoMemoryWrite<u8>(address, Truncate8(value));
+            DoMemoryWrite<u8>(address, static_cast<u8>(value));
             if (address_change_negative)
               address -= address_change;
             else
@@ -2358,7 +2358,7 @@ void CheatCode::Apply() const
         {
           for (u32 i = 0; i < slide_count; i++)
           {
-            DoMemoryWrite<u16>(address, Truncate16(value));
+            DoMemoryWrite<u16>(address, static_cast<u16>(value));
             if (address_change_negative)
               address -= address_change;
             else
@@ -2510,8 +2510,8 @@ void CheatCode::ApplyOnDisable() const
       case InstructionCode::ExtConstantWriteIfMatchWithRestore16:
       {
         const u16 value = DoMemoryRead<u16>(inst.address);
-        const u16 comparevalue = Truncate16(inst.value32 >> 16);
-        const u16 newvalue = Truncate16(inst.value32 & 0xFFFFu);
+        const u16 comparevalue = static_cast<u16>(inst.value32 >> 16);
+        const u16 newvalue = static_cast<u16>(inst.value32);
         if (value == newvalue)
           DoMemoryWrite<u16>(inst.address, comparevalue);
 
@@ -2622,7 +2622,7 @@ void MemoryScan::SearchBytes()
 
     Result res;
     res.address = address;
-    res.value = m_signed ? SignExtend32(bvalue) : ZeroExtend32(bvalue);
+    res.value = m_signed ? static_cast<u32>(static_cast<s8>(bvalue)) : static_cast<u32>(bvalue);
     res.last_value = res.value;
     res.value_changed = false;
 
@@ -2642,7 +2642,7 @@ void MemoryScan::SearchHalfwords()
 
     Result res;
     res.address = address;
-    res.value = m_signed ? SignExtend32(bvalue) : ZeroExtend32(bvalue);
+    res.value = m_signed ? static_cast<u32>(static_cast<s16>(bvalue)) : static_cast<u32>(bvalue);
     res.last_value = res.value;
     res.value_changed = false;
 
@@ -2705,11 +2705,11 @@ void MemoryScan::SetResultValue(u32 index, u32 value)
   switch (m_size)
   {
     case MemoryAccessSize::Byte:
-      DoMemoryWrite<u8>(res.address, Truncate8(value));
+      DoMemoryWrite<u8>(res.address, static_cast<u8>(value));
       break;
 
     case MemoryAccessSize::HalfWord:
-      DoMemoryWrite<u16>(res.address, Truncate16(value));
+      DoMemoryWrite<u16>(res.address, static_cast<u16>(value));
       break;
 
     case MemoryAccessSize::Word:
@@ -2822,14 +2822,14 @@ void MemoryScan::Result::UpdateValue(MemoryAccessSize size, bool is_signed)
     case MemoryAccessSize::Byte:
     {
       u8 bvalue = DoMemoryRead<u8>(address);
-      value = is_signed ? SignExtend32(bvalue) : ZeroExtend32(bvalue);
+      value = is_signed ? static_cast<u32>(static_cast<s8>(bvalue)) : static_cast<u32>(bvalue);
     }
     break;
 
     case MemoryAccessSize::HalfWord:
     {
       u16 bvalue = DoMemoryRead<u16>(address);
-      value = is_signed ? SignExtend32(bvalue) : ZeroExtend32(bvalue);
+      value = is_signed ? static_cast<u32>(static_cast<s16>(bvalue)) : static_cast<u32>(bvalue);
     }
     break;
 
@@ -2960,11 +2960,11 @@ void MemoryWatchList::SetEntryValue(Entry* entry, u32 value)
   switch (entry->size)
   {
     case MemoryAccessSize::Byte:
-      DoMemoryWrite<u8>(entry->address, Truncate8(value));
+      DoMemoryWrite<u8>(entry->address, static_cast<u8>(value));
       break;
 
     case MemoryAccessSize::HalfWord:
-      DoMemoryWrite<u16>(entry->address, Truncate16(value));
+      DoMemoryWrite<u16>(entry->address, static_cast<u16>(value));
       break;
 
     case MemoryAccessSize::Word:
@@ -2985,14 +2985,14 @@ void MemoryWatchList::UpdateEntryValue(Entry* entry)
     case MemoryAccessSize::Byte:
     {
       u8 bvalue = DoMemoryRead<u8>(entry->address);
-      entry->value = entry->is_signed ? SignExtend32(bvalue) : ZeroExtend32(bvalue);
+      entry->value = entry->is_signed ? static_cast<u32>(static_cast<s8>(bvalue)) : static_cast<u32>(bvalue);
     }
     break;
 
     case MemoryAccessSize::HalfWord:
     {
       u16 bvalue = DoMemoryRead<u16>(entry->address);
-      entry->value = entry->is_signed ? SignExtend32(bvalue) : ZeroExtend32(bvalue);
+      entry->value = entry->is_signed ? static_cast<u32>(static_cast<s16>(bvalue)) : static_cast<u32>(bvalue);
     }
     break;
 

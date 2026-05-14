@@ -111,7 +111,7 @@ ALWAYS_INLINE static constexpr u32 VRAMRGBA5551ToRGBA8888(u32 color)
   const u32 g = E5TO8((color >> 5) & 31u);
   const u32 b = E5TO8((color >> 10) & 31u);
   const u32 a = ((color >> 15) != 0) ? 255 : 0;
-  return ZeroExtend32(r) | (ZeroExtend32(g) << 8) | (ZeroExtend32(b) << 16) | (ZeroExtend32(a) << 24);
+  return static_cast<u32>(r) | (static_cast<u32>(g) << 8) | (static_cast<u32>(b) << 16) | (static_cast<u32>(a) << 24);
 
 #undef E5TO8
 }
@@ -122,7 +122,7 @@ ALWAYS_INLINE static constexpr u16 VRAMRGBA8888ToRGBA5551(u32 color)
   const u32 g = ((color >> 8) & 0xFFu) >> 3;
   const u32 b = ((color >> 16) & 0xFFu) >> 3;
   const u32 a = ((color >> 24) & 0x01u);
-  return Truncate16(r | (g << 5) | (b << 10) | (a << 15));
+  return static_cast<u16>(r | (g << 5) | (b << 10) | (a << 15));
 }
 
 union GPUVertexPosition
@@ -136,7 +136,9 @@ union GPUVertexPosition
 // Sprites/rectangles should be clipped to 12 bits before drawing.
 static constexpr s32 TruncateGPUVertexPosition(s32 x)
 {
-  return SignExtendN<11, s32>(x);
+  // Sign-extend low 11 bits to s32. Shift in unsigned space to avoid UB
+  // on negative left shift (UB in C++<20; well-defined in C++20+).
+  return static_cast<s32>(static_cast<u32>(x) << 21) >> 21;
 }
 
 // bits in GP0(E1h) or texpage part of polygon
@@ -163,8 +165,8 @@ union GPUDrawModeReg
   BitField<u16, bool, 12, 1> texture_x_flip;
   BitField<u16, bool, 13, 1> texture_y_flip;
 
-  ALWAYS_INLINE u16 GetTexturePageBaseX() const { return ZeroExtend16(texture_page_x_base.GetValue()) * 64; }
-  ALWAYS_INLINE u16 GetTexturePageBaseY() const { return ZeroExtend16(texture_page_y_base.GetValue()) * 256; }
+  ALWAYS_INLINE u16 GetTexturePageBaseX() const { return static_cast<u16>(texture_page_x_base.GetValue()) * 64; }
+  ALWAYS_INLINE u16 GetTexturePageBaseY() const { return static_cast<u16>(texture_page_y_base.GetValue()) * 256; }
 
   /// Returns true if the texture mode requires a palette.
   ALWAYS_INLINE bool IsUsingPalette() const { return (bits & (2 << 7)) == 0; }
@@ -243,12 +245,12 @@ union GPUBackendCommandParameters
   u16 GetMaskAND() const
   {
     // return check_mask_before_draw ? 0x8000 : 0x0000;
-    return Truncate16((bits << 12) & 0x8000);
+    return static_cast<u16>((bits << 12) & 0x8000);
   }
   u16 GetMaskOR() const
   {
     // return set_mask_while_drawing ? 0x8000 : 0x0000;
-    return Truncate16((bits << 13) & 0x8000);
+    return static_cast<u16>((bits << 13) & 0x8000);
   }
 };
 

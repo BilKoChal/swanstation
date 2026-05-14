@@ -170,8 +170,8 @@ union Instruction
     BitField<u32, Reg, 16, 5> rt;
     BitField<u32, u16, 0, 16> imm;
 
-    ALWAYS_INLINE u32 imm_sext32() const { return SignExtend32(imm.GetValue()); }
-    ALWAYS_INLINE u32 imm_zext32() const { return ZeroExtend32(imm.GetValue()); }
+    ALWAYS_INLINE u32 imm_sext32() const { return static_cast<u32>(static_cast<s16>(imm.GetValue())); }
+    ALWAYS_INLINE u32 imm_zext32() const { return static_cast<u32>(imm.GetValue()); }
   } i;
 
   union

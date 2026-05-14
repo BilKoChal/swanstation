@@ -299,7 +299,7 @@ u8 AnalogController::GetModeID() const
 
 u8 AnalogController::GetIDByte() const
 {
-  return Truncate8((GetModeID() << 4) | GetResponseNumHalfwords());
+  return static_cast<u8>((GetModeID() << 4) | GetResponseNumHalfwords());
 }
 
 bool AnalogController::Transfer(const u8 data_in, u8* data_out)
@@ -394,7 +394,7 @@ bool AnalogController::Transfer(const u8 data_in, u8* data_out)
       {
         case 2:
         {
-          m_tx_buffer[m_command_step] = Truncate8(m_button_state) & GetExtraButtonMaskLSB();
+          m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state) & GetExtraButtonMaskLSB();
 
           if (m_dualshock_enabled)
             SetMotorStateForConfigIndex(rumble_index, data_in);
@@ -403,7 +403,7 @@ bool AnalogController::Transfer(const u8 data_in, u8* data_out)
 
         case 3:
         {
-          m_tx_buffer[m_command_step] = Truncate8(m_button_state >> 8);
+          m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state >> 8);
 
           if (m_dualshock_enabled)
           {
@@ -473,13 +473,13 @@ bool AnalogController::Transfer(const u8 data_in, u8* data_out)
         {
           case 2:
           {
-            m_tx_buffer[m_command_step] = Truncate8(m_button_state) & GetExtraButtonMaskLSB();
+            m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state) & GetExtraButtonMaskLSB();
           }
           break;
 
           case 3:
           {
-            m_tx_buffer[m_command_step] = Truncate8(m_button_state >> 8);
+            m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state >> 8);
           }
           break;
 

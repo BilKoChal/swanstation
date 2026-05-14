@@ -72,7 +72,11 @@ template<u32 index>
 ALWAYS_INLINE static s64 SignExtendMACResult(s64 value)
 {
   CheckMACOverflow<index>(value);
-  return SignExtendN < index == 0 ? 31 : 44 > (value);
+  // Sign-extend low 31 bits (MAC0) or 44 bits (MAC1..3) to s64.
+  // Shift in unsigned space to avoid UB on negative left shift
+  // (UB in C++<20; well-defined in C++20+).
+  constexpr int shift = index == 0 ? 33 : 20;
+  return static_cast<s64>(static_cast<u64>(value) << shift) >> shift;
 }
 
 template<u32 index>
@@ -83,7 +87,7 @@ ALWAYS_INLINE static void TruncateAndSetMAC(s64 value, u8 shift)
   // shift should be done before storing to avoid losing precision
   value >>= shift;
 
-  REGS.dr32[24 + index] = Truncate32(static_cast<u64>(value));
+  REGS.dr32[24 + index] = static_cast<u32>(static_cast<u64>(value));
 }
 
 template<u32 index>
@@ -238,7 +242,7 @@ u32 ReadRegister(u32 index)
       const u8 r = static_cast<u8>(std::clamp(REGS.IR1 / 0x80, 0x00, 0x1F));
       const u8 g = static_cast<u8>(std::clamp(REGS.IR2 / 0x80, 0x00, 0x1F));
       const u8 b = static_cast<u8>(std::clamp(REGS.IR3 / 0x80, 0x00, 0x1F));
-      return ZeroExtend32(r) | (ZeroExtend32(g) << 5) | (ZeroExtend32(b) << 10);
+      return static_cast<u32>(r) | (static_cast<u32>(g) << 5) | (static_cast<u32>(b) << 10);
     }
 
     default:
@@ -266,7 +270,7 @@ void WriteRegister(u32 index, u32 value)
     case 62: // ZSF4
     {
       // sign-extend z component of vector registers
-      REGS.r32[index] = SignExtend32(Truncate16(value));
+      REGS.r32[index] = static_cast<u32>(static_cast<s16>(value));
     }
     break;
 
@@ -277,7 +281,7 @@ void WriteRegister(u32 index, u32 value)
     case 19: // SZ3
     {
       // zero-extend unsigned values
-      REGS.r32[index] = ZeroExtend32(Truncate16(value));
+      REGS.r32[index] = static_cast<u32>(static_cast<u16>(value));
     }
     break;
 
@@ -294,9 +298,9 @@ void WriteRegister(u32 index, u32 value)
     {
       // IRGB register, convert 555 to 16-bit
       REGS.IRGB = value & UINT32_C(0x7FFF);
-      REGS.r32[9] = SignExtend32(static_cast<u16>(Truncate16((value & UINT32_C(0x1F)) * UINT32_C(0x80))));
-      REGS.r32[10] = SignExtend32(static_cast<u16>(Truncate16(((value >> 5) & UINT32_C(0x1F)) * UINT32_C(0x80))));
-      REGS.r32[11] = SignExtend32(static_cast<u16>(Truncate16(((value >> 10) & UINT32_C(0x1F)) * UINT32_C(0x80))));
+      REGS.r32[9] = static_cast<u32>(static_cast<s16>(static_cast<u16>((value & UINT32_C(0x1F)) * UINT32_C(0x80))));
+      REGS.r32[10] = static_cast<u32>(static_cast<s16>(static_cast<u16>(((value >> 5) & UINT32_C(0x1F)) * UINT32_C(0x80))));
+      REGS.r32[11] = static_cast<u32>(static_cast<s16>(static_cast<u16>(((value >> 10) & UINT32_C(0x1F)) * UINT32_C(0x80))));
     }
     break;
 
@@ -400,7 +404,7 @@ static void PushRGBFromMAC()
   const u32 r = TruncateRGB<0>(static_cast<u32>(REGS.MAC1 >> 4));
   const u32 g = TruncateRGB<1>(static_cast<u32>(REGS.MAC2 >> 4));
   const u32 b = TruncateRGB<2>(static_cast<u32>(REGS.MAC3 >> 4));
-  const u32 c = ZeroExtend32(REGS.RGBC[3]);
+  const u32 c = static_cast<u32>(REGS.RGBC[3]);
 
   REGS.dr32[20] = REGS.dr32[21];                        // RGB0 <- RGB1
   REGS.dr32[21] = REGS.dr32[22];                        // RGB1 <- RGB2
@@ -444,11 +448,11 @@ ALWAYS_INLINE static u32 UNRDivide(u32 lhs, u32 rhs)
   };
 
   const u32 divisor = rhs | 0x8000;
-  const s32 x       = static_cast<s32>(0x101 + ZeroExtend32(unr_table[((divisor & 0x7FFF) + 0x40) >> 7]));
-  const s32 d       = ((static_cast<s32>(ZeroExtend32(divisor)) * -x) + 0x80) >> 8;
+  const s32 x       = static_cast<s32>(0x101 + static_cast<u32>(unr_table[((divisor & 0x7FFF) + 0x40) >> 7]));
+  const s32 d       = ((static_cast<s32>(static_cast<u32>(divisor)) * -x) + 0x80) >> 8;
   const u32 recip   = static_cast<u32>(((x * (0x20000 + d)) + 0x80) >> 8);
 
-  const u32 result  = Truncate32((ZeroExtend64(lhs) * ZeroExtend64(recip) + u64(0x8000)) >> 16);
+  const u32 result  = static_cast<u32>((static_cast<u64>(lhs) * static_cast<u64>(recip) + u64(0x8000)) >> 16);
 
   // The min(1FFFFh) limit is needed for cases like FE3Fh/7F20h, F015h/780Bh, etc. (these do produce UNR result 20000h,
   // and are saturated to 1FFFFh, but without setting overflow FLAG bits).
@@ -526,8 +530,8 @@ static void Execute_MVMVA(Instruction inst)
     default:
     {
       // buggy
-      M[0][0] = -static_cast<s16>(ZeroExtend16(REGS.RGBC[0]) << 4);
-      M[0][1] = static_cast<s16>(ZeroExtend16(REGS.RGBC[0]) << 4);
+      M[0][0] = -static_cast<s16>(static_cast<u16>(REGS.RGBC[0]) << 4);
+      M[0][1] = static_cast<s16>(static_cast<u16>(REGS.RGBC[0]) << 4);
       M[0][2] = REGS.IR0;
       M[1][0] = REGS.RT[0][2];
       M[1][1] = REGS.RT[0][2];
@@ -656,7 +660,7 @@ static void RTPS(const s16 V[3], u8 shift, bool lm, bool last)
 
   // MAC0=(((H*20000h/SZ3)+1)/2)*IR1+OFX, SX2=MAC0/10000h ;ScrX FIFO -400h..+3FFh
   // MAC0=(((H*20000h/SZ3)+1)/2)*IR2+OFY, SY2=MAC0/10000h ;ScrY FIFO -400h..+3FFh
-  const s64 result = static_cast<s64>(ZeroExtend64(UNRDivide(REGS.H, REGS.SZ3)));
+  const s64 result = static_cast<s64>(static_cast<u64>(UNRDivide(REGS.H, REGS.SZ3)));
 
   s64 Sx;
   switch (s_aspect_ratio)
@@ -900,9 +904,9 @@ static void NCCS(const s16 V[3], u8 shift, bool lm)
 
   // [MAC1,MAC2,MAC3] = [R*IR1,G*IR2,B*IR3] SHL 4          ;<--- for NCDx/NCCx
   // [MAC1,MAC2,MAC3] = [MAC1,MAC2,MAC3] SAR (sf*12)       ;<--- for NCDx/NCCx
-  TruncateAndSetMACAndIR<1>(s64(s32(ZeroExtend32(REGS.RGBC[0])) * s32(REGS.IR1)) << 4, shift, lm);
-  TruncateAndSetMACAndIR<2>(s64(s32(ZeroExtend32(REGS.RGBC[1])) * s32(REGS.IR2)) << 4, shift, lm);
-  TruncateAndSetMACAndIR<3>(s64(s32(ZeroExtend32(REGS.RGBC[2])) * s32(REGS.IR3)) << 4, shift, lm);
+  TruncateAndSetMACAndIR<1>(s64(s32(static_cast<u32>(REGS.RGBC[0])) * s32(REGS.IR1)) << 4, shift, lm);
+  TruncateAndSetMACAndIR<2>(s64(s32(static_cast<u32>(REGS.RGBC[1])) * s32(REGS.IR2)) << 4, shift, lm);
+  TruncateAndSetMACAndIR<3>(s64(s32(static_cast<u32>(REGS.RGBC[2])) * s32(REGS.IR3)) << 4, shift, lm);
 
   // Color FIFO = [MAC1/16,MAC2/16,MAC3/16,CODE], [IR1,IR2,IR3] = [MAC1,MAC2,MAC3]
   PushRGBFromMAC();
@@ -941,9 +945,9 @@ static void NCDS(const s16 V[3], u8 shift, bool lm)
 
   // No need to assign these to MAC[1-3], as it'll never overflow.
   // [MAC1,MAC2,MAC3] = [R*IR1,G*IR2,B*IR3] SHL 4          ;<--- for NCDx/NCCx
-  const s32 in_MAC1 = (s32(ZeroExtend32(REGS.RGBC[0])) * s32(REGS.IR1)) << 4;
-  const s32 in_MAC2 = (s32(ZeroExtend32(REGS.RGBC[1])) * s32(REGS.IR2)) << 4;
-  const s32 in_MAC3 = (s32(ZeroExtend32(REGS.RGBC[2])) * s32(REGS.IR3)) << 4;
+  const s32 in_MAC1 = (s32(static_cast<u32>(REGS.RGBC[0])) * s32(REGS.IR1)) << 4;
+  const s32 in_MAC2 = (s32(static_cast<u32>(REGS.RGBC[1])) * s32(REGS.IR2)) << 4;
+  const s32 in_MAC3 = (s32(static_cast<u32>(REGS.RGBC[2])) * s32(REGS.IR3)) << 4;
 
   // [MAC1,MAC2,MAC3] = MAC+(FC-MAC)*IR0                   ;<--- for NCDx only
   InterpolateColor(in_MAC1, in_MAC2, in_MAC3, shift, lm);
@@ -987,9 +991,9 @@ static void Execute_CC(Instruction inst)
 
   // [MAC1,MAC2,MAC3] = [R*IR1,G*IR2,B*IR3] SHL 4
   // [MAC1,MAC2,MAC3] = [MAC1,MAC2,MAC3] SAR (sf*12)
-  TruncateAndSetMACAndIR<1>(s64(s32(ZeroExtend32(REGS.RGBC[0])) * s32(REGS.IR1)) << 4, shift, lm);
-  TruncateAndSetMACAndIR<2>(s64(s32(ZeroExtend32(REGS.RGBC[1])) * s32(REGS.IR2)) << 4, shift, lm);
-  TruncateAndSetMACAndIR<3>(s64(s32(ZeroExtend32(REGS.RGBC[2])) * s32(REGS.IR3)) << 4, shift, lm);
+  TruncateAndSetMACAndIR<1>(s64(s32(static_cast<u32>(REGS.RGBC[0])) * s32(REGS.IR1)) << 4, shift, lm);
+  TruncateAndSetMACAndIR<2>(s64(s32(static_cast<u32>(REGS.RGBC[1])) * s32(REGS.IR2)) << 4, shift, lm);
+  TruncateAndSetMACAndIR<3>(s64(s32(static_cast<u32>(REGS.RGBC[2])) * s32(REGS.IR3)) << 4, shift, lm);
 
   // Color FIFO = [MAC1/16,MAC2/16,MAC3/16,CODE], [IR1,IR2,IR3] = [MAC1,MAC2,MAC3]
   PushRGBFromMAC();
@@ -1009,9 +1013,9 @@ static void Execute_CDP(Instruction inst)
 
   // No need to assign these to MAC[1-3], as it'll never overflow.
   // [MAC1,MAC2,MAC3] = [R*IR1,G*IR2,B*IR3] SHL 4
-  const s32 in_MAC1 = (s32(ZeroExtend32(REGS.RGBC[0])) * s32(REGS.IR1)) << 4;
-  const s32 in_MAC2 = (s32(ZeroExtend32(REGS.RGBC[1])) * s32(REGS.IR2)) << 4;
-  const s32 in_MAC3 = (s32(ZeroExtend32(REGS.RGBC[2])) * s32(REGS.IR3)) << 4;
+  const s32 in_MAC1 = (s32(static_cast<u32>(REGS.RGBC[0])) * s32(REGS.IR1)) << 4;
+  const s32 in_MAC2 = (s32(static_cast<u32>(REGS.RGBC[1])) * s32(REGS.IR2)) << 4;
+  const s32 in_MAC3 = (s32(static_cast<u32>(REGS.RGBC[2])) * s32(REGS.IR3)) << 4;
 
   // [MAC1,MAC2,MAC3] = MAC+(FC-MAC)*IR0                   ;<--- for CDP only
   // [MAC1, MAC2, MAC3] = [MAC1, MAC2, MAC3] SAR(sf * 12)
@@ -1027,9 +1031,9 @@ static void DPCS(const u8 color[3], u8 shift, bool lm)
 {
   // In: [IR1,IR2,IR3]=Vector, FC=Far Color, IR0=Interpolation value, CODE=MSB of RGBC
   // [MAC1,MAC2,MAC3] = [R,G,B] SHL 16                     ;<--- for DPCS/DPCT
-  TruncateAndSetMAC<1>((s64(ZeroExtend64(color[0])) << 16), 0);
-  TruncateAndSetMAC<2>((s64(ZeroExtend64(color[1])) << 16), 0);
-  TruncateAndSetMAC<3>((s64(ZeroExtend64(color[2])) << 16), 0);
+  TruncateAndSetMAC<1>((s64(static_cast<u64>(color[0])) << 16), 0);
+  TruncateAndSetMAC<2>((s64(static_cast<u64>(color[1])) << 16), 0);
+  TruncateAndSetMAC<3>((s64(static_cast<u64>(color[2])) << 16), 0);
 
   // [MAC1,MAC2,MAC3] = MAC+(FC-MAC)*IR0
   InterpolateColor(REGS.MAC1, REGS.MAC2, REGS.MAC3, shift, lm);
@@ -1069,9 +1073,9 @@ static void Execute_DCPL(Instruction inst)
 
   // No need to assign these to MAC[1-3], as it'll never overflow.
   // [MAC1,MAC2,MAC3] = [R*IR1,G*IR2,B*IR3] SHL 4          ;<--- for DCPL only
-  const s32 in_MAC1 = (s32(ZeroExtend32(REGS.RGBC[0])) * s32(REGS.IR1)) << 4;
-  const s32 in_MAC2 = (s32(ZeroExtend32(REGS.RGBC[1])) * s32(REGS.IR2)) << 4;
-  const s32 in_MAC3 = (s32(ZeroExtend32(REGS.RGBC[2])) * s32(REGS.IR3)) << 4;
+  const s32 in_MAC1 = (s32(static_cast<u32>(REGS.RGBC[0])) * s32(REGS.IR1)) << 4;
+  const s32 in_MAC2 = (s32(static_cast<u32>(REGS.RGBC[1])) * s32(REGS.IR2)) << 4;
+  const s32 in_MAC3 = (s32(static_cast<u32>(REGS.RGBC[2])) * s32(REGS.IR3)) << 4;
 
   // [MAC1,MAC2,MAC3] = MAC+(FC-MAC)*IR0
   InterpolateColor(in_MAC1, in_MAC2, in_MAC3, shift, lm);

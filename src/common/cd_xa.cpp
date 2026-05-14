@@ -48,7 +48,7 @@ static void DecodeXA_ADPCMChunk(const u8* chunk_ptr, s16* samples, s32* last_sam
 
       // extract nibble from block
       const u32 nibble = IS_8BIT ? ((word_data >> (block * 8)) & 0xFF) : ((word_data >> (block * 4)) & 0x0F);
-      const s16 sample = static_cast<s16>(Truncate16(nibble << 12)) >> shift;
+      const s16 sample = static_cast<s16>(static_cast<u16>(nibble << 12)) >> shift;
 
       // mix in previous values
       s32* prev = IS_STEREO ? &last_samples[(block & 1) * 2] : last_samples;

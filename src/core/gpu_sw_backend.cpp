@@ -93,30 +93,30 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       case GPUTextureMode::Palette4Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 4)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + static_cast<u32>(texcoord_x / 4)) % VRAM_WIDTH,
+                   (cmd->draw_mode.GetTexturePageBaseY() + static_cast<u32>(texcoord_y)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 4) * 4)) & 0x0Fu;
 
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + static_cast<u32>(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       case GPUTextureMode::Palette8Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 2)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + static_cast<u32>(texcoord_x / 2)) % VRAM_WIDTH,
+                   (cmd->draw_mode.GetTexturePageBaseY() + static_cast<u32>(texcoord_y)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 2) * 8)) & 0xFFu;
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + static_cast<u32>(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       default:
       {
-        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x)) % VRAM_WIDTH,
-                                      (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + static_cast<u32>(texcoord_x)) % VRAM_WIDTH,
+                                      (cmd->draw_mode.GetTexturePageBaseY() + static_cast<u32>(texcoord_y)) % VRAM_HEIGHT);
       }
       break;
     }
@@ -133,9 +133,9 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       const u32 dither_y = (dithering_enable) ? (y & 3u) : 2u;
       const u32 dither_x = (dithering_enable) ? (x & 3u) : 3u;
 
-      color.bits = (ZeroExtend16(s_dither_lut[dither_y][dither_x][(u16(texture_color.r) * u16(color_r)) >> 4]) << 0) |
-                   (ZeroExtend16(s_dither_lut[dither_y][dither_x][(u16(texture_color.g) * u16(color_g)) >> 4]) << 5) |
-                   (ZeroExtend16(s_dither_lut[dither_y][dither_x][(u16(texture_color.b) * u16(color_b)) >> 4]) << 10) |
+      color.bits = (static_cast<u16>(s_dither_lut[dither_y][dither_x][(u16(texture_color.r) * u16(color_r)) >> 4]) << 0) |
+                   (static_cast<u16>(s_dither_lut[dither_y][dither_x][(u16(texture_color.g) * u16(color_g)) >> 4]) << 5) |
+                   (static_cast<u16>(s_dither_lut[dither_y][dither_x][(u16(texture_color.b) * u16(color_b)) >> 4]) << 10) |
                    (texture_color.bits & 0x8000u);
     }
   }
@@ -145,9 +145,9 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     const u32 dither_x = (dithering_enable) ? (x & 3u) : 3u;
 
     // Non-textured transparent polygons don't set bit 15, but are treated as transparent.
-    color.bits = (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_r]) << 0) |
-                 (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_g]) << 5) |
-                 (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10) | (transparency_enable ? 0x8000u : 0);
+    color.bits = (static_cast<u16>(s_dither_lut[dither_y][dither_x][color_r]) << 0) |
+                 (static_cast<u16>(s_dither_lut[dither_y][dither_x][color_g]) << 5) |
+                 (static_cast<u16>(s_dither_lut[dither_y][dither_x][color_b]) << 10) | (transparency_enable ? 0x8000u : 0);
   }
 
   const VRAMPixel bg_color{GetPixel(static_cast<u32>(x), static_cast<u32>(y))};
@@ -156,14 +156,14 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     if (color.bits & 0x8000u || !texture_enable)
     {
       // Based on blargg's efficient 15bpp pixel math.
-      u32 bg_bits = ZeroExtend32(bg_color.bits);
-      u32 fg_bits = ZeroExtend32(color.bits);
+      u32 bg_bits = static_cast<u32>(bg_color.bits);
+      u32 fg_bits = static_cast<u32>(color.bits);
       switch (cmd->draw_mode.transparency_mode)
       {
         case GPUTransparencyMode::HalfBackgroundPlusHalfForeground:
         {
           bg_bits |= 0x8000u;
-          color.bits = Truncate16(((fg_bits + bg_bits) - ((fg_bits ^ bg_bits) & 0x0421u)) >> 1);
+          color.bits = static_cast<u16>(((fg_bits + bg_bits) - ((fg_bits ^ bg_bits) & 0x0421u)) >> 1);
         }
         break;
 
@@ -174,7 +174,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
           const u32 sum = fg_bits + bg_bits;
           const u32 carry = (sum - ((fg_bits ^ bg_bits) & 0x8421u)) & 0x8420u;
 
-          color.bits = Truncate16((sum - carry) | (carry - (carry >> 5)));
+          color.bits = static_cast<u16>((sum - carry) | (carry - (carry >> 5)));
         }
         break;
 
@@ -186,7 +186,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
           const u32 diff = bg_bits - fg_bits + 0x108420u;
           const u32 borrow = (diff - ((bg_bits ^ fg_bits) & 0x108420u)) & 0x108420u;
 
-          color.bits = Truncate16((diff - borrow) & (borrow - (borrow >> 5)));
+          color.bits = static_cast<u16>((diff - borrow) & (borrow - (borrow >> 5)));
         }
         break;
 
@@ -198,7 +198,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
           const u32 sum = fg_bits + bg_bits;
           const u32 carry = (sum - ((fg_bits ^ bg_bits) & 0x8421u)) & 0x8420u;
 
-          color.bits = Truncate16((sum - carry) | (carry - (carry >> 5)));
+          color.bits = static_cast<u16>((sum - carry) | (carry - (carry >> 5)));
         }
         break;
       }
@@ -228,12 +228,12 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
   {
     const s32 y = origin_y + static_cast<s32>(offset_y);
     if (y < static_cast<s32>(m_drawing_area.top) || y > static_cast<s32>(m_drawing_area.bottom) ||
-        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u)))
+        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (static_cast<u8>(static_cast<u32>(y)) & 1u)))
     {
       continue;
     }
 
-    const u8 texcoord_y = Truncate8(ZeroExtend32(origin_texcoord_y) + offset_y);
+    const u8 texcoord_y = static_cast<u8>(static_cast<u32>(origin_texcoord_y) + offset_y);
 
     for (u32 offset_x = 0; offset_x < cmd->width; offset_x++)
     {
@@ -241,7 +241,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
       if (x < static_cast<s32>(m_drawing_area.left) || x > static_cast<s32>(m_drawing_area.right))
         continue;
 
-      const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + offset_x);
+      const u8 texcoord_x = static_cast<u8>(static_cast<u32>(origin_texcoord_x) + offset_x);
 
       ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false>(
         cmd, static_cast<u32>(x), static_cast<u32>(y), r, g, b, texcoord_x, texcoord_y);
@@ -360,7 +360,7 @@ template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool
 void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
                               const i_deltas& idl)
 {
-  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u))
+  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (static_cast<u8>(static_cast<u32>(y)) & 1u))
     return;
 
   s32 x_ig_adjust = x_start;
@@ -393,8 +393,8 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s3
     const u32 v = ig.v >> (COORD_FBS + COORD_POST_PADDING);
 
     ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-      cmd, static_cast<u32>(x), static_cast<u32>(y), Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
-      Truncate8(v));
+      cmd, static_cast<u32>(x), static_cast<u32>(y), static_cast<u8>(r), static_cast<u8>(g), static_cast<u8>(b), static_cast<u8>(u),
+      static_cast<u8>(v));
 
     x++;
     AddIDeltas_DX<shading_enable, texture_enable>(ig, idl);
@@ -683,7 +683,7 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
     const s32 x = (cur_point.x >> Line_XY_FractBits) & 2047;
     const s32 y = (cur_point.y >> Line_XY_FractBits) & 2047;
 
-    if ((!cmd->params.interlaced_rendering || cmd->params.active_line_lsb != (Truncate8(static_cast<u32>(y)) & 1u)) &&
+    if ((!cmd->params.interlaced_rendering || cmd->params.active_line_lsb != (static_cast<u8>(static_cast<u32>(y)) & 1u)) &&
         x >= static_cast<s32>(m_drawing_area.left) && x <= static_cast<s32>(m_drawing_area.right) &&
         y >= static_cast<s32>(m_drawing_area.top) && y <= static_cast<s32>(m_drawing_area.bottom))
     {

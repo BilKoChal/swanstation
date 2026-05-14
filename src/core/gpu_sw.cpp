@@ -112,22 +112,22 @@ ALWAYS_INLINE u16 VRAM16ToOutput<HostDisplayPixelFormat::RGB565, u16>(u16 value)
 template<>
 ALWAYS_INLINE u32 VRAM16ToOutput<HostDisplayPixelFormat::RGBA8, u32>(u16 value)
 {
-  const u32 value32 = ZeroExtend32(value);
+  const u32 value32 = static_cast<u32>(value);
   const u32 r = (value32 & 31u) << 3;
   const u32 g = ((value32 >> 5) & 31u) << 3;
   const u32 b = ((value32 >> 10) & 31u) << 3;
   const u32 a = ((value >> 15) != 0) ? 255 : 0;
-  return ZeroExtend32(r) | (ZeroExtend32(g) << 8) | (ZeroExtend32(b) << 16) | (ZeroExtend32(a) << 24);
+  return static_cast<u32>(r) | (static_cast<u32>(g) << 8) | (static_cast<u32>(b) << 16) | (static_cast<u32>(a) << 24);
 }
 
 template<>
 ALWAYS_INLINE u32 VRAM16ToOutput<HostDisplayPixelFormat::BGRA8, u32>(u16 value)
 {
-  const u32 value32 = ZeroExtend32(value);
+  const u32 value32 = static_cast<u32>(value);
   const u32 r = (value32 & 31u) << 3;
   const u32 g = ((value32 >> 5) & 31u) << 3;
   const u32 b = ((value32 >> 10) & 31u) << 3;
-  return ZeroExtend32(b) | (ZeroExtend32(g) << 8) | (ZeroExtend32(r) << 16) | (0xFF000000u);
+  return static_cast<u32>(b) | (static_cast<u32>(g) << 8) | (static_cast<u32>(r) << 16) | (0xFF000000u);
 }
 
 #if defined(CPU_X64) || defined(CPU_AARCH64)
@@ -423,7 +423,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
         const u16 s0 = src_row_ptr[offset % VRAM_WIDTH];
         const u16 s1 = src_row_ptr[(offset + 1) % VRAM_WIDTH];
         const u8 shift = static_cast<u8>(col & 1u) * 8;
-        const u32 rgb = (((ZeroExtend32(s1) << 16) | ZeroExtend32(s0)) >> shift);
+        const u32 rgb = (((static_cast<u32>(s1) << 16) | static_cast<u32>(s0)) >> shift);
 
         if constexpr (display_format == HostDisplayPixelFormat::RGBA8)
         {
@@ -585,10 +585,10 @@ void GPU_SW::DispatchRenderCommand()
         GPUBackendDrawPolygonCommand::Vertex* vert = &cmd->vertices[i];
         vert->color = (shaded && i > 0) ? (FifoPop() & UINT32_C(0x00FFFFFF)) : first_color;
         const u64 maddr_and_pos = m_fifo.Pop();
-        const GPUVertexPosition vp{Truncate32(maddr_and_pos)};
+        const GPUVertexPosition vp{static_cast<u32>(maddr_and_pos)};
         vert->x = m_drawing_offset.x + vp.x;
         vert->y = m_drawing_offset.y + vp.y;
-        vert->texcoord = textured ? Truncate16(FifoPop()) : 0;
+        vert->texcoord = textured ? static_cast<u16>(FifoPop()) : 0;
       }
 
       if (!IsDrawingAreaIsValid())
@@ -649,8 +649,8 @@ void GPU_SW::DispatchRenderCommand()
       if (rc.texture_enable)
       {
         const u32 texcoord_and_palette = FifoPop();
-        cmd->palette.bits = Truncate16(texcoord_and_palette >> 16);
-        cmd->texcoord = Truncate16(texcoord_and_palette);
+        cmd->palette.bits = static_cast<u16>(texcoord_and_palette >> 16);
+        cmd->texcoord = static_cast<u16>(texcoord_and_palette);
       }
       else
       {

@@ -1084,7 +1084,7 @@ void CodeGenerator::EmitPopHostRegPair(HostReg reg, HostReg reg2, u32 position)
 
 void CodeGenerator::EmitLoadCPUStructField(HostReg host_reg, RegSize guest_size, u32 offset)
 {
-  const s64 s_offset = static_cast<s64>(ZeroExtend64(offset));
+  const s64 s_offset = static_cast<s64>(static_cast<u64>(offset));
 
   switch (guest_size)
   {
@@ -1112,7 +1112,7 @@ void CodeGenerator::EmitLoadCPUStructField(HostReg host_reg, RegSize guest_size,
 void CodeGenerator::EmitStoreCPUStructField(u32 offset, const Value& value)
 {
   const Value hr_value = GetValueInHostRegister(value);
-  const s64 s_offset = static_cast<s64>(ZeroExtend64(offset));
+  const s64 s_offset = static_cast<s64>(static_cast<u64>(offset));
 
   switch (value.size)
   {
@@ -1139,7 +1139,7 @@ void CodeGenerator::EmitStoreCPUStructField(u32 offset, const Value& value)
 
 void CodeGenerator::EmitAddCPUStructField(u32 offset, const Value& value)
 {
-  const s64 s_offset = static_cast<s64>(ZeroExtend64(offset));
+  const s64 s_offset = static_cast<s64>(static_cast<u64>(offset));
   const a64::MemOperand o_offset(GetCPUPtrReg(), s_offset);
 
   Value real_value;

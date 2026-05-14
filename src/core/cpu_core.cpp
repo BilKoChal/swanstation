@@ -702,10 +702,10 @@ restart_instruction:
           const u32 lhs = ReadReg(inst.r.rs);
           const u32 rhs = ReadReg(inst.r.rt);
           const u64 result =
-            static_cast<u64>(static_cast<s64>(SignExtend64(lhs)) * static_cast<s64>(SignExtend64(rhs)));
+            static_cast<u64>(static_cast<s64>(static_cast<s32>(lhs)) * static_cast<s64>(static_cast<s32>(rhs)));
 
-          g_state.regs.hi = Truncate32(result >> 32);
-          g_state.regs.lo = Truncate32(result);
+          g_state.regs.hi = static_cast<u32>(result >> 32);
+          g_state.regs.lo = static_cast<u32>(result);
 
           if constexpr (pgxp_mode >= PGXPMode::CPU)
             PGXP::CPU_MULT(inst.bits, lhs, rhs);
@@ -716,13 +716,13 @@ restart_instruction:
         {
           const u32 lhs = ReadReg(inst.r.rs);
           const u32 rhs = ReadReg(inst.r.rt);
-          const u64 result = ZeroExtend64(lhs) * ZeroExtend64(rhs);
+          const u64 result = static_cast<u64>(lhs) * static_cast<u64>(rhs);
 
           if constexpr (pgxp_mode >= PGXPMode::CPU)
             PGXP::CPU_MULTU(inst.bits, lhs, rhs);
 
-          g_state.regs.hi = Truncate32(result >> 32);
-          g_state.regs.lo = Truncate32(result);
+          g_state.regs.hi = static_cast<u32>(result >> 32);
+          g_state.regs.lo = static_cast<u32>(result);
         }
         break;
 
@@ -936,7 +936,7 @@ restart_instruction:
       if (!ReadMemoryByte(addr, &value))
         return;
 
-      const u32 sxvalue = SignExtend32(value);
+      const u32 sxvalue = static_cast<u32>(static_cast<s8>(value));
 
       WriteRegDelayed(inst.i.rt, sxvalue);
 
@@ -955,7 +955,7 @@ restart_instruction:
       if (!ReadMemoryHalfWord(addr, &value))
         return;
 
-      const u32 sxvalue = SignExtend32(value);
+      const u32 sxvalue = static_cast<u32>(static_cast<s16>(value));
       WriteRegDelayed(inst.i.rt, sxvalue);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
@@ -990,7 +990,7 @@ restart_instruction:
       if (!ReadMemoryByte(addr, &value))
         return;
 
-      const u32 zxvalue = ZeroExtend32(value);
+      const u32 zxvalue = static_cast<u32>(value);
       WriteRegDelayed(inst.i.rt, zxvalue);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
@@ -1008,7 +1008,7 @@ restart_instruction:
       if (!ReadMemoryHalfWord(addr, &value))
         return;
 
-      const u32 zxvalue = ZeroExtend32(value);
+      const u32 zxvalue = static_cast<u32>(value);
       WriteRegDelayed(inst.i.rt, zxvalue);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
@@ -1030,7 +1030,7 @@ restart_instruction:
 
       // Bypasses load delay. No need to check the old value since this is the delay slot or it's not relevant.
       const u32 existing_value = (inst.i.rt == g_state.load_delay_reg) ? g_state.load_delay_value : ReadReg(inst.i.rt);
-      const u8 shift = (Truncate8(addr) & u8(3)) * u8(8);
+      const u8 shift = (static_cast<u8>(addr) & u8(3)) * u8(8);
       u32 new_value;
       if (inst.op == InstructionOp::lwl)
       {
@@ -1060,7 +1060,7 @@ restart_instruction:
       WriteMemoryByte(addr, value);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
-        PGXP::CPU_SB(inst.bits, Truncate8(value), addr);
+        PGXP::CPU_SB(inst.bits, static_cast<u8>(value), addr);
     }
     break;
 
@@ -1074,7 +1074,7 @@ restart_instruction:
       WriteMemoryHalfWord(addr, value);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
-        PGXP::CPU_SH(inst.bits, Truncate16(value), addr);
+        PGXP::CPU_SH(inst.bits, static_cast<u16>(value), addr);
     }
     break;
 
@@ -1101,7 +1101,7 @@ restart_instruction:
         Cop0DataBreakpointCheck<MemoryAccessType::Write>(aligned_addr);
 
       const u32 reg_value = ReadReg(inst.i.rt);
-      const u8 shift = (Truncate8(addr) & u8(3)) * u8(8);
+      const u8 shift = (static_cast<u8>(addr) & u8(3)) * u8(8);
       u32 mem_value;
       if (!ReadMemoryWord(aligned_addr, &mem_value))
         return;
@@ -1339,7 +1339,7 @@ restart_instruction:
         return;
 
       StallUntilGTEComplete();
-      GTE::WriteRegister(ZeroExtend32(static_cast<u8>(inst.i.rt.GetValue())), value);
+      GTE::WriteRegister(static_cast<u32>(static_cast<u8>(inst.i.rt.GetValue())), value);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)
         PGXP::CPU_LWC2(inst.bits, value, addr);
@@ -1357,7 +1357,7 @@ restart_instruction:
       StallUntilGTEComplete();
 
       const VirtualMemoryAddress addr = ReadReg(inst.i.rs) + inst.i.imm_sext32();
-      const u32 value = GTE::ReadRegister(ZeroExtend32(static_cast<u8>(inst.i.rt.GetValue())));
+      const u32 value = GTE::ReadRegister(static_cast<u32>(static_cast<u8>(inst.i.rt.GetValue())));
       WriteMemoryWord(addr, value);
 
       if constexpr (pgxp_mode >= PGXPMode::Memory)

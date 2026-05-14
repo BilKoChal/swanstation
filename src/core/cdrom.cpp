@@ -1289,8 +1289,8 @@ void CDROM::ExecuteCommand(TickCount ticks_late)
       if (CanReadMedia())
       {
         m_response_fifo.Push(m_secondary_status.bits);
-        m_response_fifo.Push(BinaryToBCD(Truncate8(m_reader.GetMedia()->GetFirstTrackNumber())));
-        m_response_fifo.Push(BinaryToBCD(Truncate8(m_reader.GetMedia()->GetLastTrackNumber())));
+        m_response_fifo.Push(BinaryToBCD(static_cast<u8>(m_reader.GetMedia()->GetFirstTrackNumber())));
+        m_response_fifo.Push(BinaryToBCD(static_cast<u8>(m_reader.GetMedia()->GetLastTrackNumber())));
         SetInterrupt(Interrupt::ACK);
       }
       else
@@ -1323,8 +1323,8 @@ void CDROM::ExecuteCommand(TickCount ticks_late)
           pos = m_reader.GetMedia()->GetTrackStartMSFPosition(track);
 
         m_response_fifo.Push(m_secondary_status.bits);
-        m_response_fifo.Push(BinaryToBCD(Truncate8(pos.minute)));
-        m_response_fifo.Push(BinaryToBCD(Truncate8(pos.second)));
+        m_response_fifo.Push(BinaryToBCD(static_cast<u8>(pos.minute)));
+        m_response_fifo.Push(BinaryToBCD(static_cast<u8>(pos.second)));
 
         SetInterrupt(Interrupt::ACK);
       }
@@ -1634,7 +1634,7 @@ void CDROM::BeginPlaying(u8 track, TickCount ticks_late /* = 0 */, bool after_se
     if (track > m_reader.GetMedia()->GetTrackCount())
     {
       // restart current track
-      track = Truncate8(m_reader.GetMedia()->GetTrackNumber());
+      track = static_cast<u8>(m_reader.GetMedia()->GetTrackNumber());
     }
 
     m_setloc_position = m_reader.GetMedia()->GetTrackStartMSFPosition(track);
@@ -2080,7 +2080,7 @@ void CDROM::DoSectorRead()
     ProcessCDDASector(m_reader.GetSectorBuffer().data(), subq);
 
     if (m_fast_forward_rate != 0)
-      next_sector = m_current_lba + SignExtend32(m_fast_forward_rate);
+      next_sector = m_current_lba + static_cast<u32>(static_cast<s8>(m_fast_forward_rate));
   }
 
   m_requested_lba = next_sector;
@@ -2361,10 +2361,10 @@ void CDROM::ProcessCDDASector(const u8* raw_sector, const CDImage::SubChannelQ& 
 
       const u8 channel = subq.absolute_second_bcd & 1u;
       const s16 peak_volume = std::min<s16>(GetPeakVolume(raw_sector, channel), 32767);
-      const u16 peak_value = (ZeroExtend16(channel) << 15) | peak_volume;
+      const u16 peak_value = (static_cast<u16>(channel) << 15) | peak_volume;
 
-      m_async_response_fifo.Push(Truncate8(peak_value));      // peak low
-      m_async_response_fifo.Push(Truncate8(peak_value >> 8)); // peak high
+      m_async_response_fifo.Push(static_cast<u8>(peak_value));      // peak low
+      m_async_response_fifo.Push(static_cast<u8>(peak_value >> 8)); // peak high
       SetAsyncInterrupt(Interrupt::DataReady);
     }
   }

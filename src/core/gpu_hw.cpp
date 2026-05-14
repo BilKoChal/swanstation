@@ -490,7 +490,7 @@ void GPU_HW::LoadVertices()
     m_current_depth++;
 
   const GPURenderCommand rc{m_render_command.bits};
-  const u32 texpage = ZeroExtend32(m_draw_mode.mode_reg.bits) | (ZeroExtend32(m_draw_mode.palette_reg) << 16);
+  const u32 texpage = static_cast<u32>(m_draw_mode.mode_reg.bits) | (static_cast<u32>(m_draw_mode.palette_reg) << 16);
   const float depth = GetCurrentNormalizedVertexDepth();
 
   switch (rc.primitive)
@@ -511,8 +511,8 @@ void GPU_HW::LoadVertices()
       {
         const u32 color = (shaded && i > 0) ? (FifoPop() & UINT32_C(0x00FFFFFF)) : first_color;
         const u64 maddr_and_pos = m_fifo.Pop();
-        const GPUVertexPosition vp{Truncate32(maddr_and_pos)};
-        const u16 texcoord = textured ? Truncate16(FifoPop()) : 0;
+        const GPUVertexPosition vp{static_cast<u32>(maddr_and_pos)};
+        const u16 texcoord = textured ? static_cast<u16>(FifoPop()) : 0;
         const s32 native_x = m_drawing_offset.x + vp.x;
         const s32 native_y = m_drawing_offset.y + vp.y;
         native_vertex_positions[i][0] = native_x;
@@ -524,7 +524,7 @@ void GPU_HW::LoadVertices()
         if (pgxp)
         {
           valid_w &=
-            PGXP::GetPreciseVertex(Truncate32(maddr_and_pos >> 32), vp.bits, native_x, native_y, m_drawing_offset.x,
+            PGXP::GetPreciseVertex(static_cast<u32>(maddr_and_pos >> 32), vp.bits, native_x, native_y, m_drawing_offset.x,
                                    m_drawing_offset.y, &vertices[i].x, &vertices[i].y, &vertices[i].w);
         }
       }
@@ -644,9 +644,9 @@ void GPU_HW::LoadVertices()
       const s32 pos_x = TruncateGPUVertexPosition(m_drawing_offset.x + vp.x);
       const s32 pos_y = TruncateGPUVertexPosition(m_drawing_offset.y + vp.y);
 
-      const auto [texcoord_x, texcoord_y] = UnpackTexcoord(rc.texture_enable ? Truncate16(FifoPop()) : 0);
-      u16 orig_tex_left = ZeroExtend16(texcoord_x);
-      u16 orig_tex_top = ZeroExtend16(texcoord_y);
+      const auto [texcoord_x, texcoord_y] = UnpackTexcoord(rc.texture_enable ? static_cast<u16>(FifoPop()) : 0);
+      u16 orig_tex_left = static_cast<u16>(texcoord_x);
+      u16 orig_tex_top = static_cast<u16>(texcoord_y);
       s32 rectangle_width;
       s32 rectangle_height;
       switch (rc.rectangle_size)
@@ -1242,10 +1242,10 @@ void GPU_HW::DispatchRenderCommand()
   {
     m_draw_mode.ClearTextureWindowChangedFlag();
 
-    m_batch_ubo_data.u_texture_window_and[0] = ZeroExtend32(m_draw_mode.texture_window.and_x);
-    m_batch_ubo_data.u_texture_window_and[1] = ZeroExtend32(m_draw_mode.texture_window.and_y);
-    m_batch_ubo_data.u_texture_window_or[0] = ZeroExtend32(m_draw_mode.texture_window.or_x);
-    m_batch_ubo_data.u_texture_window_or[1] = ZeroExtend32(m_draw_mode.texture_window.or_y);
+    m_batch_ubo_data.u_texture_window_and[0] = static_cast<u32>(m_draw_mode.texture_window.and_x);
+    m_batch_ubo_data.u_texture_window_and[1] = static_cast<u32>(m_draw_mode.texture_window.and_y);
+    m_batch_ubo_data.u_texture_window_or[0] = static_cast<u32>(m_draw_mode.texture_window.or_x);
+    m_batch_ubo_data.u_texture_window_or[1] = static_cast<u32>(m_draw_mode.texture_window.or_y);
     m_batch_ubo_dirty = true;
   }
 

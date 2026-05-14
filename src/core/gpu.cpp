@@ -906,7 +906,7 @@ void GPU::CRTCTickEvent(TickCount ticks)
   if (m_GPUSTAT.InInterleaved480iMode())
   {
     m_crtc_state.active_line_lsb =
-      Truncate8((m_crtc_state.regs.Y + BoolToUInt32(m_crtc_state.interlaced_display_field)) & u32(1));
+      static_cast<u8>((m_crtc_state.regs.Y + BoolToUInt32(m_crtc_state.interlaced_display_field)) & u32(1));
     m_GPUSTAT.display_line_lsb = ConvertToBoolUnchecked(
       (m_crtc_state.regs.Y + (BoolToUInt8(!m_crtc_state.in_vblank) & m_crtc_state.interlaced_display_field)) & u32(1));
   }
@@ -989,7 +989,7 @@ u32 GPU::ReadGPUREAD()
     // Read with correct wrap-around behavior.
     const u16 read_x = (m_vram_transfer.x + m_vram_transfer.col) % VRAM_WIDTH;
     const u16 read_y = (m_vram_transfer.y + m_vram_transfer.row) % VRAM_HEIGHT;
-    value |= ZeroExtend32(m_vram_ptr[read_y * VRAM_WIDTH + read_x]) << (i * 16);
+    value |= static_cast<u32>(m_vram_ptr[read_y * VRAM_WIDTH + read_x]) << (i * 16);
 
     if (++m_vram_transfer.col == m_vram_transfer.width)
     {
@@ -1181,7 +1181,7 @@ void GPU::WriteGP1(u32 value)
     case 0x1E:
     case 0x1F:
     {
-	    const u8 subcommand = Truncate8(value & 0x07);
+	    const u8 subcommand = static_cast<u8>(value & 0x07);
 	    switch (subcommand)
 	    {
 		    case 0x00:
@@ -1419,7 +1419,7 @@ void GPU::SetDrawMode(u16 value)
 
   // Bits 0..10 are returned in the GPU status register.
   m_GPUSTAT.bits = (m_GPUSTAT.bits & ~(GPUDrawModeReg::GPUSTAT_MASK)) |
-                   (ZeroExtend32(new_mode_reg.bits) & GPUDrawModeReg::GPUSTAT_MASK);
+                   (static_cast<u32>(new_mode_reg.bits) & GPUDrawModeReg::GPUSTAT_MASK);
   m_GPUSTAT.texture_disable = m_draw_mode.mode_reg.texture_disable;
 }
 
@@ -1429,8 +1429,8 @@ void GPU::SetTexturePalette(u16 value)
   if (m_draw_mode.palette_reg == value)
     return;
 
-  m_draw_mode.texture_palette_x = ZeroExtend32(value & 0x3F) * 16;
-  m_draw_mode.texture_palette_y = ZeroExtend32(value >> 6);
+  m_draw_mode.texture_palette_x = static_cast<u32>(value & 0x3F) * 16;
+  m_draw_mode.texture_palette_y = static_cast<u32>(value >> 6);
   m_draw_mode.palette_reg = value;
   m_draw_mode.texture_page_changed = true;
 }
@@ -1443,10 +1443,10 @@ void GPU::SetTextureWindow(u32 value)
 
   FlushRender();
 
-  const u8 mask_x = Truncate8(value & UINT32_C(0x1F));
-  const u8 mask_y = Truncate8((value >> 5) & UINT32_C(0x1F));
-  const u8 offset_x = Truncate8((value >> 10) & UINT32_C(0x1F));
-  const u8 offset_y = Truncate8((value >> 15) & UINT32_C(0x1F));
+  const u8 mask_x = static_cast<u8>(value & UINT32_C(0x1F));
+  const u8 mask_y = static_cast<u8>((value >> 5) & UINT32_C(0x1F));
+  const u8 offset_x = static_cast<u8>((value >> 10) & UINT32_C(0x1F));
+  const u8 offset_y = static_cast<u8>((value >> 15) & UINT32_C(0x1F));
 
   m_draw_mode.texture_window.and_x = ~(mask_x * 8);
   m_draw_mode.texture_window.and_y = ~(mask_y * 8);

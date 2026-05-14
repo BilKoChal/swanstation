@@ -77,7 +77,7 @@ public:
   ALWAYS_INLINE bool BeginDMAWrite() const { return (m_GPUSTAT.dma_direction == DMADirection::CPUtoGP0); }
   ALWAYS_INLINE void DMAWrite(u32 address, u32 value)
   {
-    m_fifo.Push((ZeroExtend64(address) << 32) | ZeroExtend64(value));
+    m_fifo.Push((static_cast<u64>(address) << 32) | static_cast<u64>(value));
   }
   void EndDMAWrite();
 
@@ -181,10 +181,10 @@ protected:
   void CommandTickEvent(TickCount ticks);
 
   /// Returns 0 if the currently-displayed field is on odd lines (1,3,5,...) or 1 if even (2,4,6,...).
-  ALWAYS_INLINE u32 GetInterlacedDisplayField() const { return ZeroExtend32(m_crtc_state.interlaced_field); }
+  ALWAYS_INLINE u32 GetInterlacedDisplayField() const { return static_cast<u32>(m_crtc_state.interlaced_field); }
 
   /// Returns 0 if the currently-displayed field is on an even line in VRAM, otherwise 1.
-  ALWAYS_INLINE u32 GetActiveLineLSB() const { return ZeroExtend32(m_crtc_state.active_line_lsb); }
+  ALWAYS_INLINE u32 GetActiveLineLSB() const { return static_cast<u32>(m_crtc_state.active_line_lsb); }
 
   /// Sets/decodes GP0(E1h) (set draw mode).
   void SetDrawMode(u16 bits);
@@ -338,12 +338,12 @@ protected:
     ALWAYS_INLINE u16 GetMaskAND() const
     {
       // return check_mask_before_draw ? 0x8000 : 0x0000;
-      return Truncate16((bits << 3) & 0x8000);
+      return static_cast<u16>((bits << 3) & 0x8000);
     }
     ALWAYS_INLINE u16 GetMaskOR() const
     {
       // return set_mask_while_drawing ? 0x8000 : 0x0000;
-      return Truncate16((bits << 4) & 0x8000);
+      return static_cast<u16>((bits << 4) & 0x8000);
     }
   } m_GPUSTAT = {};
 
@@ -499,9 +499,9 @@ protected:
   u32 m_blit_remaining_words;
   GPURenderCommand m_render_command{};
 
-  ALWAYS_INLINE u32 FifoPop() { return Truncate32(m_fifo.Pop()); }
-  ALWAYS_INLINE u32 FifoPeek() { return Truncate32(m_fifo.Peek()); }
-  ALWAYS_INLINE u32 FifoPeek(u32 i) { return Truncate32(m_fifo.Peek(i)); }
+  ALWAYS_INLINE u32 FifoPop() { return static_cast<u32>(m_fifo.Pop()); }
+  ALWAYS_INLINE u32 FifoPeek() { return static_cast<u32>(m_fifo.Peek()); }
+  ALWAYS_INLINE u32 FifoPeek(u32 i) { return static_cast<u32>(m_fifo.Peek(i)); }
 
   TickCount m_max_run_ahead = 128;
   u32 m_fifo_size = 128;

@@ -73,20 +73,20 @@ public:
 
     static constexpr Position FromLBA(LBA lba)
     {
-      const u8 frame = Truncate8(lba % FRAMES_PER_SECOND);
+      const u8 frame = static_cast<u8>(lba % FRAMES_PER_SECOND);
       lba /= FRAMES_PER_SECOND;
 
-      const u8 second = Truncate8(lba % SECONDS_PER_MINUTE);
+      const u8 second = static_cast<u8>(lba % SECONDS_PER_MINUTE);
       lba /= SECONDS_PER_MINUTE;
 
-      const u8 minute = Truncate8(lba);
+      const u8 minute = static_cast<u8>(lba);
 
       return Position{minute, second, frame};
     }
 
     LBA ToLBA() const
     {
-      return ZeroExtend32(minute) * FRAMES_PER_MINUTE + ZeroExtend32(second) * FRAMES_PER_SECOND + ZeroExtend32(frame);
+      return static_cast<u32>(minute) * FRAMES_PER_MINUTE + static_cast<u32>(second) * FRAMES_PER_SECOND + static_cast<u32>(frame);
     }
 
     constexpr std::tuple<u8, u8, u8> ToBCD() const

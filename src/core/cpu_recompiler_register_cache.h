@@ -140,10 +140,10 @@ struct Value
     switch (size)
     {
       case RegSize_8:
-        return static_cast<s32>(SignExtend32(Truncate8(constant_value)));
+        return static_cast<s32>(static_cast<s8>(constant_value));
 
       case RegSize_16:
-        return static_cast<s32>(SignExtend32(Truncate16(constant_value)));
+        return static_cast<s32>(static_cast<s16>(constant_value));
 
       case RegSize_32:
       case RegSize_64:
@@ -158,13 +158,13 @@ struct Value
     switch (size)
     {
       case RegSize_8:
-        return static_cast<s64>(SignExtend64(Truncate8(constant_value)));
+        return static_cast<s64>(static_cast<s8>(constant_value));
 
       case RegSize_16:
-        return static_cast<s64>(SignExtend64(Truncate16(constant_value)));
+        return static_cast<s64>(static_cast<s16>(constant_value));
 
       case RegSize_32:
-        return static_cast<s64>(SignExtend64(Truncate32(constant_value)));
+        return static_cast<s64>(static_cast<s32>(constant_value));
 
       case RegSize_64:
       default:
@@ -184,10 +184,10 @@ struct Value
   {
     return Value(nullptr, cv, size, ValueFlags::Valid | ValueFlags::Constant);
   }
-  static Value FromConstantU8(u8 value) { return FromConstant(ZeroExtend64(value), RegSize_8); }
-  static Value FromConstantU16(u16 value) { return FromConstant(ZeroExtend64(value), RegSize_16); }
-  static Value FromConstantU32(u32 value) { return FromConstant(ZeroExtend64(value), RegSize_32); }
-  static Value FromConstantS32(s32 value) { return FromConstant(ZeroExtend64(static_cast<u32>(value)), RegSize_32); }
+  static Value FromConstantU8(u8 value) { return FromConstant(static_cast<u64>(value), RegSize_8); }
+  static Value FromConstantU16(u16 value) { return FromConstant(static_cast<u64>(value), RegSize_16); }
+  static Value FromConstantU32(u32 value) { return FromConstant(static_cast<u64>(value), RegSize_32); }
+  static Value FromConstantS32(s32 value) { return FromConstant(static_cast<u64>(static_cast<u32>(value)), RegSize_32); }
   static Value FromConstantU64(u64 value) { return FromConstant(value, RegSize_64); }
   static Value FromConstantPtr(const void* pointer)
   {

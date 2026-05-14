@@ -112,8 +112,8 @@ ALWAYS_INLINE_RELEASE void MakeValid(PGXP_value* pV, u32 psxV)
 {
   if (VALID_01 != (pV->flags & VALID_01))
   {
-    pV->x = static_cast<float>(static_cast<s16>(Truncate16(psxV)));
-    pV->y = static_cast<float>(static_cast<s16>(Truncate16(psxV >> 16)));
+    pV->x = static_cast<float>(static_cast<s16>(static_cast<u16>(psxV)));
+    pV->y = static_cast<float>(static_cast<s16>(static_cast<u16>(psxV >> 16)));
     pV->z = 0.f;
     pV->flags |= VALID_01;
     pV->value = psxV;
@@ -361,7 +361,7 @@ void GTE_PushSXYZ2f(float x, float y, float z, u32 v)
   SXY2.flags = VALID_ALL;
 
   if (g_settings.gpu_pgxp_vertex_cache)
-    PGXP_CacheVertex(static_cast<s16>(Truncate16(v)), static_cast<s16>(Truncate16(v >> 16)), SXY2);
+    PGXP_CacheVertex(static_cast<s16>(static_cast<u16>(v)), static_cast<s16>(static_cast<u16>(v >> 16)), SXY2);
 }
 
 #define VX(n) (psxRegs.CP2D.p[n << 1].sw.l)
@@ -1072,10 +1072,10 @@ void CPU_MULT(u32 instr, u32 rsVal, u32 rtVal)
   CPU_Hi.x = (float)f16Sign(hx);
   CPU_Hi.y = (float)f16Sign(hy);
 
-  // compute PSX value
-  const u64 result = static_cast<u64>(static_cast<s64>(SignExtend64(rsVal)) * static_cast<s64>(SignExtend64(rtVal)));
-  CPU_Hi.value = Truncate32(result >> 32);
-  CPU_Lo.value = Truncate32(result);
+  // compute PSX value (signed 32x32 -> 64 multiply matching MIPS MULT)
+  const u64 result = static_cast<u64>(static_cast<s64>(static_cast<s32>(rsVal)) * static_cast<s64>(static_cast<s32>(rtVal)));
+  CPU_Hi.value = static_cast<u32>(result >> 32);
+  CPU_Lo.value = static_cast<u32>(result);
 }
 
 void CPU_MULTU(u32 instr, u32 rsVal, u32 rtVal)
@@ -1121,9 +1121,9 @@ void CPU_MULTU(u32 instr, u32 rsVal, u32 rtVal)
   CPU_Hi.y = (float)f16Sign(hy);
 
   // compute PSX value
-  const u64 result = ZeroExtend64(rsVal) * ZeroExtend64(rtVal);
-  CPU_Hi.value = Truncate32(result >> 32);
-  CPU_Lo.value = Truncate32(result);
+  const u64 result = static_cast<u64>(rsVal) * static_cast<u64>(rtVal);
+  CPU_Hi.value = static_cast<u32>(result >> 32);
+  CPU_Lo.value = static_cast<u32>(result);
 }
 
 void CPU_DIV(u32 instr, u32 rsVal, u32 rtVal)

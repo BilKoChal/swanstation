@@ -103,7 +103,7 @@ bool NamcoGunCon::Transfer(const u8 data_in, u8* data_out)
     {
       if (data_in == 0x42)
       {
-        *data_out = Truncate8(ID);
+        *data_out = static_cast<u8>(ID);
         m_transfer_state = TransferState::IDMSB;
         return true;
       }
@@ -114,21 +114,21 @@ bool NamcoGunCon::Transfer(const u8 data_in, u8* data_out)
 
     case TransferState::IDMSB:
     {
-      *data_out = Truncate8(ID >> 8);
+      *data_out = static_cast<u8>(ID >> 8);
       m_transfer_state = TransferState::ButtonsLSB;
       return true;
     }
 
     case TransferState::ButtonsLSB:
     {
-      *data_out = Truncate8(m_button_state);
+      *data_out = static_cast<u8>(m_button_state);
       m_transfer_state = TransferState::ButtonsMSB;
       return true;
     }
 
     case TransferState::ButtonsMSB:
     {
-      *data_out = Truncate8(m_button_state >> 8);
+      *data_out = static_cast<u8>(m_button_state >> 8);
       m_transfer_state = TransferState::XLSB;
       return true;
     }
@@ -136,28 +136,28 @@ bool NamcoGunCon::Transfer(const u8 data_in, u8* data_out)
     case TransferState::XLSB:
     {
       UpdatePosition();
-      *data_out = Truncate8(m_position_x);
+      *data_out = static_cast<u8>(m_position_x);
       m_transfer_state = TransferState::XMSB;
       return true;
     }
 
     case TransferState::XMSB:
     {
-      *data_out = Truncate8(m_position_x >> 8);
+      *data_out = static_cast<u8>(m_position_x >> 8);
       m_transfer_state = TransferState::YLSB;
       return true;
     }
 
     case TransferState::YLSB:
     {
-      *data_out = Truncate8(m_position_y);
+      *data_out = static_cast<u8>(m_position_y);
       m_transfer_state = TransferState::YMSB;
       return true;
     }
 
     case TransferState::YMSB:
     {
-      *data_out = Truncate8(m_position_y >> 8);
+      *data_out = static_cast<u8>(m_position_y >> 8);
       m_transfer_state = TransferState::Idle;
       break;
     }

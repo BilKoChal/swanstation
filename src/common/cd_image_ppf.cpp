@@ -368,8 +368,8 @@ bool CDImagePPF::AddPatch(u64 offset, const u8* patch, u32 patch_size)
 {
   while (patch_size > 0)
   {
-    const u32 sector_index = Truncate32(offset / RAW_SECTOR_SIZE) + m_replacement_offset;
-    const u32 sector_offset = Truncate32(offset % RAW_SECTOR_SIZE);
+    const u32 sector_index = static_cast<u32>(offset / RAW_SECTOR_SIZE) + m_replacement_offset;
+    const u32 sector_offset = static_cast<u32>(offset % RAW_SECTOR_SIZE);
     if (sector_index >= m_parent_image->GetLBACount())
     {
       Log_ErrorPrintf("Sector %u in patch is out of range", sector_index);
