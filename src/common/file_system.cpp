@@ -213,18 +213,18 @@ static std::string_view::size_type GetLastSeperatorPosition(const std::string_vi
   return last_separator;
 }
 
-std::string GetDisplayNameFromPath(const std::string_view& path)
-{
-  return std::string(GetFileNameFromPath(path));
-}
-
-std::string_view GetFileNameFromPath(const std::string_view& path)
+static std::string_view GetFileNameFromPath(const std::string_view& path)
 {
   std::string_view::size_type pos = GetLastSeperatorPosition(path, true);
   if (pos == std::string_view::npos)
     return path;
 
   return path.substr(pos);
+}
+
+std::string GetDisplayNameFromPath(const std::string_view& path)
+{
+  return std::string(GetFileNameFromPath(path));
 }
 
 std::string_view GetFileTitleFromPath(const std::string_view& path)

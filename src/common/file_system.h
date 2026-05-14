@@ -54,9 +54,6 @@ std::string ReplaceExtension(const std::string_view& path, const std::string_vie
 /// where it resolves a content URI to its name.
 std::string GetDisplayNameFromPath(const std::string_view& path);
 
-/// Returns the filename component of a filename.
-std::string_view GetFileNameFromPath(const std::string_view& path);
-
 /// Returns the file title (less the extension and path) from a filename.
 std::string_view GetFileTitleFromPath(const std::string_view& path);
 
