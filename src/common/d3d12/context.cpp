@@ -143,6 +143,36 @@ bool Context::Create(IDXGIFactory* dxgi_factory, uint32_t adapter_index, bool en
   return true;
 }
 
+bool Context::CreateForLibretro(ID3D12Device* device, ID3D12CommandQueue* command_queue)
+{
+  // We don't need d3d12.dll's PFN_D3D12_CREATE_DEVICE here - the frontend
+  // already loaded the library and created the device. The serializer entry
+  // (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE) is still required by
+  // SerializeRootSignature; load the library so its function pointers are
+  // resolved for that path. If LoadLibrary succeeds, UnloadD3D12Library is
+  // a no-op until Destroy().
+  if (!LoadD3D12Library())
+    return false;
+
+  g_d3d12_context.reset(new Context());
+  g_d3d12_context->m_device = device;
+  g_d3d12_context->m_command_queue = command_queue;
+
+  // Match the same feature level CreateDevice would have selected; we
+  // create our own resources at FL11_0 regardless of what the frontend
+  // negotiated, so this is correct for libretro.
+  g_d3d12_context->m_feature_level = D3D_FEATURE_LEVEL_11_0;
+
+  if (!g_d3d12_context->CreateFence() || !g_d3d12_context->CreateDescriptorHeaps() ||
+      !g_d3d12_context->CreateCommandLists() || !g_d3d12_context->CreateTextureStreamBuffer())
+  {
+    Destroy();
+    return false;
+  }
+
+  return true;
+}
+
 void Context::Destroy()
 {
   if (g_d3d12_context)

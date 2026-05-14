@@ -12,8 +12,276 @@
 #include "host_display.h"
 #include "host_interface.h"
 #include "system.h"
+#define HAVE_D3D12
+#include "libretro_d3d.h"
 #include <cstring>
 Log_SetChannel(GPU_HW_D3D12);
+
+extern retro_environment_t g_retro_environment_callback;
+extern retro_video_refresh_t g_retro_video_refresh_callback;
+
+// Index parallels HostDisplayPixelFormat (Unknown, RGBA8, BGRA8, RGB565,
+// RGBA5551, Count). Same table layout as gpu_hw_d3d11.cpp; the Unknown
+// slot resolves to DXGI_FORMAT_UNKNOWN as a value-0 sentinel.
+static constexpr std::array<DXGI_FORMAT, static_cast<uint32_t>(HostDisplayPixelFormat::Count)>
+  s_display_pixel_format_mapping = {{DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM,
+                                     DXGI_FORMAT_B5G6R5_UNORM, DXGI_FORMAT_B5G5R5A1_UNORM}};
+
+// =====================================================================
+// LibretroD3D12HostDisplay - libretro HostDisplay subclass for the D3D12
+// hardware renderer path.
+//
+// Mirrors LibretroD3D11HostDisplay structurally, with two architectural
+// differences driven by the libretro D3D12 hardware interface
+// (retro_hw_render_interface_d3d12 in libretro_d3d.h):
+//
+//   1. Device + queue ownership lives in the frontend. We adopt them
+//      via D3D12::Context::CreateForLibretro(); D3D12::Context::Destroy()
+//      releases our refs. m_device / m_context style members are absent
+//      because everything that needs the device goes through
+//      g_d3d12_context, which is what gpu_hw_d3d12.cpp uses anyway.
+//
+//   2. Present path is the set_texture callback rather than a swapchain
+//      blit. Render() composites into m_framebuffer (an RTV we own),
+//      transitions it to required_state, calls set_texture, then signals
+//      the frontend a HW frame is ready via
+//      g_retro_video_refresh_callback(RETRO_HW_FRAME_BUFFER_VALID, ...).
+//
+// The HostDisplay::SetDisplayPixels path (SW pixels uploaded to a
+// frontend-readable texture via UpdateSubresource) is not implemented
+// for D3D12 in the current libretro frontend integration; the SW
+// renderer uses LibretroHostDisplay instead. BeginSetDisplayPixels
+// returns false so any caller short-circuits.
+// =====================================================================
+
+LibretroD3D12HostDisplay::LibretroD3D12HostDisplay() = default;
+LibretroD3D12HostDisplay::~LibretroD3D12HostDisplay() = default;
+
+bool LibretroD3D12HostDisplay::RequestHardwareRendererContext(retro_hw_render_callback* cb)
+{
+  cb->cache_context = false;
+  cb->bottom_left_origin = false;
+  cb->context_type = RETRO_HW_CONTEXT_D3D12;
+  cb->version_major = 12;
+  cb->version_minor = 0;
+
+  return g_retro_environment_callback(RETRO_ENVIRONMENT_SET_HW_RENDER, cb);
+}
+
+HostDisplay::RenderAPI LibretroD3D12HostDisplay::GetRenderAPI() const
+{
+  return RenderAPI::D3D12;
+}
+
+void* LibretroD3D12HostDisplay::GetRenderDevice() const
+{
+  return g_d3d12_context ? g_d3d12_context->GetDevice() : nullptr;
+}
+
+void* LibretroD3D12HostDisplay::GetRenderContext() const
+{
+  // D3D12 has no DeviceContext analogue - work is recorded on command
+  // lists owned by the Context. Return nullptr; callers either don't
+  // need it (D3D12 path) or already special-case the D3D12 RenderAPI.
+  return nullptr;
+}
+
+bool LibretroD3D12HostDisplay::CreateRenderDevice(const WindowInfo& wi, std::string_view adapter_name, bool debug_device,
+                                                  bool threaded_presentation)
+{
+  retro_hw_render_interface* ri = nullptr;
+  if (!g_retro_environment_callback(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, &ri))
+  {
+    Log_ErrorPrint("Failed to get HW render interface");
+    return false;
+  }
+  else if (ri->interface_type != RETRO_HW_RENDER_INTERFACE_D3D12 ||
+           ri->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION)
+  {
+    Log_ErrorPrintf("Unexpected HW interface - type %u version %u", static_cast<unsigned>(ri->interface_type),
+                    static_cast<unsigned>(ri->interface_version));
+    return false;
+  }
+
+  const retro_hw_render_interface_d3d12* d3d12_ri = reinterpret_cast<const retro_hw_render_interface_d3d12*>(ri);
+  if (!d3d12_ri->device || !d3d12_ri->queue || !d3d12_ri->set_texture)
+  {
+    Log_ErrorPrintf("Missing D3D12 device, queue, or set_texture callback");
+    return false;
+  }
+
+  if (!D3D12::Context::CreateForLibretro(d3d12_ri->device, d3d12_ri->queue))
+  {
+    Log_ErrorPrint("Failed to adopt D3D12 device/queue for libretro");
+    return false;
+  }
+
+  m_set_texture = d3d12_ri->set_texture;
+  m_frontend_handle = d3d12_ri->handle;
+  m_required_state = d3d12_ri->required_state;
+  m_window_info = wi;
+  return true;
+}
+
+bool LibretroD3D12HostDisplay::InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device,
+                                                     bool threaded_presentation)
+{
+  return CreateResources();
+}
+
+void LibretroD3D12HostDisplay::DestroyRenderDevice()
+{
+  ClearSoftwareCursor();
+  DestroyResources();
+
+  if (g_d3d12_context)
+  {
+    g_d3d12_context->WaitForGPUIdle();
+    D3D12::Context::Destroy();
+  }
+}
+
+void LibretroD3D12HostDisplay::ResizeRenderWindow(int32_t new_window_width, int32_t new_window_height)
+{
+  m_window_info.surface_width = static_cast<uint32_t>(new_window_width);
+  m_window_info.surface_height = static_cast<uint32_t>(new_window_height);
+}
+
+bool LibretroD3D12HostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
+{
+  // Check that the device/queue/handle haven't changed under us.
+  retro_hw_render_interface* ri = nullptr;
+  if (!g_retro_environment_callback(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, &ri))
+  {
+    Log_ErrorPrint("Failed to get HW render interface");
+    return false;
+  }
+  else if (ri->interface_type != RETRO_HW_RENDER_INTERFACE_D3D12 ||
+           ri->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION)
+  {
+    Log_ErrorPrintf("Unexpected HW interface - type %u version %u", static_cast<unsigned>(ri->interface_type),
+                    static_cast<unsigned>(ri->interface_version));
+    return false;
+  }
+
+  const retro_hw_render_interface_d3d12* d3d12_ri = reinterpret_cast<const retro_hw_render_interface_d3d12*>(ri);
+  if (d3d12_ri->device != g_d3d12_context->GetDevice() || d3d12_ri->queue != g_d3d12_context->GetCommandQueue() ||
+      d3d12_ri->set_texture != m_set_texture || d3d12_ri->handle != m_frontend_handle)
+  {
+    Log_ErrorPrintf("D3D12 device/queue/handle changed outside our control");
+    return false;
+  }
+
+  // required_state is allowed to change across a ChangeRenderWindow -
+  // re-cache it in case the frontend renegotiated.
+  m_required_state = d3d12_ri->required_state;
+  m_window_info = new_wi;
+  return true;
+}
+
+std::unique_ptr<HostDisplayTexture> LibretroD3D12HostDisplay::CreateTexture(uint32_t width, uint32_t height, uint32_t layers,
+                                                                            uint32_t levels, uint32_t samples,
+                                                                            HostDisplayPixelFormat format,
+                                                                            const void* data, uint32_t data_stride,
+                                                                            bool dynamic)
+{
+  // GPU_HW_D3D12 manages its own textures through D3D12::Texture directly.
+  // The HostDisplay::CreateTexture surface is only used by code paths that
+  // do not run for the libretro D3D12 backend (software cursor preload,
+  // SetDisplayPixels CPU-to-GPU upload), so this returns nullptr the same
+  // way LibretroHostDisplay does.
+  return nullptr;
+}
+
+bool LibretroD3D12HostDisplay::SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const
+{
+  const DXGI_FORMAT dfmt = s_display_pixel_format_mapping[static_cast<uint32_t>(format)];
+  return dfmt != DXGI_FORMAT_UNKNOWN && g_d3d12_context && g_d3d12_context->SupportsTextureFormat(dfmt);
+}
+
+bool LibretroD3D12HostDisplay::BeginSetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height,
+                                                    void** out_buffer, uint32_t* out_pitch)
+{
+  // See comment on CreateTexture - this path is not wired for D3D12
+  // libretro. The SW renderer uses LibretroHostDisplay.
+  return false;
+}
+
+void LibretroD3D12HostDisplay::EndSetDisplayPixels()
+{
+}
+
+bool LibretroD3D12HostDisplay::CreateResources()
+{
+  // Nothing to do up front - the framebuffer is sized lazily in
+  // CheckFramebufferSize when Render() sees the first display frame.
+  return true;
+}
+
+void LibretroD3D12HostDisplay::DestroyResources()
+{
+  m_framebuffer.Destroy(false);
+}
+
+bool LibretroD3D12HostDisplay::CheckFramebufferSize(uint32_t width, uint32_t height)
+{
+  if (m_framebuffer.GetWidth() == width && m_framebuffer.GetHeight() == height)
+    return true;
+
+  m_framebuffer.Destroy(false);
+  return m_framebuffer.Create(width, height, 1, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM,
+                              DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+}
+
+bool LibretroD3D12HostDisplay::Render()
+{
+  // No display texture this frame -> send the libretro frame-dupe
+  // signal (NULL frame), matching the SW and D3D11 paths. See the
+  // equivalent comment in gpu_hw_d3d11.cpp::Render().
+  if (!HasDisplayTexture())
+  {
+    g_retro_video_refresh_callback(nullptr, 0, 0, 0);
+    return true;
+  }
+
+  const uint32_t resolution_scale = g_host_interface_storage.GetResolutionScale();
+  const uint32_t display_width = static_cast<uint32_t>(m_display_width) * resolution_scale;
+  const uint32_t display_height = static_cast<uint32_t>(m_display_height) * resolution_scale;
+
+  if (!CheckFramebufferSize(display_width, display_height))
+    return false;
+
+  // The GPU_HW_D3D12 path already produced the display image inside its
+  // own m_display_texture (or m_vram_texture) and called SetDisplayTexture
+  // with a D3D12::Texture* handle. For the libretro D3D12 frontend we
+  // do not need to perform an additional blit through a vertex/pixel
+  // shader pair the way D3D11 does - the source texture is already the
+  // composited display image, so we forward its resource directly to the
+  // frontend via set_texture.
+  //
+  // m_framebuffer therefore acts as a stable holder of an RTV-bindable
+  // resource only when the source path itself isn't already in
+  // PIXEL_SHADER_RESOURCE form. The current GPU_HW_D3D12::UpdateDisplay
+  // call sites guarantee the display texture is left in
+  // PIXEL_SHADER_RESOURCE state at end-of-frame, so the simpler model
+  // is: transition that texture into m_required_state and hand it over.
+  //
+  // We keep m_framebuffer around because future work (software cursor
+  // composition, lightgun crosshair overlay) will need an owned RTV
+  // to draw onto, matching what gpu_hw_d3d11.cpp does. For now it's
+  // unused on the present path.
+  D3D12::Texture* const display_texture = static_cast<D3D12::Texture*>(const_cast<void*>(m_display_texture_handle));
+  display_texture->TransitionToState(m_required_state);
+
+  // Flush our pending command list before handing the texture over -
+  // otherwise the frontend may read stale contents.
+  g_d3d12_context->ExecuteCommandList(false);
+
+  m_set_texture(m_frontend_handle, display_texture->GetResource(), DXGI_FORMAT_R8G8B8A8_UNORM);
+  g_retro_video_refresh_callback(RETRO_HW_FRAME_BUFFER_VALID, m_display_texture_view_width,
+                                 m_display_texture_view_height, 0);
+  return true;
+}
 
 GPU_HW_D3D12::GPU_HW_D3D12() = default;
 

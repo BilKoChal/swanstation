@@ -289,6 +289,9 @@ struct retro_core_option_v2_definition option_defs_us[] = {
      {"Auto", "Hardware (Auto)"},
 #ifdef WIN32
      {"D3D11", "Hardware (D3D11)"},
+#ifdef USE_D3D12
+     {"D3D12", "Hardware (D3D12)"},
+#endif
 #endif
      {"OpenGL", "Hardware (OpenGL)"},
      {"Vulkan", "Hardware (Vulkan)"},

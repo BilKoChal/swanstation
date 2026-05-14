@@ -36,6 +36,14 @@ public:
   // Creates new device and context.
   static bool Create(IDXGIFactory* dxgi_factory, uint32_t adapter_index, bool enable_debug_layer);
 
+  // Creates a context that adopts the frontend's ID3D12Device and
+  // ID3D12CommandQueue (e.g. via retro_hw_render_interface_d3d12).
+  // The frontend retains ownership of both - we just AddRef them
+  // and create the rest of the context (descriptor heaps, command
+  // lists, fence, texture upload buffer) on top. enable_debug_layer
+  // is ignored; the frontend already configured the device.
+  static bool CreateForLibretro(ID3D12Device* device, ID3D12CommandQueue* command_queue);
+
   // Destroys active context.
   static void Destroy();
 

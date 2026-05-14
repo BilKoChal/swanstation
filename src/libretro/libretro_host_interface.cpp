@@ -37,6 +37,9 @@ Log_SetChannel(HostInterface);
 
 #ifdef WIN32
 #include "core/gpu_hw_d3d11.h"
+#ifdef USE_D3D12
+#include "core/gpu_hw_d3d12.h"
+#endif
 #endif
 
 RETRO_API unsigned retro_api_version(void)
@@ -1886,6 +1889,10 @@ static std::optional<GPURenderer> RetroHwContextToRenderer(retro_hw_context_type
 #ifdef WIN32
     case RETRO_HW_CONTEXT_D3D11:
       return GPURenderer::HardwareD3D11;
+#ifdef USE_D3D12
+    case RETRO_HW_CONTEXT_D3D12:
+      return GPURenderer::HardwareD3D12;
+#endif
 #endif
 
     default:
@@ -1907,6 +1914,10 @@ static std::optional<GPURenderer> RenderAPIToRenderer(HostDisplay::RenderAPI api
 #ifdef WIN32
     case HostDisplay::RenderAPI::D3D11:
       return GPURenderer::HardwareD3D11;
+#ifdef USE_D3D12
+    case HostDisplay::RenderAPI::D3D12:
+      return GPURenderer::HardwareD3D12;
+#endif
 #endif
 
     default:
@@ -1951,6 +1962,11 @@ bool HostInterface::RequestHardwareRendererContext()
     case GPURenderer::HardwareD3D11:
       m_hw_render_callback_valid = LibretroD3D11HostDisplay::RequestHardwareRendererContext(&m_hw_render_callback);
       break;
+#ifdef USE_D3D12
+    case GPURenderer::HardwareD3D12:
+      m_hw_render_callback_valid = LibretroD3D12HostDisplay::RequestHardwareRendererContext(&m_hw_render_callback);
+      break;
+#endif
 #endif
 
     case GPURenderer::HardwareVulkan:
@@ -2032,6 +2048,11 @@ void HostInterface::SwitchToHardwareRenderer()
       case GPURenderer::HardwareD3D11:
         display = std::make_unique<LibretroD3D11HostDisplay>();
         break;
+#ifdef USE_D3D12
+      case GPURenderer::HardwareD3D12:
+        display = std::make_unique<LibretroD3D12HostDisplay>();
+        break;
+#endif
 #endif
 
       default:

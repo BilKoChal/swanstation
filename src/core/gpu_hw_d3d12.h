@@ -6,13 +6,70 @@
 #include "common/dimensional_array.h"
 #include "gpu_hw.h"
 #include "gpu_hw_shadergen.h"
+#include "host_display.h"
 #include "texture_replacements.h"
 #include <array>
 #include <atomic>
+#include <d3d12.h>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <tuple>
+#include <wrl/client.h>
+#include <libretro.h>
+
+class LibretroD3D12HostDisplay final : public HostDisplay
+{
+public:
+  LibretroD3D12HostDisplay();
+  ~LibretroD3D12HostDisplay();
+
+  static bool RequestHardwareRendererContext(retro_hw_render_callback* cb);
+
+  RenderAPI GetRenderAPI() const override;
+  void* GetRenderDevice() const override;
+  void* GetRenderContext() const override;
+
+  bool CreateRenderDevice(const WindowInfo& wi, std::string_view adapter_name, bool debug_device,
+                          bool threaded_presentation) override;
+  bool InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device,
+                              bool threaded_presentation) override;
+  void DestroyRenderDevice() override;
+
+  void ResizeRenderWindow(int32_t new_window_width, int32_t new_window_height) override;
+
+  bool ChangeRenderWindow(const WindowInfo& new_wi) override;
+
+  std::unique_ptr<HostDisplayTexture> CreateTexture(uint32_t width, uint32_t height, uint32_t layers, uint32_t levels, uint32_t samples,
+                                                    HostDisplayPixelFormat format, const void* data, uint32_t data_stride,
+                                                    bool dynamic = false) override;
+  bool SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const override;
+  bool BeginSetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height, void** out_buffer,
+                             uint32_t* out_pitch) override;
+  void EndSetDisplayPixels() override;
+
+  bool Render() override;
+
+protected:
+  bool CreateResources() override;
+  void DestroyResources() override;
+
+private:
+  template<typename T>
+  using ComPtr = Microsoft::WRL::ComPtr<T>;
+
+  bool CheckFramebufferSize(uint32_t width, uint32_t height);
+
+  // retro_hw_render_interface_d3d12::set_texture callback - the frontend
+  // reads from this resource in m_required_state to compose the final
+  // output frame. We hand it the framebuffer texture (post our display
+  // blit) at the end of Render().
+  void (*m_set_texture)(void* handle, ID3D12Resource* texture, DXGI_FORMAT format) = nullptr;
+  void* m_frontend_handle = nullptr;
+  D3D12_RESOURCE_STATES m_required_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+  D3D12::Texture m_framebuffer;
+};
 
 class GPU_HW_D3D12 : public GPU_HW
 {
