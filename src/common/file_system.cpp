@@ -247,7 +247,7 @@ std::string BuildRelativePath(const std::string_view& filename, const std::strin
   return new_string;
 }
 
-std::unique_ptr<ByteStream> OpenFile(const char* FileName, u32 Flags)
+std::unique_ptr<ByteStream> OpenFile(const char* FileName, uint32_t Flags)
 {
   // TODO: Handle Android content URIs here.
 
@@ -291,7 +291,7 @@ std::FILE* OpenCFile(const char* filename, const char* mode)
 #endif
 }
 
-std::optional<std::vector<u8>> ReadBinaryFile(const char* filename)
+std::optional<std::vector<uint8_t>> ReadBinaryFile(const char* filename)
 {
   RFILE *fp = OpenRFile(filename, "rb");
   if (!fp)
@@ -306,7 +306,7 @@ std::optional<std::vector<u8>> ReadBinaryFile(const char* filename)
     return std::nullopt;
   }
 
-  std::vector<u8> res(static_cast<size_t>(size));
+  std::vector<uint8_t> res(static_cast<size_t>(size));
   if (size > 0 && rfread(res.data(), 1u, static_cast<size_t>(size), fp) != static_cast<int64_t>(size))
   {
     rfclose(fp);
@@ -316,7 +316,7 @@ std::optional<std::vector<u8>> ReadBinaryFile(const char* filename)
   return res;
 }
 
-std::optional<std::vector<u8>> ReadBinaryFile(RFILE* fp)
+std::optional<std::vector<uint8_t>> ReadBinaryFile(RFILE* fp)
 {
   rfseek(fp, 0, SEEK_END);
   int64_t size = rftell(fp);
@@ -324,7 +324,7 @@ std::optional<std::vector<u8>> ReadBinaryFile(RFILE* fp)
   if (size < 0)
     return std::nullopt;
 
-  std::vector<u8> res(static_cast<size_t>(size));
+  std::vector<uint8_t> res(static_cast<size_t>(size));
   if (size > 0 && rfread(res.data(), 1u, static_cast<size_t>(size), fp) != static_cast<int64_t>(size))
     return std::nullopt;
 
@@ -360,8 +360,8 @@ bool WriteBinaryFile(const char* filename, const void* data, size_t data_length)
 }
 
 #ifdef _WIN32
-static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, const char* Path, const char* Pattern,
-                              u32 Flags, FileSystem::FindResultsArray* pResults)
+static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPath, const char* Path, const char* Pattern,
+                              uint32_t Flags, FileSystem::FindResultsArray* pResults)
 {
   std::string tempStr;
   if (Path)
@@ -388,7 +388,7 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
   // small speed optimization for '*' case
   bool hasWildCards = false;
   bool wildCardMatchAll = false;
-  u32 nFiles = 0;
+  uint32_t nFiles = 0;
   if (std::strpbrk(Pattern, "*?") != nullptr)
   {
     hasWildCards = true;
@@ -488,7 +488,7 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
         outData.FileName = std::string(utf8_filename);
     }
 
-    outData.Size = (u64)wfd.nFileSizeHigh << 32 | (u64)wfd.nFileSizeLow;
+    outData.Size = (uint64_t)wfd.nFileSizeHigh << 32 | (uint64_t)wfd.nFileSizeLow;
 
     nFiles++;
     pResults->push_back(std::move(outData));
@@ -500,8 +500,8 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
 }
 
 #else
-static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, const char* Path, const char* Pattern,
-                              u32 Flags, FindResultsArray* pResults)
+static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPath, const char* Path, const char* Pattern,
+                              uint32_t Flags, FindResultsArray* pResults)
 {
   std::string tempStr;
   if (Path)
@@ -523,7 +523,7 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
   // small speed optimization for '*' case
   bool hasWildCards = false;
   bool wildCardMatchAll = false;
-  u32 nFiles = 0;
+  uint32_t nFiles = 0;
   if (std::strpbrk(Pattern, "*?"))
   {
     hasWildCards = true;
@@ -589,7 +589,7 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
         continue;
     }
 
-    outData.Size = static_cast<u64>(sdir_size);
+    outData.Size = static_cast<uint64_t>(sdir_size);
 
     // match the filename
     if (hasWildCards)
@@ -628,7 +628,7 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
 }
 #endif
 
-bool FindFiles(const char* Path, const char* Pattern, u32 Flags, FindResultsArray* pResults)
+bool FindFiles(const char* Path, const char* Pattern, uint32_t Flags, FindResultsArray* pResults)
 {
   // has a path
   if (Path[0] == '\0')
@@ -683,7 +683,7 @@ RFILE* OpenRFile(const char *filename, const char *mode)
    return output;
 }
 
-s64 FSeek64(RFILE* fp, s64 offset, int whence)
+int64_t FSeek64(RFILE* fp, int64_t offset, int whence)
 {
    int seek_position = -1;
 
@@ -706,7 +706,7 @@ s64 FSeek64(RFILE* fp, s64 offset, int whence)
    return filestream_seek(fp, offset, seek_position);
 }
 
-s64 FTell64(RFILE* fp)
+int64_t FTell64(RFILE* fp)
 {
 	return filestream_tell(fp);
 }

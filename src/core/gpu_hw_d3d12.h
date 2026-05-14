@@ -35,21 +35,21 @@ public:
 protected:
   void ClearDisplay() override;
   void UpdateDisplay() override;
-  void ReadVRAM(u32 x, u32 y, u32 width, u32 height) override;
-  void FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color) override;
-  void UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, bool set_mask, bool check_mask) override;
-  void CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height) override;
+  void ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
+  void FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) override;
+  void UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask) override;
+  void CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height) override;
   void UpdateVRAMReadTexture() override;
   void UpdateDepthBufferFromMaskBit() override;
   void ClearDepthBuffer() override;
   void SetScissorFromDrawingArea() override;
-  void MapBatchVertexPointer(u32 required_vertices) override;
-  void UnmapBatchVertexPointer(u32 used_vertices) override;
-  void UploadUniformBuffer(const void* data, u32 data_size) override;
-  void DrawBatchVertices(BatchRenderMode render_mode, u32 base_vertex, u32 num_vertices) override;
+  void MapBatchVertexPointer(uint32_t required_vertices) override;
+  void UnmapBatchVertexPointer(uint32_t used_vertices) override;
+  void UploadUniformBuffer(const void* data, uint32_t data_size) override;
+  void DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices) override;
 
 private:
-  static constexpr u32 MAX_PUSH_CONSTANTS_SIZE = 64, TEXTURE_REPLACEMENT_BUFFER_SIZE = 64 * 1024 * 1024;
+  static constexpr uint32_t MAX_PUSH_CONSTANTS_SIZE = 64, TEXTURE_REPLACEMENT_BUFFER_SIZE = 64 * 1024 * 1024;
   void SetCapabilities();
   void DestroyResources();
 
@@ -89,8 +89,8 @@ private:
   // Both helpers serialise their cache + array mutations through
   // m_batch_shader_mutex. The fast path is one uncontended lock
   // per DrawBatchVertices call.
-  ComPtr<ID3DBlob> GetBatchFragmentShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
-  ComPtr<ID3D12PipelineState> GetBatchPipeline(u8 depth_test, u8 render_mode, u8 texture_mode, u8 transparency_mode,
+  ComPtr<ID3DBlob> GetBatchFragmentShader(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
+  ComPtr<ID3D12PipelineState> GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode,
                                                bool dithering, bool interlacing);
 
   // Background-thread worker for 'Lazy' precompile mode: walks the
@@ -104,7 +104,7 @@ private:
   void StopShaderCompileThread();
 
   bool CreateTextureReplacementStreamBuffer();
-  bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, u32 dst_x, u32 dst_y, u32 width, u32 height);
+  bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height);
 
   ComPtr<ID3D12RootSignature> m_batch_root_signature;
   ComPtr<ID3D12RootSignature> m_single_sampler_root_signature;
@@ -124,7 +124,7 @@ private:
   D3D12::StreamBuffer m_texture_stream_buffer;
   D3D12::DescriptorHandle m_texture_stream_buffer_srv;
 
-  u32 m_current_uniform_buffer_offset = 0;
+  uint32_t m_current_uniform_buffer_offset = 0;
 
   // Batch PSO matrix. The ComPtr array owns the reference; the
   // parallel atomic-raw-pointer array exists so DrawBatchVertices

@@ -163,7 +163,7 @@ bool StagingBuffer::AllocateBuffer(Type type, VkDeviceSize size, VkBufferUsageFl
   VkMemoryRequirements requirements;
   vkGetBufferMemoryRequirements(g_vulkan_context->GetDevice(), *out_buffer, &requirements);
 
-  u32 type_index;
+  uint32_t type_index;
   if (type == Type::Upload)
     type_index = g_vulkan_context->GetUploadMemoryType(requirements.memoryTypeBits, out_coherent);
   else

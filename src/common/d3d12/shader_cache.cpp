@@ -15,12 +15,12 @@ namespace D3D12 {
 #pragma pack(push, 1)
 struct CacheIndexEntry
 {
-  u64 source_hash_low;
-  u64 source_hash_high;
-  u32 source_length;
-  u32 shader_type;
-  u32 file_offset;
-  u32 blob_size;
+  uint64_t source_hash_low;
+  uint64_t source_hash_high;
+  uint32_t source_length;
+  uint32_t shader_type;
+  uint32_t file_offset;
+  uint32_t blob_size;
 };
 #pragma pack(pop)
 
@@ -134,7 +134,7 @@ bool ShaderCache::CreateNew(const std::string& index_filename, const std::string
     return false;
   }
 
-  const u32 index_version = FILE_VERSION;
+  const uint32_t index_version = FILE_VERSION;
   if (rfwrite(&index_version, sizeof(index_version), 1, index_file) != 1)
   {
     Log_ErrorPrintf("Failed to write version to index file '%s'", index_filename.c_str());
@@ -164,7 +164,7 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   if (!index_file)
     return false;
 
-  u32 file_version;
+  uint32_t file_version;
   if (rfread(&file_version, sizeof(file_version), 1, index_file) != 1 || file_version != FILE_VERSION)
   {
     Log_ErrorPrintf("Bad file version in '%s'", index_filename.c_str());
@@ -183,7 +183,7 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   }
 
   rfseek(blob_file, 0, SEEK_END);
-  const u32 blob_file_size = static_cast<u32>(rftell(blob_file));
+  const uint32_t blob_file_size = static_cast<uint32_t>(rftell(blob_file));
 
   for (;;)
   {
@@ -249,41 +249,41 @@ union MD5Hash
 {
   struct
   {
-    u64 low;
-    u64 high;
+    uint64_t low;
+    uint64_t high;
   };
-  u8 hash[16];
+  uint8_t hash[16];
 };
 
 ShaderCache::CacheIndexKey ShaderCache::GetShaderCacheKey(EntryType type, const std::string_view& shader_code)
 {
   MD5Hash h;
   MD5Digest digest;
-  digest.Update(shader_code.data(), static_cast<u32>(shader_code.length()));
+  digest.Update(shader_code.data(), static_cast<uint32_t>(shader_code.length()));
   digest.Final(h.hash);
 
-  return CacheIndexKey{h.low, h.high, static_cast<u32>(shader_code.length()), type};
+  return CacheIndexKey{h.low, h.high, static_cast<uint32_t>(shader_code.length()), type};
 }
 
 ShaderCache::CacheIndexKey ShaderCache::GetPipelineCacheKey(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc)
 {
   MD5Digest digest;
-  u32 length = sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
+  uint32_t length = sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
 
   if (gpdesc.VS.BytecodeLength > 0)
   {
-    digest.Update(gpdesc.VS.pShaderBytecode, static_cast<u32>(gpdesc.VS.BytecodeLength));
-    length += static_cast<u32>(gpdesc.VS.BytecodeLength);
+    digest.Update(gpdesc.VS.pShaderBytecode, static_cast<uint32_t>(gpdesc.VS.BytecodeLength));
+    length += static_cast<uint32_t>(gpdesc.VS.BytecodeLength);
   }
   if (gpdesc.GS.BytecodeLength > 0)
   {
-    digest.Update(gpdesc.GS.pShaderBytecode, static_cast<u32>(gpdesc.GS.BytecodeLength));
-    length += static_cast<u32>(gpdesc.GS.BytecodeLength);
+    digest.Update(gpdesc.GS.pShaderBytecode, static_cast<uint32_t>(gpdesc.GS.BytecodeLength));
+    length += static_cast<uint32_t>(gpdesc.GS.BytecodeLength);
   }
   if (gpdesc.PS.BytecodeLength > 0)
   {
-    digest.Update(gpdesc.PS.pShaderBytecode, static_cast<u32>(gpdesc.PS.BytecodeLength));
-    length += static_cast<u32>(gpdesc.PS.BytecodeLength);
+    digest.Update(gpdesc.PS.pShaderBytecode, static_cast<uint32_t>(gpdesc.PS.BytecodeLength));
+    length += static_cast<uint32_t>(gpdesc.PS.BytecodeLength);
   }
 
   digest.Update(&gpdesc.BlendState, sizeof(gpdesc.BlendState));
@@ -291,10 +291,10 @@ ShaderCache::CacheIndexKey ShaderCache::GetPipelineCacheKey(const D3D12_GRAPHICS
   digest.Update(&gpdesc.RasterizerState, sizeof(gpdesc.RasterizerState));
   digest.Update(&gpdesc.DepthStencilState, sizeof(gpdesc.DepthStencilState));
 
-  for (u32 i = 0; i < gpdesc.InputLayout.NumElements; i++)
+  for (uint32_t i = 0; i < gpdesc.InputLayout.NumElements; i++)
   {
     const D3D12_INPUT_ELEMENT_DESC& ie = gpdesc.InputLayout.pInputElementDescs[i];
-    digest.Update(ie.SemanticName, static_cast<u32>(std::strlen(ie.SemanticName)));
+    digest.Update(ie.SemanticName, static_cast<uint32_t>(std::strlen(ie.SemanticName)));
     digest.Update(&ie.SemanticIndex, sizeof(ie.SemanticIndex));
     digest.Update(&ie.Format, sizeof(ie.Format));
     digest.Update(&ie.InputSlot, sizeof(ie.InputSlot));
@@ -401,14 +401,14 @@ ShaderCache::ComPtr<ID3DBlob> ShaderCache::CompileAndAddShaderBlob(const CacheIn
     return blob;
 
   CacheIndexData data;
-  data.file_offset = static_cast<u32>(rftell(m_shader_blob_file));
-  data.blob_size = static_cast<u32>(blob->GetBufferSize());
+  data.file_offset = static_cast<uint32_t>(rftell(m_shader_blob_file));
+  data.blob_size = static_cast<uint32_t>(blob->GetBufferSize());
 
   CacheIndexEntry entry = {};
   entry.source_hash_low = key.source_hash_low;
   entry.source_hash_high = key.source_hash_high;
   entry.source_length = key.source_length;
-  entry.shader_type = static_cast<u32>(key.type);
+  entry.shader_type = static_cast<uint32_t>(key.type);
   entry.blob_size = data.blob_size;
   entry.file_offset = data.file_offset;
 
@@ -448,14 +448,14 @@ ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& ke
   }
 
   CacheIndexData data;
-  data.file_offset = static_cast<u32>(rftell(m_pipeline_blob_file));
-  data.blob_size = static_cast<u32>(blob->GetBufferSize());
+  data.file_offset = static_cast<uint32_t>(rftell(m_pipeline_blob_file));
+  data.blob_size = static_cast<uint32_t>(blob->GetBufferSize());
 
   CacheIndexEntry entry = {};
   entry.source_hash_low = key.source_hash_low;
   entry.source_hash_high = key.source_hash_high;
   entry.source_length = key.source_length;
-  entry.shader_type = static_cast<u32>(key.type);
+  entry.shader_type = static_cast<uint32_t>(key.type);
   entry.blob_size = data.blob_size;
   entry.file_offset = data.file_offset;
 

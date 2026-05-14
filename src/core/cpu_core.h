@@ -16,22 +16,22 @@ inline constexpr VirtualMemoryAddress RESET_VECTOR = UINT32_C(0xBFC00000);
 inline constexpr PhysicalMemoryAddress DCACHE_LOCATION = UINT32_C(0x1F800000),
                                        DCACHE_LOCATION_MASK = UINT32_C(0xFFFFFC00),
                                        DCACHE_OFFSET_MASK = UINT32_C(0x000003FF), DCACHE_SIZE = UINT32_C(0x00000400),
-                                       ICACHE_SIZE = UINT32_C(0x00001000), ICACHE_SLOTS = ICACHE_SIZE / sizeof(u32),
+                                       ICACHE_SIZE = UINT32_C(0x00001000), ICACHE_SLOTS = ICACHE_SIZE / sizeof(uint32_t),
                                        ICACHE_LINE_SIZE = 16, ICACHE_LINES = ICACHE_SIZE / ICACHE_LINE_SIZE,
                                        ICACHE_SLOTS_PER_LINE = ICACHE_SLOTS / ICACHE_LINES,
                                        ICACHE_TAG_ADDRESS_MASK = 0xFFFFFFF0u, ICACHE_INVALID_BITS = 0x0Fu;
 
 union CacheControl
 {
-  u32 bits;
+  uint32_t bits;
 
-  BitField<u32, bool, 0, 1> lock_mode;
-  BitField<u32, bool, 1, 1> invalidate_mode;
-  BitField<u32, bool, 2, 1> tag_test_mode;
-  BitField<u32, bool, 3, 1> dcache_scratchpad;
-  BitField<u32, bool, 7, 1> dcache_enable;
-  BitField<u32, u8, 8, 2> icache_fill_size; // actually dcache? icache always fills to 16 bytes
-  BitField<u32, bool, 11, 1> icache_enable;
+  BitField<uint32_t, bool, 0, 1> lock_mode;
+  BitField<uint32_t, bool, 1, 1> invalidate_mode;
+  BitField<uint32_t, bool, 2, 1> tag_test_mode;
+  BitField<uint32_t, bool, 3, 1> dcache_scratchpad;
+  BitField<uint32_t, bool, 7, 1> dcache_enable;
+  BitField<uint32_t, uint8_t, 8, 2> icache_fill_size; // actually dcache? icache always fills to 16 bytes
+  BitField<uint32_t, bool, 11, 1> icache_enable;
 };
 
 struct State
@@ -47,7 +47,7 @@ struct State
 
   // address of the instruction currently being executed
   Instruction current_instruction = {};
-  u32 current_instruction_pc = 0;
+  uint32_t current_instruction_pc = 0;
   bool current_instruction_in_branch_delay_slot = false;
   bool current_instruction_was_branch_taken = false;
   bool next_instruction_is_branch_delay_slot = false;
@@ -58,9 +58,9 @@ struct State
 
   // load delays
   Reg load_delay_reg = Reg::count;
-  u32 load_delay_value = 0;
+  uint32_t load_delay_value = 0;
   Reg next_load_delay_reg = Reg::count;
-  u32 next_load_delay_value = 0;
+  uint32_t next_load_delay_value = 0;
 
   CacheControl cache_control{0};
 
@@ -70,12 +70,12 @@ struct State
   // 4 bytes of padding here on x64
   bool use_debug_dispatcher = false;
 
-  u8* fastmem_base = nullptr;
+  uint8_t* fastmem_base = nullptr;
 
   // data cache (used as scratchpad)
-  std::array<u8, DCACHE_SIZE> dcache = {};
-  std::array<u32, ICACHE_LINES> icache_tags = {};
-  std::array<u8, ICACHE_SIZE> icache_data = {};
+  std::array<uint8_t, DCACHE_SIZE> dcache = {};
+  std::array<uint32_t, ICACHE_LINES> icache_tags = {};
+  std::array<uint8_t, ICACHE_SIZE> icache_data = {};
 
   // Compute the byte offset of a register within the State struct, for the
   // recompiler's EmitLoadCPUStructField / EmitStoreCPUStructField helpers.
@@ -91,20 +91,20 @@ struct State
   // constexpr semantics, not specific to any deployment target.
   //
   // Dropping constexpr costs nothing at runtime: every call site passes a
-  // runtime u32 (guest_reg / GTE register index), so the value is computed
+  // runtime uint32_t (guest_reg / GTE register index), so the value is computed
   // at runtime in either case. The two inner offsetof calls remain
   // compile-time constants regardless of the constexpr keyword on the
   // wrapper, and the compiler folds them through normal optimization just
   // as well as it would through constexpr evaluation. Verified at -O3
   // with GCC: object files for cpu_recompiler_code_generator{,_generic}.o
   // are bit-identical with and without the keyword.
-  static u32 GPRRegisterOffset(u32 index)
+  static uint32_t GPRRegisterOffset(uint32_t index)
   {
-    return offsetof(State, regs) + offsetof(Registers, r) + (sizeof(u32) * index);
+    return offsetof(State, regs) + offsetof(Registers, r) + (sizeof(uint32_t) * index);
   }
-  static u32 GTERegisterOffset(u32 index)
+  static uint32_t GTERegisterOffset(uint32_t index)
   {
-    return offsetof(State, gte_regs) + offsetof(GTE::Regs, r32) + (sizeof(u32) * index);
+    return offsetof(State, gte_regs) + offsetof(GTE::Regs, r32) + (sizeof(uint32_t) * index);
   }
 };
 
@@ -158,16 +158,16 @@ ALWAYS_INLINE bool InKernelMode()
 // Memory reads variants which do not raise exceptions.
 // These methods do not support writing to MMIO addresses with side effects, and are
 // thus safe to call from the UI thread in debuggers, for example.
-bool SafeReadMemoryByte(VirtualMemoryAddress addr, u8* value);
-bool SafeReadMemoryHalfWord(VirtualMemoryAddress addr, u16* value);
-bool SafeReadMemoryWord(VirtualMemoryAddress addr, u32* value);
-bool SafeWriteMemoryByte(VirtualMemoryAddress addr, u8 value);
-bool SafeWriteMemoryHalfWord(VirtualMemoryAddress addr, u16 value);
-bool SafeWriteMemoryWord(VirtualMemoryAddress addr, u32 value);
+bool SafeReadMemoryByte(VirtualMemoryAddress addr, uint8_t* value);
+bool SafeReadMemoryHalfWord(VirtualMemoryAddress addr, uint16_t* value);
+bool SafeReadMemoryWord(VirtualMemoryAddress addr, uint32_t* value);
+bool SafeWriteMemoryByte(VirtualMemoryAddress addr, uint8_t value);
+bool SafeWriteMemoryHalfWord(VirtualMemoryAddress addr, uint16_t value);
+bool SafeWriteMemoryWord(VirtualMemoryAddress addr, uint32_t value);
 
 // External IRQs
-void SetExternalInterrupt(u8 bit);
-void ClearExternalInterrupt(u8 bit);
+void SetExternalInterrupt(uint8_t bit);
+void ClearExternalInterrupt(uint8_t bit);
 
 // Breakpoints
 void ClearBreakpoints();

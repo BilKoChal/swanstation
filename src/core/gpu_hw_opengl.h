@@ -41,18 +41,18 @@ public:
                               bool threaded_presentation) override;
   void DestroyRenderDevice() override;
 
-  void ResizeRenderWindow(s32 new_window_width, s32 new_window_height) override;
+  void ResizeRenderWindow(int32_t new_window_width, int32_t new_window_height) override;
 
   bool ChangeRenderWindow(const WindowInfo& new_wi) override;
 
-  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, u32 layers, u32 levels, u32 samples,
-                                                    HostDisplayPixelFormat format, const void* data, u32 data_stride,
+  std::unique_ptr<HostDisplayTexture> CreateTexture(uint32_t width, uint32_t height, uint32_t layers, uint32_t levels, uint32_t samples,
+                                                    HostDisplayPixelFormat format, const void* data, uint32_t data_stride,
                                                     bool dynamic = false) override;
   bool SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const override;
-  bool BeginSetDisplayPixels(HostDisplayPixelFormat format, u32 width, u32 height, void** out_buffer,
-                             u32* out_pitch) override;
+  bool BeginSetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height, void** out_buffer,
+                             uint32_t* out_pitch) override;
   void EndSetDisplayPixels() override;
-  bool SetDisplayPixels(HostDisplayPixelFormat format, u32 width, u32 height, const void* buffer, u32 pitch) override;
+  bool SetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height, const void* buffer, uint32_t pitch) override;
 
   bool Render() override;
 
@@ -60,11 +60,11 @@ protected:
   bool CreateResources() override;
   void DestroyResources() override;
   void RenderSoftwareCursor() override;
-  void RenderSoftwareCursor(s32 left, s32 top, s32 width, s32 height, HostDisplayTexture* texture_handle);
+  void RenderSoftwareCursor(int32_t left, int32_t top, int32_t width, int32_t height, HostDisplayTexture* texture_handle);
 
-  void RenderDisplay(s32 left, s32 bottom, s32 width, s32 height, void* texture_handle, u32 texture_width,
-                     s32 texture_height, s32 texture_view_x, s32 texture_view_y, s32 texture_view_width,
-                     s32 texture_view_height);
+  void RenderDisplay(int32_t left, int32_t bottom, int32_t width, int32_t height, void* texture_handle, uint32_t texture_width,
+                     int32_t texture_height, int32_t texture_view_x, int32_t texture_view_y, int32_t texture_view_width,
+                     int32_t texture_view_height);
 
 private:
   const char* GetGLSLVersionString() const;
@@ -79,9 +79,9 @@ private:
 
   GLuint m_display_pixels_texture_id = 0;
   std::unique_ptr<GL::StreamBuffer> m_display_pixels_texture_pbo;
-  u32 m_display_pixels_texture_pbo_map_offset = 0;
-  u32 m_display_pixels_texture_pbo_map_size = 0;
-  std::vector<u8> m_gles_pixels_repack_buffer;
+  uint32_t m_display_pixels_texture_pbo_map_offset = 0;
+  uint32_t m_display_pixels_texture_pbo_map_size = 0;
+  std::vector<uint8_t> m_gles_pixels_repack_buffer;
 
   bool m_is_gles = false;
 };
@@ -105,39 +105,39 @@ public:
 protected:
   void ClearDisplay() override;
   void UpdateDisplay() override;
-  void ReadVRAM(u32 x, u32 y, u32 width, u32 height) override;
-  void FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color) override;
-  void UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, bool set_mask, bool check_mask) override;
-  void CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height) override;
+  void ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
+  void FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) override;
+  void UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask) override;
+  void CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height) override;
   void UpdateVRAMReadTexture() override;
   void UpdateDepthBufferFromMaskBit() override;
   void ClearDepthBuffer() override;
   void SetScissorFromDrawingArea() override;
-  void MapBatchVertexPointer(u32 required_vertices) override;
-  void UnmapBatchVertexPointer(u32 used_vertices) override;
-  void UploadUniformBuffer(const void* data, u32 data_size) override;
-  void DrawBatchVertices(BatchRenderMode render_mode, u32 base_vertex, u32 num_vertices) override;
+  void MapBatchVertexPointer(uint32_t required_vertices) override;
+  void UnmapBatchVertexPointer(uint32_t used_vertices) override;
+  void UploadUniformBuffer(const void* data, uint32_t data_size) override;
+  void DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices) override;
 
 private:
   struct GLStats
   {
-    u32 num_batches;
-    u32 num_vertices;
-    u32 num_vram_reads;
-    u32 num_vram_writes;
-    u32 num_vram_read_texture_updates;
-    u32 num_uniform_buffer_updates;
+    uint32_t num_batches;
+    uint32_t num_vertices;
+    uint32_t num_vram_reads;
+    uint32_t num_vram_writes;
+    uint32_t num_vram_read_texture_updates;
+    uint32_t num_uniform_buffer_updates;
   };
 
   ALWAYS_INLINE bool IsGLES() const { return (m_render_api == HostDisplay::RenderAPI::OpenGLES); }
 
-  std::tuple<s32, s32> ConvertToFramebufferCoordinates(s32 x, s32 y);
+  std::tuple<int32_t, int32_t> ConvertToFramebufferCoordinates(int32_t x, int32_t y);
 
   void SetCapabilities();
   bool CreateFramebuffer();
   void ClearFramebuffer();
-  void CopyFramebufferForState(GLenum target, GLuint src_texture, u32 src_fbo, u32 src_x, u32 src_y, GLuint dst_texture,
-                               u32 dst_fbo, u32 dst_x, u32 dst_y, u32 width, u32 height);
+  void CopyFramebufferForState(GLenum target, GLuint src_texture, uint32_t src_fbo, uint32_t src_x, uint32_t src_y, GLuint dst_texture,
+                               uint32_t dst_fbo, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height);
 
   bool CreateVertexBuffer();
   bool CreateUniformBuffer();
@@ -160,15 +160,15 @@ private:
   // applying the Reserved_*Direct16Bit dedup at the matrix level
   // by re-linking the program from the canonical mode's source
   // string (the shader cache makes the second link cheap).
-  const GL::Program* GetBatchProgram(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
+  const GL::Program* GetBatchProgram(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
 
   void SetDepthFunc();
   void SetDepthFunc(GLenum func);
   void SetBlendMode();
 
-  bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, u32 dst_x, u32 dst_y, u32 width, u32 height);
-  void DownsampleFramebuffer(GL::Texture& source, u32 left, u32 top, u32 width, u32 height);
-  void DownsampleFramebufferBoxFilter(GL::Texture& source, u32 left, u32 top, u32 width, u32 height);
+  bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height);
+  void DownsampleFramebuffer(GL::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height);
+  void DownsampleFramebufferBoxFilter(GL::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height);
 
   // downsample texture - used for readbacks at >1xIR.
   GL::Texture m_vram_texture;
@@ -212,8 +212,8 @@ private:
   std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
   bool m_use_binding_layout = false;
 
-  u32 m_uniform_buffer_alignment = 1;
-  u32 m_texture_stream_buffer_size = 0;
+  uint32_t m_uniform_buffer_alignment = 1;
+  uint32_t m_texture_stream_buffer_size = 0;
 
   bool m_use_texture_buffer_for_vram_writes = false;
   bool m_use_ssbo_for_vram_writes = false;

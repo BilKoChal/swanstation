@@ -22,7 +22,7 @@ protected:
 
 private:
   RFILE* m_fp = nullptr;
-  u64 m_file_position = 0;
+  uint64_t m_file_position = 0;
 
   CDSubChannelReplacement m_sbi;
 };
@@ -45,11 +45,11 @@ bool CDImageBin::Open(const char* filename, Common::Error* error)
     return false;
   }
 
-  const u32 track_sector_size = RAW_SECTOR_SIZE;
+  const uint32_t track_sector_size = RAW_SECTOR_SIZE;
 
   // determine the length from the file
   rfseek(m_fp, 0, SEEK_END);
-  const u32 file_size = static_cast<u32>(rftell(m_fp));
+  const uint32_t file_size = static_cast<uint32_t>(rftell(m_fp));
   rfseek(m_fp, 0, SEEK_SET);
 
   m_lba_count = file_size / track_sector_size;
@@ -59,11 +59,11 @@ bool CDImageBin::Open(const char* filename, Common::Error* error)
   control.data = mode != TrackMode::Audio;
 
   // Two seconds default pregap.
-  const u32 pregap_frames = 2 * FRAMES_PER_SECOND;
+  const uint32_t pregap_frames = 2 * FRAMES_PER_SECOND;
   Index pregap_index = {};
   pregap_index.file_sector_size = track_sector_size;
   pregap_index.start_lba_on_disc = 0;
-  pregap_index.start_lba_in_track = static_cast<LBA>(-static_cast<s32>(pregap_frames));
+  pregap_index.start_lba_in_track = static_cast<LBA>(-static_cast<int32_t>(pregap_frames));
   pregap_index.length = pregap_frames;
   pregap_index.track_number = 1;
   pregap_index.index_number = 0;
@@ -88,7 +88,7 @@ bool CDImageBin::Open(const char* filename, Common::Error* error)
 
   // Assume a single track.
   m_tracks.push_back(
-    Track{static_cast<u32>(1), data_index.start_lba_on_disc, static_cast<u32>(0), m_lba_count, mode, control});
+    Track{static_cast<uint32_t>(1), data_index.start_lba_on_disc, static_cast<uint32_t>(0), m_lba_count, mode, control});
 
   AddLeadOutIndex();
 
@@ -112,7 +112,7 @@ bool CDImageBin::HasNonStandardSubchannel() const
 
 bool CDImageBin::ReadSectorFromIndex(void* buffer, const Index& index, LBA lba_in_index)
 {
-  const u64 file_position = index.file_offset + (static_cast<u64>(lba_in_index) * index.file_sector_size);
+  const uint64_t file_position = index.file_offset + (static_cast<uint64_t>(lba_in_index) * index.file_sector_size);
   if (m_file_position != file_position)
   {
     if (rfseek(m_fp, static_cast<long>(file_position), SEEK_SET) != 0)

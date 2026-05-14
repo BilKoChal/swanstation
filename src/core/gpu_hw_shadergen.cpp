@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <glad.h>
 
-GPU_HW_ShaderGen::GPU_HW_ShaderGen(HostDisplay::RenderAPI render_api, u32 resolution_scale, u32 multisamples,
+GPU_HW_ShaderGen::GPU_HW_ShaderGen(HostDisplay::RenderAPI render_api, uint32_t resolution_scale, uint32_t multisamples,
                                    bool per_sample_shading, bool true_color, bool scaled_dithering,
                                    GPUTextureFilter texture_filtering, bool uv_limits, bool pgxp_depth,
                                    bool disable_color_perspective, bool supports_dual_source_blend)
@@ -703,7 +703,7 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
     ss << "CONSTANT int[16] s_dither_values = int[16]( ";
   else
     ss << "CONSTANT int s_dither_values[] = {";
-  for (u32 i = 0; i < 16; i++)
+  for (uint32_t i = 0; i < 16; i++)
   {
     if (i > 0)
       ss << ", ";

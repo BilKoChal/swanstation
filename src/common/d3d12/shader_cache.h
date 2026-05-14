@@ -55,13 +55,13 @@ public:
   ComPtr<ID3D12PipelineState> GetPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
 
 private:
-  static constexpr u32 FILE_VERSION = 1;
+  static constexpr uint32_t FILE_VERSION = 1;
 
   struct CacheIndexKey
   {
-    u64 source_hash_low;
-    u64 source_hash_high;
-    u32 source_length;
+    uint64_t source_hash_low;
+    uint64_t source_hash_high;
+    uint32_t source_length;
     EntryType type;
 
     bool operator==(const CacheIndexKey& key) const;
@@ -80,8 +80,8 @@ private:
 
   struct CacheIndexData
   {
-    u32 file_offset;
-    u32 blob_size;
+    uint32_t file_offset;
+    uint32_t blob_size;
   };
 
   using CacheIndex = std::unordered_map<CacheIndexKey, CacheIndexData, CacheIndexEntryHasher>;

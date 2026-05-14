@@ -2,22 +2,22 @@
 #include "common/types.h"
 
 // Physical memory addresses are 32-bits wide
-using PhysicalMemoryAddress = u32;
-using VirtualMemoryAddress = u32;
+using PhysicalMemoryAddress = uint32_t;
+using VirtualMemoryAddress = uint32_t;
 
-enum class MemoryAccessType : u32
+enum class MemoryAccessType : uint32_t
 {
   Read,
   Write
 };
-enum class MemoryAccessSize : u32
+enum class MemoryAccessSize : uint32_t
 {
   Byte,
   HalfWord,
   Word
 };
 
-using TickCount = s32;
+using TickCount = int32_t;
 
 enum class ConsoleRegion
 {
@@ -28,7 +28,7 @@ enum class ConsoleRegion
   Count
 };
 
-enum class DiscRegion : u8
+enum class DiscRegion : uint8_t
 {
   NTSC_J, // SCEI
   NTSC_U, // SCEA
@@ -37,7 +37,7 @@ enum class DiscRegion : u8
   Count
 };
 
-enum class CPUExecutionMode : u8
+enum class CPUExecutionMode : uint8_t
 {
   Interpreter,
   CachedInterpreter,
@@ -45,14 +45,14 @@ enum class CPUExecutionMode : u8
   Count
 };
 
-enum class PGXPMode : u8
+enum class PGXPMode : uint8_t
 {
   Disabled,
   Memory,
   CPU
 };
 
-enum class GPURenderer : u8
+enum class GPURenderer : uint8_t
 {
 #ifdef _WIN32
   HardwareD3D11,
@@ -64,7 +64,7 @@ enum class GPURenderer : u8
   Count
 };
 
-enum class GPUTextureFilter : u8
+enum class GPUTextureFilter : uint8_t
 {
   Nearest,
   Bilinear,
@@ -76,7 +76,7 @@ enum class GPUTextureFilter : u8
   Count
 };
 
-enum class GPUDownsampleMode : u8
+enum class GPUDownsampleMode : uint8_t
 {
   Disabled,
   Box,
@@ -110,7 +110,7 @@ enum class GPUDownsampleMode : u8
 //     otherwise the entry is just picked up. After the background
 //     thread finishes, behaviour is identical to Enabled.
 //     This is the default.
-enum class GPUShaderPrecompileMode : u8
+enum class GPUShaderPrecompileMode : uint8_t
 {
   Disabled,
   Enabled,
@@ -118,7 +118,7 @@ enum class GPUShaderPrecompileMode : u8
   Count
 };
 
-enum class DisplayCropMode : u8
+enum class DisplayCropMode : uint8_t
 {
   None,
   Overscan,
@@ -126,7 +126,7 @@ enum class DisplayCropMode : u8
   Count
 };
 
-enum class DisplayAspectRatio : u8
+enum class DisplayAspectRatio : uint8_t
 {
   Auto,
   MatchWindow,
@@ -174,7 +174,7 @@ enum class MultitapMode
   Count
 };
 
-inline constexpr u32 NUM_CONTROLLER_AND_CARD_PORTS = 8, NUM_MULTITAPS = 2;
+inline constexpr uint32_t NUM_CONTROLLER_AND_CARD_PORTS = 8, NUM_MULTITAPS = 2;
 
 enum class CPUFastmemMode
 {

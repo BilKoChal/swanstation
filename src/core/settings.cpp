@@ -22,27 +22,27 @@ bool SettingInfo::BooleanDefaultValue() const
   return default_value ? StringUtil::FromChars<bool>(default_value).value_or(false) : false;
 }
 
-s32 SettingInfo::IntegerDefaultValue() const
+int32_t SettingInfo::IntegerDefaultValue() const
 {
-  return default_value ? StringUtil::FromChars<s32>(default_value).value_or(0) : 0;
+  return default_value ? StringUtil::FromChars<int32_t>(default_value).value_or(0) : 0;
 }
 
-s32 SettingInfo::IntegerMinValue() const
+int32_t SettingInfo::IntegerMinValue() const
 {
-  static constexpr s32 fallback_value = std::numeric_limits<s32>::min();
-  return min_value ? StringUtil::FromChars<s32>(min_value).value_or(fallback_value) : fallback_value;
+  static constexpr int32_t fallback_value = std::numeric_limits<int32_t>::min();
+  return min_value ? StringUtil::FromChars<int32_t>(min_value).value_or(fallback_value) : fallback_value;
 }
 
-s32 SettingInfo::IntegerMaxValue() const
+int32_t SettingInfo::IntegerMaxValue() const
 {
-  static constexpr s32 fallback_value = std::numeric_limits<s32>::max();
-  return max_value ? StringUtil::FromChars<s32>(max_value).value_or(fallback_value) : fallback_value;
+  static constexpr int32_t fallback_value = std::numeric_limits<int32_t>::max();
+  return max_value ? StringUtil::FromChars<int32_t>(max_value).value_or(fallback_value) : fallback_value;
 }
 
-s32 SettingInfo::IntegerStepValue() const
+int32_t SettingInfo::IntegerStepValue() const
 {
-  static constexpr s32 fallback_value = 1;
-  return step_value ? StringUtil::FromChars<s32>(step_value).value_or(fallback_value) : fallback_value;
+  static constexpr int32_t fallback_value = 1;
+  return step_value ? StringUtil::FromChars<int32_t>(step_value).value_or(fallback_value) : fallback_value;
 }
 
 float SettingInfo::FloatDefaultValue() const
@@ -84,12 +84,12 @@ std::array<TinyString, NUM_CONTROLLER_AND_CARD_PORTS> Settings::GeneratePortLabe
 
   std::array<TinyString, NUM_CONTROLLER_AND_CARD_PORTS> labels;
 
-  u32 logical_port = 0;
-  for (u32 physical_port = 0; physical_port < NUM_MULTITAPS; physical_port++)
+  uint32_t logical_port = 0;
+  for (uint32_t physical_port = 0; physical_port < NUM_MULTITAPS; physical_port++)
   {
     if (multitap_enabled_on_port[static_cast<size_t>(multitap_mode)][physical_port])
     {
-      for (u32 i = 0; i < 4; i++)
+      for (uint32_t i = 0; i < 4; i++)
       {
         labels[logical_port] = TinyString::FromFormat("Port %u%c", physical_port + 1u, 'A' + i);
         logical_port++;
@@ -105,24 +105,24 @@ std::array<TinyString, NUM_CONTROLLER_AND_CARD_PORTS> Settings::GeneratePortLabe
   return labels;
 }
 
-void Settings::CPUOverclockPercentToFraction(u32 percent, u32* numerator, u32* denominator)
+void Settings::CPUOverclockPercentToFraction(uint32_t percent, uint32_t* numerator, uint32_t* denominator)
 {
-  const u32 percent_gcd = std::gcd(percent, 100);
+  const uint32_t percent_gcd = std::gcd(percent, 100);
   *numerator = percent / percent_gcd;
   *denominator = 100u / percent_gcd;
 }
 
-u32 Settings::CPUOverclockFractionToPercent(u32 numerator, u32 denominator)
+uint32_t Settings::CPUOverclockFractionToPercent(uint32_t numerator, uint32_t denominator)
 {
   return (numerator * 100u) / denominator;
 }
 
-void Settings::SetCPUOverclockPercent(u32 percent)
+void Settings::SetCPUOverclockPercent(uint32_t percent)
 {
   CPUOverclockPercentToFraction(percent, &cpu_overclock_numerator, &cpu_overclock_denominator);
 }
 
-u32 Settings::GetCPUOverclockPercent() const
+uint32_t Settings::GetCPUOverclockPercent() const
 {
   return CPUOverclockFractionToPercent(cpu_overclock_numerator, cpu_overclock_denominator);
 }
@@ -141,7 +141,7 @@ void Settings::Load(LibretroSettingsInterface& si)
   enable_8mb_ram = si.GetBoolValue("Console", "Enable8MBRAM", false);
 
   apply_game_settings = si.GetBoolValue("Main", "ApplyGameSettings", true);
-  runahead_frames = static_cast<u32>(si.GetIntValue("Main", "RunaheadFrameCount", 0));
+  runahead_frames = static_cast<uint32_t>(si.GetIntValue("Main", "RunaheadFrameCount", 0));
 
   audio_fast_hook = si.GetBoolValue("Audio", "FastHook", true);
 
@@ -159,7 +159,7 @@ void Settings::Load(LibretroSettingsInterface& si)
 
   gpu_renderer = ParseRendererName(si.GetStringValue("GPU", "Renderer", GetRendererName(DEFAULT_GPU_RENDERER)).c_str())
                    .value_or(DEFAULT_GPU_RENDERER);
-  gpu_resolution_scale = static_cast<u32>(si.GetIntValue("GPU", "ResolutionScale", 1));
+  gpu_resolution_scale = static_cast<uint32_t>(si.GetIntValue("GPU", "ResolutionScale", 1));
   gpu_use_thread = si.GetBoolValue("GPU", "UseThread", true);
   gpu_use_software_renderer_for_readbacks = si.GetBoolValue("GPU", "UseSoftwareRendererForReadbacks", false);
   gpu_true_color = si.GetBoolValue("GPU", "TrueColor", false);
@@ -199,18 +199,18 @@ void Settings::Load(LibretroSettingsInterface& si)
     ParseDisplayAspectRatio(
       si.GetStringValue("Display", "AspectRatio", GetDisplayAspectRatioName(DEFAULT_DISPLAY_ASPECT_RATIO)).c_str())
       .value_or(DEFAULT_DISPLAY_ASPECT_RATIO);
-  display_aspect_ratio_custom_numerator = static_cast<u16>(
-    std::clamp<int>(si.GetIntValue("Display", "CustomAspectRatioNumerator", 4), 1, std::numeric_limits<u16>::max()));
-  display_aspect_ratio_custom_denominator = static_cast<u16>(
-    std::clamp<int>(si.GetIntValue("Display", "CustomAspectRatioDenominator", 3), 1, std::numeric_limits<u16>::max()));
+  display_aspect_ratio_custom_numerator = static_cast<uint16_t>(
+    std::clamp<int>(si.GetIntValue("Display", "CustomAspectRatioNumerator", 4), 1, std::numeric_limits<uint16_t>::max()));
+  display_aspect_ratio_custom_denominator = static_cast<uint16_t>(
+    std::clamp<int>(si.GetIntValue("Display", "CustomAspectRatioDenominator", 3), 1, std::numeric_limits<uint16_t>::max()));
   display_force_4_3_for_24bit = si.GetBoolValue("Display", "Force4_3For24Bit", false);
-  display_active_start_offset = static_cast<s16>(si.GetIntValue("Display", "ActiveStartOffset", 0));
-  display_active_end_offset = static_cast<s16>(si.GetIntValue("Display", "ActiveEndOffset", 0));
-  display_line_start_offset = static_cast<s8>(si.GetIntValue("Display", "LineStartOffset", 0));
-  display_line_end_offset = static_cast<s8>(si.GetIntValue("Display", "LineEndOffset", 0));
+  display_active_start_offset = static_cast<int16_t>(si.GetIntValue("Display", "ActiveStartOffset", 0));
+  display_active_end_offset = static_cast<int16_t>(si.GetIntValue("Display", "ActiveEndOffset", 0));
+  display_line_start_offset = static_cast<int8_t>(si.GetIntValue("Display", "LineStartOffset", 0));
+  display_line_end_offset = static_cast<int8_t>(si.GetIntValue("Display", "LineEndOffset", 0));
   display_show_osd_messages = si.GetBoolValue("Display", "ShowOSDMessages", true);
 
-  cdrom_readahead_sectors = static_cast<u8>(si.GetIntValue("CDROM", "ReadaheadSectors", DEFAULT_CDROM_READAHEAD_SECTORS));
+  cdrom_readahead_sectors = static_cast<uint8_t>(si.GetIntValue("CDROM", "ReadaheadSectors", DEFAULT_CDROM_READAHEAD_SECTORS));
   cdrom_region_check = si.GetBoolValue("CDROM", "RegionCheck", false);
   cdrom_load_image_to_ram = si.GetBoolValue("CDROM", "LoadImageToRAM", false);
   cdrom_precache_chd = si.GetBoolValue("CDROM", "PreCacheCHD", false);
@@ -338,7 +338,7 @@ static std::array<const char*, 3> s_cpu_execution_mode_display_names = {
 
 std::optional<CPUExecutionMode> Settings::ParseCPUExecutionMode(const char* str)
 {
-  u8 index = 0;
+  uint8_t index = 0;
   for (const char* name : s_cpu_execution_mode_names)
   {
     if (StringUtil::Strcasecmp(name, str) == 0)
@@ -352,24 +352,24 @@ std::optional<CPUExecutionMode> Settings::ParseCPUExecutionMode(const char* str)
 
 const char* Settings::GetCPUExecutionModeName(CPUExecutionMode mode)
 {
-  return s_cpu_execution_mode_names[static_cast<u8>(mode)];
+  return s_cpu_execution_mode_names[static_cast<uint8_t>(mode)];
 }
 
 const char* Settings::GetCPUExecutionModeDisplayName(CPUExecutionMode mode)
 {
-  return s_cpu_execution_mode_display_names[static_cast<u8>(mode)];
+  return s_cpu_execution_mode_display_names[static_cast<uint8_t>(mode)];
 }
 
-static std::array<const char*, static_cast<u32>(CPUFastmemMode::Count)> s_cpu_fastmem_mode_names = {
+static std::array<const char*, static_cast<uint32_t>(CPUFastmemMode::Count)> s_cpu_fastmem_mode_names = {
   {"Disabled", "MMap", "LUT"}};
-static std::array<const char*, static_cast<u32>(CPUFastmemMode::Count)> s_cpu_fastmem_mode_display_names = {
+static std::array<const char*, static_cast<uint32_t>(CPUFastmemMode::Count)> s_cpu_fastmem_mode_display_names = {
   {TRANSLATABLE("CPUFastmemMode", "Disabled (Slowest)"),
    TRANSLATABLE("CPUFastmemMode", "MMap (Hardware, Fastest, 64-Bit Only)"),
    TRANSLATABLE("CPUFastmemMode", "LUT (Faster)")}};
 
 std::optional<CPUFastmemMode> Settings::ParseCPUFastmemMode(const char* str)
 {
-  u8 index = 0;
+  uint8_t index = 0;
   for (const char* name : s_cpu_fastmem_mode_names)
   {
     if (StringUtil::Strcasecmp(name, str) == 0)
@@ -383,12 +383,12 @@ std::optional<CPUFastmemMode> Settings::ParseCPUFastmemMode(const char* str)
 
 const char* Settings::GetCPUFastmemModeName(CPUFastmemMode mode)
 {
-  return s_cpu_fastmem_mode_names[static_cast<u8>(mode)];
+  return s_cpu_fastmem_mode_names[static_cast<uint8_t>(mode)];
 }
 
 const char* Settings::GetCPUFastmemModeDisplayName(CPUFastmemMode mode)
 {
-  return s_cpu_fastmem_mode_display_names[static_cast<u8>(mode)];
+  return s_cpu_fastmem_mode_display_names[static_cast<uint8_t>(mode)];
 }
 
 static constexpr auto s_gpu_renderer_names = make_array(
@@ -567,8 +567,8 @@ float Settings::GetDisplayAspectRatioValue() const
       if (!display)
         return s_display_aspect_ratio_values[static_cast<int>(DEFAULT_DISPLAY_ASPECT_RATIO)];
 
-      const u32 width = display->GetWindowWidth();
-      const u32 height = display->GetWindowHeight();
+      const uint32_t width = display->GetWindowWidth();
+      const uint32_t height = display->GetWindowHeight();
       return static_cast<float>(width) / static_cast<float>(height);
     }
 
@@ -633,7 +633,7 @@ static std::array<const char*, 4> s_multitap_enable_mode_names = {{"Disabled", "
 
 std::optional<MultitapMode> Settings::ParseMultitapModeName(const char* str)
 {
-  u32 index = 0;
+  uint32_t index = 0;
   for (const char* name : s_multitap_enable_mode_names)
   {
     if (StringUtil::Strcasecmp(name, str) == 0)

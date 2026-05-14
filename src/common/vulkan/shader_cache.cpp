@@ -22,21 +22,21 @@ using ShaderCompiler::SPIRVCodeVector;
 #pragma pack(push, 4)
 struct VK_PIPELINE_CACHE_HEADER
 {
-  u32 header_length;
-  u32 header_version;
-  u32 vendor_id;
-  u32 device_id;
-  u8 uuid[VK_UUID_SIZE];
+  uint32_t header_length;
+  uint32_t header_version;
+  uint32_t vendor_id;
+  uint32_t device_id;
+  uint8_t uuid[VK_UUID_SIZE];
 };
 
 struct CacheIndexEntry
 {
-  u64 source_hash_low;
-  u64 source_hash_high;
-  u32 source_length;
-  u32 shader_type;
-  u32 file_offset;
-  u32 blob_size;
+  uint64_t source_hash_low;
+  uint64_t source_hash_high;
+  uint32_t source_length;
+  uint32_t shader_type;
+  uint32_t file_offset;
+  uint32_t blob_size;
 };
 #pragma pack(pop)
 
@@ -107,7 +107,7 @@ bool ShaderCache::CacheIndexKey::operator!=(const CacheIndexKey& key) const
           source_length != key.source_length || shader_type != key.shader_type);
 }
 
-void ShaderCache::Create(std::string_view base_path, u32 version, bool debug)
+void ShaderCache::Create(std::string_view base_path, uint32_t version, bool debug)
 {
   g_vulkan_shader_cache.reset(new ShaderCache());
   g_vulkan_shader_cache->Open(base_path, version, debug);
@@ -118,7 +118,7 @@ void ShaderCache::Destroy()
   g_vulkan_shader_cache.reset();
 }
 
-void ShaderCache::Open(std::string_view base_path, u32 version, bool debug)
+void ShaderCache::Open(std::string_view base_path, uint32_t version, bool debug)
 {
   m_version = version;
   m_debug = debug;
@@ -172,7 +172,7 @@ bool ShaderCache::CreateNewShaderCache(const std::string& index_filename, const 
     return false;
   }
 
-  const u32 index_version = FILE_VERSION;
+  const uint32_t index_version = FILE_VERSION;
   VK_PIPELINE_CACHE_HEADER header;
   FillPipelineCacheHeader(&header);
 
@@ -206,8 +206,8 @@ bool ShaderCache::ReadExistingShaderCache(const std::string& index_filename, con
   if (!m_index_file)
     return false;
 
-  u32 file_version = 0;
-  u32 data_version = 0;
+  uint32_t file_version = 0;
+  uint32_t data_version = 0;
   if (rfread(&file_version, sizeof(file_version), 1, m_index_file) != 1 || file_version != FILE_VERSION ||
       rfread(&data_version, sizeof(data_version), 1, m_index_file) != 1 || data_version != m_version)
   {
@@ -236,7 +236,7 @@ bool ShaderCache::ReadExistingShaderCache(const std::string& index_filename, con
   }
 
   rfseek(m_blob_file, 0, SEEK_END);
-  const u32 blob_file_size = static_cast<u32>(rftell(m_blob_file));
+  const uint32_t blob_file_size = static_cast<uint32_t>(rftell(m_blob_file));
 
   for (;;)
   {
@@ -305,7 +305,7 @@ bool ShaderCache::CreateNewPipelineCache()
 
 bool ShaderCache::ReadExistingPipelineCache()
 {
-  std::optional<std::vector<u8>> data = FileSystem::ReadBinaryFile(m_pipeline_cache_filename.c_str());
+  std::optional<std::vector<uint8_t>> data = FileSystem::ReadBinaryFile(m_pipeline_cache_filename.c_str());
   if (!data.has_value())
     return false;
 
@@ -345,7 +345,7 @@ bool ShaderCache::FlushPipelineCache()
     return false;
   }
 
-  std::vector<u8> data(data_size);
+  std::vector<uint8_t> data(data_size);
   res = vkGetPipelineCacheData(g_vulkan_context->GetDevice(), m_pipeline_cache, &data_size, data.data());
   if (res != VK_SUCCESS)
   {
@@ -413,18 +413,18 @@ ShaderCache::CacheIndexKey ShaderCache::GetCacheKey(ShaderCompiler::Type type, c
   {
     struct
     {
-      u64 hash_low;
-      u64 hash_high;
+      uint64_t hash_low;
+      uint64_t hash_high;
     };
-    u8 hash[16];
+    uint8_t hash[16];
   };
   HashParts h;
 
   MD5Digest digest;
-  digest.Update(shader_code.data(), static_cast<u32>(shader_code.length()));
+  digest.Update(shader_code.data(), static_cast<uint32_t>(shader_code.length()));
   digest.Final(h.hash);
 
-  return CacheIndexKey{h.hash_low, h.hash_high, static_cast<u32>(shader_code.length()), type};
+  return CacheIndexKey{h.hash_low, h.hash_high, static_cast<uint32_t>(shader_code.length()), type};
 }
 
 std::optional<ShaderCompiler::SPIRVCodeVector> ShaderCache::GetShaderSPV(ShaderCompiler::Type type,
@@ -487,14 +487,14 @@ std::optional<ShaderCompiler::SPIRVCodeVector> ShaderCache::CompileAndAddShaderS
     return spv;
 
   CacheIndexData data;
-  data.file_offset = static_cast<u32>(rftell(m_blob_file));
-  data.blob_size = static_cast<u32>(spv->size());
+  data.file_offset = static_cast<uint32_t>(rftell(m_blob_file));
+  data.blob_size = static_cast<uint32_t>(spv->size());
 
   CacheIndexEntry entry = {};
   entry.source_hash_low = key.source_hash_low;
   entry.source_hash_high = key.source_hash_high;
   entry.source_length = key.source_length;
-  entry.shader_type = static_cast<u32>(key.shader_type);
+  entry.shader_type = static_cast<uint32_t>(key.shader_type);
   entry.blob_size = data.blob_size;
   entry.file_offset = data.file_offset;
 

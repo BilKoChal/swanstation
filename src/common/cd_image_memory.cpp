@@ -22,8 +22,8 @@ protected:
   bool ReadSectorFromIndex(void* buffer, const Index& index, LBA lba_in_index) override;
 
 private:
-  u8* m_memory = nullptr;
-  u32 m_memory_sectors = 0;
+  uint8_t* m_memory = nullptr;
+  uint32_t m_memory_sectors = 0;
   CDSubChannelReplacement m_sbi;
 };
 
@@ -39,15 +39,15 @@ bool CDImageMemory::CopyImage(CDImage* image, ProgressCallback* progress)
 {
   // figure out the total number of sectors (not including blank pregaps)
   m_memory_sectors = 0;
-  for (u32 i = 0; i < image->GetIndexCount(); i++)
+  for (uint32_t i = 0; i < image->GetIndexCount(); i++)
   {
     const Index& index = image->GetIndex(i);
     if (index.file_sector_size > 0)
       m_memory_sectors += image->GetIndex(i).length;
   }
 
-  if ((static_cast<u64>(RAW_SECTOR_SIZE) * static_cast<u64>(m_memory_sectors)) >=
-      static_cast<u64>(std::numeric_limits<size_t>::max()))
+  if ((static_cast<uint64_t>(RAW_SECTOR_SIZE) * static_cast<uint64_t>(m_memory_sectors)) >=
+      static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
   {
     progress->DisplayFormattedModalError("Insufficient address space");
     return false;
@@ -56,7 +56,7 @@ bool CDImageMemory::CopyImage(CDImage* image, ProgressCallback* progress)
   progress->SetFormattedStatusText("Allocating memory for %u sectors...", m_memory_sectors);
 
   m_memory =
-    static_cast<u8*>(std::malloc(static_cast<size_t>(RAW_SECTOR_SIZE) * static_cast<size_t>(m_memory_sectors)));
+    static_cast<uint8_t*>(std::malloc(static_cast<size_t>(RAW_SECTOR_SIZE) * static_cast<size_t>(m_memory_sectors)));
   if (!m_memory)
   {
     progress->DisplayFormattedModalError("Failed to allocate memory for %u sectors", m_memory_sectors);
@@ -67,15 +67,15 @@ bool CDImageMemory::CopyImage(CDImage* image, ProgressCallback* progress)
   progress->SetProgressRange(m_memory_sectors);
   progress->SetProgressValue(0);
 
-  u8* memory_ptr = m_memory;
-  u32 sectors_read = 0;
-  for (u32 i = 0; i < image->GetIndexCount(); i++)
+  uint8_t* memory_ptr = m_memory;
+  uint32_t sectors_read = 0;
+  for (uint32_t i = 0; i < image->GetIndexCount(); i++)
   {
     const Index& index = image->GetIndex(i);
     if (index.file_sector_size == 0)
       continue;
 
-    for (u32 lba = 0; lba < index.length; lba++)
+    for (uint32_t lba = 0; lba < index.length; lba++)
     {
       if (!image->ReadSectorFromIndex(memory_ptr, index, lba))
       {
@@ -89,11 +89,11 @@ bool CDImageMemory::CopyImage(CDImage* image, ProgressCallback* progress)
     }
   }
 
-  for (u32 i = 1; i <= image->GetTrackCount(); i++)
+  for (uint32_t i = 1; i <= image->GetTrackCount(); i++)
     m_tracks.push_back(image->GetTrack(i));
 
-  u32 current_offset = 0;
-  for (u32 i = 0; i < image->GetIndexCount(); i++)
+  uint32_t current_offset = 0;
+  for (uint32_t i = 0; i < image->GetIndexCount(); i++)
   {
     Index new_index = image->GetIndex(i);
     new_index.file_index = 0;
@@ -128,7 +128,7 @@ bool CDImageMemory::HasNonStandardSubchannel() const
 
 bool CDImageMemory::ReadSectorFromIndex(void* buffer, const Index& index, LBA lba_in_index)
 {
-  const u64 sector_number = index.file_offset + lba_in_index;
+  const uint64_t sector_number = index.file_offset + lba_in_index;
   if (sector_number >= m_memory_sectors)
     return false;
 

@@ -3,7 +3,7 @@
 #include <cstdarg>
 #include <mutex>
 
-enum class LogLevel : u8
+enum class LogLevel : uint8_t
 {
   None = 0,    // Silences all log traffic
   Error = 1,   // "ErrorPrint"

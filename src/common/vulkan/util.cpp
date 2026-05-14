@@ -64,7 +64,7 @@ VkFormat GetLinearFormat(VkFormat format)
   }
 }
 
-u32 GetTexelSize(VkFormat format)
+uint32_t GetTexelSize(VkFormat format)
 {
   // Only contains pixel formats we use.
   switch (format)
@@ -101,7 +101,7 @@ u32 GetTexelSize(VkFormat format)
   return 1;
 }
 
-u32 GetBlockSize(VkFormat format)
+uint32_t GetBlockSize(VkFormat format)
 {
   switch (format)
   {
@@ -116,7 +116,7 @@ u32 GetBlockSize(VkFormat format)
   }
 }
 
-VkRect2D ClampRect2D(const VkRect2D& rect, u32 width, u32 height)
+VkRect2D ClampRect2D(const VkRect2D& rect, uint32_t width, uint32_t height)
 {
   VkRect2D out;
   out.offset.x = std::clamp(rect.offset.x, 0, static_cast<int>(width - 1));
@@ -157,7 +157,7 @@ void SetViewport(VkCommandBuffer command_buffer, int x, int y, int width, int he
 
 void SetScissor(VkCommandBuffer command_buffer, int x, int y, int width, int height)
 {
-  const VkRect2D scissor{{x, y}, {static_cast<u32>(width), static_cast<u32>(height)}};
+  const VkRect2D scissor{{x, y}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
   vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 }
 
@@ -170,7 +170,7 @@ void SetViewportAndScissor(VkCommandBuffer command_buffer, int x, int y, int wid
                       static_cast<float>(height),
                       min_depth,
                       max_depth};
-  const VkRect2D scissor{{x, y}, {static_cast<u32>(width), static_cast<u32>(height)}};
+  const VkRect2D scissor{{x, y}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
   vkCmdSetViewport(command_buffer, 0, 1, &vp);
   vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 }

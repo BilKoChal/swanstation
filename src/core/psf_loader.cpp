@@ -56,13 +56,13 @@ float File::GetTagFloat(const char* tag_name, float default_value) const
 
 bool File::Load(const char* path)
 {
-  std::optional<std::vector<u8>> file_data(FileSystem::ReadBinaryFile(path));
+  std::optional<std::vector<uint8_t>> file_data(FileSystem::ReadBinaryFile(path));
   if (!file_data.has_value() || file_data->empty())
     return false;
 
-  const u8* file_pointer = file_data->data();
-  const u8* file_pointer_end = file_data->data() + file_data->size();
-  const u32 file_size = static_cast<u32>(file_data->size());
+  const uint8_t* file_pointer = file_data->data();
+  const uint8_t* file_pointer_end = file_data->data() + file_data->size();
+  const uint32_t file_size = static_cast<uint32_t>(file_data->size());
 
   PSFHeader header;
   std::memcpy(&header, file_pointer, sizeof(header));
@@ -78,7 +78,7 @@ bool File::Load(const char* path)
 
   z_stream strm = {};
   strm.avail_in = static_cast<uInt>(file_pointer_end - file_pointer);
-  strm.next_in = static_cast<Bytef*>(const_cast<u8*>(file_pointer));
+  strm.next_in = static_cast<Bytef*>(const_cast<uint8_t*>(file_pointer));
   strm.avail_out = static_cast<uInt>(m_program_data.size());
   strm.next_out = static_cast<Bytef*>(m_program_data.data());
 
@@ -98,7 +98,7 @@ bool File::Load(const char* path)
   file_pointer += header.compressed_program_size;
   inflateEnd(&strm);
 
-  u32 remaining_tag_data = static_cast<u32>(file_pointer_end - file_pointer);
+  uint32_t remaining_tag_data = static_cast<uint32_t>(file_pointer_end - file_pointer);
   static constexpr char tag_signature[] = {'[', 'T', 'A', 'G', ']'};
   if (remaining_tag_data >= sizeof(tag_signature) &&
       std::memcmp(file_pointer, tag_signature, sizeof(tag_signature)) == 0)
@@ -141,7 +141,7 @@ bool File::Load(const char* path)
   return true;
 }
 
-static bool LoadLibraryPSF(const char* path, bool use_pc_sp, u32 depth = 0)
+static bool LoadLibraryPSF(const char* path, bool use_pc_sp, uint32_t depth = 0)
 {
   // don't recurse past 10 levels just in case of broken files
   if (depth >= 10)
@@ -168,12 +168,12 @@ static bool LoadLibraryPSF(const char* path, bool use_pc_sp, u32 depth = 0)
   }
 
   // apply the main psf
-  if (!System::InjectEXEFromBuffer(file.GetProgramData().data(), static_cast<u32>(file.GetProgramData().size()),
+  if (!System::InjectEXEFromBuffer(file.GetProgramData().data(), static_cast<uint32_t>(file.GetProgramData().size()),
                                    use_pc_sp))
     return false;
 
   // load any other parent psfs
-  u32 lib_counter = 2;
+  uint32_t lib_counter = 2;
   for (;;)
   {
     lib_name = file.GetTagString(TinyString::FromFormat("_lib%u", lib_counter++));

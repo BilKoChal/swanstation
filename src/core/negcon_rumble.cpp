@@ -6,10 +6,10 @@
 #include "system.h"
 #include <cmath>
 
-NeGconRumble::NeGconRumble(u32 index) : m_index(index)
+NeGconRumble::NeGconRumble(uint32_t index) : m_index(index)
 {
   m_axis_state.fill(0x00);
-  m_axis_state[static_cast<u8>(Axis::Steering)] = 0x80;
+  m_axis_state[static_cast<uint8_t>(Axis::Steering)] = 0x80;
   Reset();
 }
 
@@ -46,10 +46,10 @@ bool NeGconRumble::DoState(StateWrapper& sw, bool apply_input_state)
   sw.Do(&m_analog_mode);
   sw.Do(&m_dualshock_enabled);
   sw.Do(&m_configuration_mode);
-  sw.DoEx(&m_status_byte, 55, static_cast<u8>(0x5A));
+  sw.DoEx(&m_status_byte, 55, static_cast<uint8_t>(0x5A));
 
-  u16 button_state = m_button_state;
-  sw.DoEx(&button_state, 44, static_cast<u16>(0xFFFF));
+  uint16_t button_state = m_button_state;
+  sw.DoEx(&button_state, 44, static_cast<uint16_t>(0xFFFF));
   if (apply_input_state)
     m_button_state = button_state;
   else
@@ -67,7 +67,7 @@ bool NeGconRumble::DoState(StateWrapper& sw, bool apply_input_state)
 
   if (sw.IsReading())
   {
-    for (u8 i = 0; i < NUM_MOTORS; i++)
+    for (uint8_t i = 0; i < NUM_MOTORS; i++)
       SetMotorState(i, motor_state[i]);
 
     if (old_analog_mode != m_analog_mode)
@@ -83,13 +83,13 @@ bool NeGconRumble::DoState(StateWrapper& sw, bool apply_input_state)
   return true;
 }
 
-void NeGconRumble::SetAxisState(s32 axis_code, float value)
+void NeGconRumble::SetAxisState(int32_t axis_code, float value)
 {
-  if (axis_code < 0 || axis_code >= static_cast<s32>(Axis::Count))
+  if (axis_code < 0 || axis_code >= static_cast<int32_t>(Axis::Count))
     return;
 
   // Steering Axis: -1..1 -> 0..255
-  if (axis_code == static_cast<s32>(Axis::Steering))
+  if (axis_code == static_cast<int32_t>(Axis::Steering))
   {
     float float_value =
       (std::abs(value) < m_steering_deadzone) ?
@@ -108,30 +108,30 @@ void NeGconRumble::SetAxisState(s32 axis_code, float value)
         float_value = float_value * float_value * float_value;
     }
 
-    const u8 u8_value = static_cast<u8>(std::clamp(std::round(((float_value + 1.0f) / 2.0f) * 255.0f), 0.0f, 255.0f));
+    const uint8_t u8_value = static_cast<uint8_t>(std::clamp(std::round(((float_value + 1.0f) / 2.0f) * 255.0f), 0.0f, 255.0f));
     SetAxisState(static_cast<Axis>(axis_code), u8_value);
 
     return;
   }
 
   // I, II, L: -1..1 -> 0..255
-  const u8 u8_value = static_cast<u8>(std::clamp(value * 255.0f, 0.0f, 255.0f));
+  const uint8_t u8_value = static_cast<uint8_t>(std::clamp(value * 255.0f, 0.0f, 255.0f));
 
   SetAxisState(static_cast<Axis>(axis_code), u8_value);
 }
 
-void NeGconRumble::SetAxisState(Axis axis, u8 value)
+void NeGconRumble::SetAxisState(Axis axis, uint8_t value)
 {
-  if (value != m_axis_state[static_cast<u8>(axis)])
+  if (value != m_axis_state[static_cast<uint8_t>(axis)])
     System::SetRunaheadReplayFlag();
 
-  m_axis_state[static_cast<u8>(axis)] = value;
+  m_axis_state[static_cast<uint8_t>(axis)] = value;
 }
 
 void NeGconRumble::SetButtonState(Button button, bool pressed)
 {
   // Mapping of Button to index of corresponding bit in m_button_state
-  static constexpr std::array<u8, static_cast<size_t>(Button::Count)> indices = {3, 4, 5, 6, 7, 11, 12, 13};
+  static constexpr std::array<uint8_t, static_cast<size_t>(Button::Count)> indices = {3, 4, 5, 6, 7, 11, 12, 13};
 
   if (button == Button::Analog)
   {
@@ -152,8 +152,8 @@ void NeGconRumble::SetButtonState(Button button, bool pressed)
   // above, so the previous code's runahead-replay-flag check ran against a
   // different bit than the one being changed and could fire the flag on
   // unrelated state or miss real changes.
-  const u16 bit = u16(1) << indices[static_cast<u8>(button)];
-  const u16 new_state = pressed ? (m_button_state & ~bit) : (m_button_state | bit);
+  const uint16_t bit = uint16_t(1) << indices[static_cast<uint8_t>(button)];
+  const uint16_t new_state = pressed ? (m_button_state & ~bit) : (m_button_state | bit);
   if (new_state != m_button_state)
   {
     System::SetRunaheadReplayFlag();
@@ -161,39 +161,39 @@ void NeGconRumble::SetButtonState(Button button, bool pressed)
   }
 }
 
-void NeGconRumble::SetButtonState(s32 button_code, bool pressed)
+void NeGconRumble::SetButtonState(int32_t button_code, bool pressed)
 {
-  if (button_code < 0 || button_code >= static_cast<s32>(Button::Count))
+  if (button_code < 0 || button_code >= static_cast<int32_t>(Button::Count))
     return;
 
   SetButtonState(static_cast<Button>(button_code), pressed);
 }
 
-u32 NeGconRumble::GetButtonStateBits() const
+uint32_t NeGconRumble::GetButtonStateBits() const
 {
   // flip bits, native data is active low
   return m_button_state ^ 0xFFFF;
 }
 
-std::optional<u32> NeGconRumble::GetAnalogInputBytes() const
+std::optional<uint32_t> NeGconRumble::GetAnalogInputBytes() const
 {
   return m_axis_state[static_cast<size_t>(Axis::L)] << 24 | m_axis_state[static_cast<size_t>(Axis::II)] << 16 |
          m_axis_state[static_cast<size_t>(Axis::I)] << 8 | m_axis_state[static_cast<size_t>(Axis::Steering)];
 }
 
-u32 NeGconRumble::GetVibrationMotorCount() const
+uint32_t NeGconRumble::GetVibrationMotorCount() const
 {
   return NUM_MOTORS;
 }
 
-float NeGconRumble::GetVibrationMotorStrength(u32 motor)
+float NeGconRumble::GetVibrationMotorStrength(uint32_t motor)
 {
   if (m_motor_state[motor] == 0)
     return 0.0f;
 
   // Curve from https://github.com/KrossX/Pokopom/blob/master/Pokopom/Input_XInput.cpp#L210
   const double x =
-    static_cast<double>(std::min<u32>(static_cast<u32>(m_motor_state[motor]) + static_cast<u32>(m_rumble_bias), 255));
+    static_cast<double>(std::min<uint32_t>(static_cast<uint32_t>(m_motor_state[motor]) + static_cast<uint32_t>(m_rumble_bias), 255));
   const double strength = 0.006474549734772402 * std::pow(x, 3.0) - 1.258165252213538 * std::pow(x, 2.0) +
                           156.82454281087692 * x + 3.637978807091713e-11;
 
@@ -246,12 +246,12 @@ void NeGconRumble::ProcessAnalogModeToggle()
   }
 }
 
-void NeGconRumble::SetMotorState(u8 motor, u8 value)
+void NeGconRumble::SetMotorState(uint8_t motor, uint8_t value)
 {
   m_motor_state[motor] = value;
 }
 
-u8 NeGconRumble::GetExtraButtonMaskLSB() const
+uint8_t NeGconRumble::GetExtraButtonMaskLSB() const
 {
   return 0xFF;
 }
@@ -267,7 +267,7 @@ void NeGconRumble::ResetRumbleConfig()
   SetMotorState(SmallMotor, 0);
 }
 
-void NeGconRumble::SetMotorStateForConfigIndex(int index, u8 value)
+void NeGconRumble::SetMotorStateForConfigIndex(int index, uint8_t value)
 {
   if (m_rumble_config_small_motor_index == index)
     SetMotorState(SmallMotor, ((value & 0x01) != 0) ? 255 : 0);
@@ -275,7 +275,7 @@ void NeGconRumble::SetMotorStateForConfigIndex(int index, u8 value)
     SetMotorState(LargeMotor, value);
 }
 
-u8 NeGconRumble::GetResponseNumHalfwords() const
+uint8_t NeGconRumble::GetResponseNumHalfwords() const
 {
   if (m_configuration_mode || m_analog_mode)
     return 0x3;
@@ -283,7 +283,7 @@ u8 NeGconRumble::GetResponseNumHalfwords() const
   return (0x1);
 }
 
-u8 NeGconRumble::GetModeID() const
+uint8_t NeGconRumble::GetModeID() const
 {
   if (m_configuration_mode)
     return 0xF;
@@ -294,12 +294,12 @@ u8 NeGconRumble::GetModeID() const
   return 0x4;
 }
 
-u8 NeGconRumble::GetIDByte() const
+uint8_t NeGconRumble::GetIDByte() const
 {
-  return static_cast<u8>((GetModeID() << 4) | GetResponseNumHalfwords());
+  return static_cast<uint8_t>((GetModeID() << 4) | GetResponseNumHalfwords());
 }
 
-bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
+bool NeGconRumble::Transfer(const uint8_t data_in, uint8_t* data_out)
 {
   bool ack;
   m_rx_buffer[m_command_step] = data_in;
@@ -346,7 +346,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
       {
         m_response_length = (GetResponseNumHalfwords() + 1) * 2;
         m_command = Command::GetAnalogMode;
-        m_tx_buffer = {GetIDByte(), m_status_byte, 0x01, 0x02, static_cast<u8>(m_analog_mode), 0x02, 0x01, 0x00};
+        m_tx_buffer = {GetIDByte(), m_status_byte, 0x01, 0x02, static_cast<uint8_t>(m_analog_mode), 0x02, 0x01, 0x00};
       }
       else if (m_configuration_mode && data_in == 0x46)
       {
@@ -391,7 +391,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
       {
         case 2:
         {
-          m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state) & GetExtraButtonMaskLSB();
+          m_tx_buffer[m_command_step] = static_cast<uint8_t>(m_button_state) & GetExtraButtonMaskLSB();
 
           if (m_dualshock_enabled)
             SetMotorStateForConfigIndex(rumble_index, data_in);
@@ -400,7 +400,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
 
         case 3:
         {
-          m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state >> 8);
+          m_tx_buffer[m_command_step] = static_cast<uint8_t>(m_button_state >> 8);
 
           if (m_dualshock_enabled)
           {
@@ -417,7 +417,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
         case 4:
         {
           if (m_configuration_mode || m_analog_mode)
-            m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::Steering)];
+            m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::Steering)];
 
           if (m_dualshock_enabled)
             SetMotorStateForConfigIndex(rumble_index, data_in);
@@ -427,7 +427,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
         case 5:
         {
           if (m_configuration_mode || m_analog_mode)
-            m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::I)];
+            m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::I)];
 
           if (m_dualshock_enabled)
             SetMotorStateForConfigIndex(rumble_index, data_in);
@@ -437,7 +437,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
         case 6:
         {
           if (m_configuration_mode || m_analog_mode)
-            m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::II)];
+            m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::II)];
 
           if (m_dualshock_enabled)
             SetMotorStateForConfigIndex(rumble_index, data_in);
@@ -447,7 +447,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
         case 7:
         {
           if (m_configuration_mode || m_analog_mode)
-            m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::L)];
+            m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::L)];
 
           if (m_dualshock_enabled)
             SetMotorStateForConfigIndex(rumble_index, data_in);
@@ -470,41 +470,41 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
         {
           case 2:
           {
-            m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state) & GetExtraButtonMaskLSB();
+            m_tx_buffer[m_command_step] = static_cast<uint8_t>(m_button_state) & GetExtraButtonMaskLSB();
           }
           break;
 
           case 3:
           {
-            m_tx_buffer[m_command_step] = static_cast<u8>(m_button_state >> 8);
+            m_tx_buffer[m_command_step] = static_cast<uint8_t>(m_button_state >> 8);
           }
           break;
 
           case 4:
           {
             if (m_configuration_mode || m_analog_mode)
-              m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::Steering)];
+              m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::Steering)];
           }
           break;
 
           case 5:
           {
             if (m_configuration_mode || m_analog_mode)
-              m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::I)];
+              m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::I)];
           }
           break;
 
           case 6:
           {
             if (m_configuration_mode || m_analog_mode)
-              m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::II)];
+              m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::II)];
           }
           break;
 
           case 7:
           {
             if (m_configuration_mode || m_analog_mode)
-              m_tx_buffer[m_command_step] = m_axis_state[static_cast<u8>(Axis::L)];
+              m_tx_buffer[m_command_step] = m_axis_state[static_cast<uint8_t>(Axis::L)];
           }
           break;
 
@@ -515,7 +515,7 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
         }
       }
 
-      if (m_command_step == (static_cast<s32>(m_response_length) - 1))
+      if (m_command_step == (static_cast<int32_t>(m_response_length) - 1))
       {
         m_configuration_mode = (m_rx_buffer[2] == 1);
 
@@ -634,12 +634,12 @@ bool NeGconRumble::Transfer(const u8 data_in, u8* data_out)
   return ack;
 }
 
-std::unique_ptr<NeGconRumble> NeGconRumble::Create(u32 index)
+std::unique_ptr<NeGconRumble> NeGconRumble::Create(uint32_t index)
 {
   return std::make_unique<NeGconRumble>(index);
 }
 
-u32 NeGconRumble::StaticGetVibrationMotorCount()
+uint32_t NeGconRumble::StaticGetVibrationMotorCount()
 {
   return NUM_MOTORS;
 }
@@ -650,5 +650,5 @@ void NeGconRumble::LoadSettings(const char* section)
   m_steering_deadzone = g_host_interface->GetFloatSettingValue(section, "SteeringDeadzone", 0.10f);
   m_twist_response = g_host_interface->GetStringSettingValue(section, "TwistResponse");
   m_rumble_bias =
-    static_cast<u8>(std::min<u32>(g_host_interface->GetIntSettingValue(section, "VibrationBias", 8), 255));
+    static_cast<uint8_t>(std::min<uint32_t>(g_host_interface->GetIntSettingValue(section, "VibrationBias", 8), 255));
 }

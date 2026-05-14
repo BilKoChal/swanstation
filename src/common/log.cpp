@@ -80,9 +80,9 @@ void Writev(const char* channelName, const char* functionName, LogLevel level, c
   va_copy(apCopy, ap);
 
 #ifdef _WIN32
-  u32 requiredSize = static_cast<u32>(_vscprintf(format, apCopy));
+  uint32_t requiredSize = static_cast<uint32_t>(_vscprintf(format, apCopy));
 #else
-  u32 requiredSize = std::vsnprintf(nullptr, 0, format, apCopy);
+  uint32_t requiredSize = std::vsnprintf(nullptr, 0, format, apCopy);
 #endif
   va_end(apCopy);
 

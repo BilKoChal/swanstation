@@ -36,7 +36,7 @@ bool ShaderGen::UseGLSLBindingLayout()
 
 void ShaderGen::DefineMacro(std::stringstream& ss, const char* name, bool enabled)
 {
-  ss << "#define " << name << " " << static_cast<u32>(enabled) << "\n";
+  ss << "#define " << name << " " << static_cast<uint32_t>(enabled) << "\n";
 }
 
 void ShaderGen::SetGLSLVersionString()
@@ -270,7 +270,7 @@ void ShaderGen::DeclareUniformBuffer(std::stringstream& ss, const std::initializ
   ss << "};\n\n";
 }
 
-void ShaderGen::DeclareTexture(std::stringstream& ss, const char* name, u32 index, bool multisampled /* = false */)
+void ShaderGen::DeclareTexture(std::stringstream& ss, const char* name, uint32_t index, bool multisampled /* = false */)
 {
   if (m_glsl)
   {
@@ -288,7 +288,7 @@ void ShaderGen::DeclareTexture(std::stringstream& ss, const char* name, u32 inde
   }
 }
 
-void ShaderGen::DeclareTextureBuffer(std::stringstream& ss, const char* name, u32 index, bool is_int, bool is_unsigned)
+void ShaderGen::DeclareTextureBuffer(std::stringstream& ss, const char* name, uint32_t index, bool is_int, bool is_unsigned)
 {
   if (m_glsl)
   {
@@ -321,8 +321,8 @@ const char* ShaderGen::GetInterpolationQualifier(bool interface_block, bool cent
 }
 
 void ShaderGen::DeclareVertexEntryPoint(
-  std::stringstream& ss, const std::initializer_list<const char*>& attributes, u32 num_color_outputs,
-  u32 num_texcoord_outputs, const std::initializer_list<std::pair<const char*, const char*>>& additional_outputs,
+  std::stringstream& ss, const std::initializer_list<const char*>& attributes, uint32_t num_color_outputs,
+  uint32_t num_texcoord_outputs, const std::initializer_list<std::pair<const char*, const char*>>& additional_outputs,
   bool declare_vertex_id /* = false */, const char* output_block_suffix /* = "" */, bool msaa /* = false */,
   bool ssaa /* = false */, bool noperspective_color /* = false */)
 {
@@ -330,7 +330,7 @@ void ShaderGen::DeclareVertexEntryPoint(
   {
     if (m_use_glsl_binding_layout)
     {
-      u32 attribute_counter = 0;
+      uint32_t attribute_counter = 0;
       for (const char* attribute : attributes)
       {
         ss << "layout(location = " << attribute_counter << ") in " << attribute << ";\n";
@@ -351,10 +351,10 @@ void ShaderGen::DeclareVertexEntryPoint(
         ss << "layout(location = 0) ";
 
       ss << "out VertexData" << output_block_suffix << " {\n";
-      for (u32 i = 0; i < num_color_outputs; i++)
+      for (uint32_t i = 0; i < num_color_outputs; i++)
         ss << "  " << (noperspective_color ? "noperspective " : "") << qualifier << "float4 v_col" << i << ";\n";
 
-      for (u32 i = 0; i < num_texcoord_outputs; i++)
+      for (uint32_t i = 0; i < num_texcoord_outputs; i++)
         ss << "  " << qualifier << "float2 v_tex" << i << ";\n";
 
       for (const auto& [qualifiers, name] : additional_outputs)
@@ -368,10 +368,10 @@ void ShaderGen::DeclareVertexEntryPoint(
     {
       const char* qualifier = GetInterpolationQualifier(false, msaa, ssaa, true);
 
-      for (u32 i = 0; i < num_color_outputs; i++)
+      for (uint32_t i = 0; i < num_color_outputs; i++)
         ss << qualifier << (noperspective_color ? "noperspective " : "") << "out float4 v_col" << i << ";\n";
 
-      for (u32 i = 0; i < num_texcoord_outputs; i++)
+      for (uint32_t i = 0; i < num_texcoord_outputs; i++)
         ss << qualifier << "out float2 v_tex" << i << ";\n";
 
       for (const auto& [qualifiers, name] : additional_outputs)
@@ -402,21 +402,21 @@ void ShaderGen::DeclareVertexEntryPoint(
     if (declare_vertex_id)
       ss << "  in uint v_id : SV_VertexID,\n";
 
-    u32 attribute_counter = 0;
+    uint32_t attribute_counter = 0;
     for (const char* attribute : attributes)
     {
       ss << "  in " << attribute << " : ATTR" << attribute_counter << ",\n";
       attribute_counter++;
     }
 
-    for (u32 i = 0; i < num_color_outputs; i++)
+    for (uint32_t i = 0; i < num_color_outputs; i++)
       ss << "  " << qualifier << (noperspective_color ? "noperspective " : "") << "out float4 v_col" << i << " : COLOR"
          << i << ",\n";
 
-    for (u32 i = 0; i < num_texcoord_outputs; i++)
+    for (uint32_t i = 0; i < num_texcoord_outputs; i++)
       ss << "  " << qualifier << "out float2 v_tex" << i << " : TEXCOORD" << i << ",\n";
 
-    u32 additional_counter = num_texcoord_outputs;
+    uint32_t additional_counter = num_texcoord_outputs;
     for (const auto& [qualifiers, name] : additional_outputs)
     {
       const char* qualifier_to_use = (qualifiers && qualifiers[0] != '\0') ? qualifiers : qualifier;
@@ -429,9 +429,9 @@ void ShaderGen::DeclareVertexEntryPoint(
 }
 
 void ShaderGen::DeclareFragmentEntryPoint(
-  std::stringstream& ss, u32 num_color_inputs, u32 num_texcoord_inputs,
+  std::stringstream& ss, uint32_t num_color_inputs, uint32_t num_texcoord_inputs,
   const std::initializer_list<std::pair<const char*, const char*>>& additional_inputs,
-  bool declare_fragcoord /* = false */, u32 num_color_outputs /* = 1 */, bool depth_output /* = false */,
+  bool declare_fragcoord /* = false */, uint32_t num_color_outputs /* = 1 */, bool depth_output /* = false */,
   bool msaa /* = false */, bool ssaa /* = false */, bool declare_sample_id /* = false */,
   bool noperspective_color /* = false */)
 {
@@ -445,10 +445,10 @@ void ShaderGen::DeclareFragmentEntryPoint(
         ss << "layout(location = 0) ";
 
       ss << "in VertexData {\n";
-      for (u32 i = 0; i < num_color_inputs; i++)
+      for (uint32_t i = 0; i < num_color_inputs; i++)
         ss << "  " << qualifier << (noperspective_color ? "noperspective " : "") << "float4 v_col" << i << ";\n";
 
-      for (u32 i = 0; i < num_texcoord_inputs; i++)
+      for (uint32_t i = 0; i < num_texcoord_inputs; i++)
         ss << "  " << qualifier << "float2 v_tex" << i << ";\n";
 
       for (const auto& [qualifiers, name] : additional_inputs)
@@ -462,10 +462,10 @@ void ShaderGen::DeclareFragmentEntryPoint(
     {
       const char* qualifier = GetInterpolationQualifier(false, msaa, ssaa, false);
 
-      for (u32 i = 0; i < num_color_inputs; i++)
+      for (uint32_t i = 0; i < num_color_inputs; i++)
         ss << qualifier << (noperspective_color ? "noperspective " : "") << "in float4 v_col" << i << ";\n";
 
-      for (u32 i = 0; i < num_texcoord_inputs; i++)
+      for (uint32_t i = 0; i < num_texcoord_inputs; i++)
         ss << qualifier << "in float2 v_tex" << i << ";\n";
 
       for (const auto& [qualifiers, name] : additional_inputs)
@@ -488,18 +488,18 @@ void ShaderGen::DeclareFragmentEntryPoint(
     {
       if (m_supports_dual_source_blend)
       {
-        for (u32 i = 0; i < num_color_outputs; i++)
+        for (uint32_t i = 0; i < num_color_outputs; i++)
           ss << "layout(location = 0, index = " << i << ") out float4 o_col" << i << ";\n";
       }
       else
       {
-        for (u32 i = 0; i < num_color_outputs; i++)
+        for (uint32_t i = 0; i < num_color_outputs; i++)
           ss << "layout(location = " << i << ") out float4 o_col" << i << ";\n";
       }
     }
     else
     {
-      for (u32 i = 0; i < num_color_outputs; i++)
+      for (uint32_t i = 0; i < num_color_outputs; i++)
         ss << "out float4 o_col" << i << ";\n";
     }
 
@@ -513,14 +513,14 @@ void ShaderGen::DeclareFragmentEntryPoint(
 
     ss << "void main(\n";
 
-    for (u32 i = 0; i < num_color_inputs; i++)
+    for (uint32_t i = 0; i < num_color_inputs; i++)
       ss << "  " << qualifier << (noperspective_color ? "noperspective " : "") << "in float4 v_col" << i << " : COLOR"
          << i << ",\n";
 
-    for (u32 i = 0; i < num_texcoord_inputs; i++)
+    for (uint32_t i = 0; i < num_texcoord_inputs; i++)
       ss << "  " << qualifier << "in float2 v_tex" << i << " : TEXCOORD" << i << ",\n";
 
-    u32 additional_counter = num_texcoord_inputs;
+    uint32_t additional_counter = num_texcoord_inputs;
     for (const auto& [qualifiers, name] : additional_inputs)
     {
       const char* qualifier_to_use = (qualifiers && qualifiers[0] != '\0') ? qualifiers : qualifier;
@@ -542,7 +542,7 @@ void ShaderGen::DeclareFragmentEntryPoint(
         ss << ")\n";
     }
 
-    for (u32 i = 0; i < num_color_outputs; i++)
+    for (uint32_t i = 0; i < num_color_outputs; i++)
     {
       ss << "  out float4 o_col" << i << " : SV_Target" << i;
 

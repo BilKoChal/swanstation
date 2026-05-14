@@ -412,13 +412,13 @@ static const char* GetSaveDirectory()
   return save_directory;
 }
 
-std::string HostInterface::GetSharedMemoryCardPath(u32 slot) const
+std::string HostInterface::GetSharedMemoryCardPath(uint32_t slot) const
 {
   return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "duckstation_shared_card_%d.mcd",
                                          GetSaveDirectory(), slot + 1);
 }
 
-std::string HostInterface::GetGameMemoryCardPath(const char* game_code, u32 slot) const
+std::string HostInterface::GetGameMemoryCardPath(const char* game_code, uint32_t slot) const
 {
   return StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "%s_%d.mcd", GetSaveDirectory(), game_code,
                                          slot + 1);
@@ -573,7 +573,7 @@ void HostInterface::AddOSDMessage(std::string message, float duration /*= 2.0f*/
 
   retro_message msg = {};
   msg.msg = message.c_str();
-  msg.frames = static_cast<u32>(duration * (System::IsShutdown() ? 60.0f : System::GetThrottleFrequency()));
+  msg.frames = static_cast<uint32_t>(duration * (System::IsShutdown() ? 60.0f : System::GetThrottleFrequency()));
   g_retro_environment_callback(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 }
 
@@ -587,7 +587,7 @@ void HostInterface::retro_get_system_av_info(struct retro_system_av_info* info)
 
 void HostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale)
 {
-  const u32 resolution_scale = use_resolution_scale ? GetResolutionScale() : 1u;
+  const uint32_t resolution_scale = use_resolution_scale ? GetResolutionScale() : 1u;
 
   std::memset(info, 0, sizeof(*info));
 
@@ -722,7 +722,7 @@ bool HostInterface::retro_load_game(const struct retro_game_info* game)
       P_THIS->m_disk_control_info.image_count            = System::GetMediaSubImageCount();
       P_THIS->m_disk_control_info.sub_images_parent_path = parent_path;
 
-      for (u32 i = 0; i < P_THIS->m_disk_control_info.image_count; i++)
+      for (uint32_t i = 0; i < P_THIS->m_disk_control_info.image_count; i++)
       {
         const std::string& sub_image_path = System::GetMediaSubImagePath(i);
         if (sub_image_path.empty())
@@ -806,7 +806,7 @@ bool HostInterface::retro_load_game(const struct retro_game_info* game)
   return true;
 }
 
-void HostInterface::retro_set_controller_port_device(u32 port, u32 device)
+void HostInterface::retro_set_controller_port_device(uint32_t port, uint32_t device)
 {
   if (retropad_device[port] != device)
   {
@@ -887,7 +887,7 @@ size_t HostInterface::retro_serialize_size()
 
 bool HostInterface::retro_serialize(void* data, size_t size)
 {
-  std::unique_ptr<ByteStream> stream = ByteStream_CreateMemoryStream(data, static_cast<u32>(size));
+  std::unique_ptr<ByteStream> stream = ByteStream_CreateMemoryStream(data, static_cast<uint32_t>(size));
   return System::SaveState(stream.get());
 }
 
@@ -909,7 +909,7 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
                        ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY);
   }
 
-  std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<u32>(size));
+  std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<uint32_t>(size));
   return System::LoadState(stream.get(), is_memory_state);
 }
 
@@ -1008,7 +1008,7 @@ void HostInterface::ReleaseHostDisplay()
   m_display.reset();
 }
 
-void HostInterface::OnControllerTypeChanged(u32 slot) {}
+void HostInterface::OnControllerTypeChanged(uint32_t slot) {}
 
 void HostInterface::SetMouseMode(bool relative, bool hide_cursor) {}
 
@@ -1156,7 +1156,7 @@ bool HostInterface::UpdateCoreOptionsDisplay(bool controller)
   option_display.key = "swanstation_GPU_PGXPDepthClearThreshold";
   g_retro_environment_callback(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
 
-  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     if (multitap_mode == MultitapMode::Port1Only || multitap_mode == MultitapMode::Port2Only)
       port_allowed = (i < 5);
@@ -1165,7 +1165,7 @@ bool HostInterface::UpdateCoreOptionsDisplay(bool controller)
     else
       port_allowed = (i < 2);
 
-    const u32 active_controller = retropad_device[i];
+    const uint32_t active_controller = retropad_device[i];
     const bool analog_active = (port_allowed && (active_controller == RETRO_DEVICE_PS_DUALSHOCK || active_controller == RETRO_DEVICE_PS_ANALOG_JOYSTICK ||
                                 active_controller == RETRO_DEVICE_PS_NEGCON || active_controller == RETRO_DEVICE_PS_NEGCON_RUMBLE));
     const bool dualshock_active = (port_allowed && active_controller == RETRO_DEVICE_PS_DUALSHOCK);
@@ -1237,7 +1237,7 @@ void HostInterface::LoadSettings()
   g_settings.Load(si);
 
   // turn percentage into fraction for overclock
-  const u32 overclock_percent = static_cast<u32>(std::max(si.GetIntValue("CPU", "Overclock", 100), 1));
+  const uint32_t overclock_percent = static_cast<uint32_t>(std::max(si.GetIntValue("CPU", "Overclock", 100), 1));
   Settings::CPUOverclockPercentToFraction(overclock_percent, &g_settings.cpu_overclock_numerator,
                                           &g_settings.cpu_overclock_denominator);
   g_settings.cpu_overclock_enable = (overclock_percent != 100);
@@ -1245,10 +1245,10 @@ void HostInterface::LoadSettings()
 
   // convert msaa settings
   const std::string msaa = si.GetStringValue("GPU", "MSAA", "1");
-  g_settings.gpu_multisamples = StringUtil::FromChars<u32>(msaa).value_or(1);
+  g_settings.gpu_multisamples = StringUtil::FromChars<uint32_t>(msaa).value_or(1);
   g_settings.gpu_per_sample_shading = StringUtil::EndsWith(msaa, "-ssaa");
 
-  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     // workaround to make sure controller specific settings don't require a re-init
     switch (retropad_device[i])
@@ -1372,7 +1372,7 @@ void HostInterface::UpdateControllers()
 {
   g_retro_input_poll_callback();
 
-  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     switch (g_settings.controller_types[i])
     {
@@ -1413,11 +1413,11 @@ void HostInterface::UpdateControllers()
   }
 }
 
-void HostInterface::UpdateControllersDigitalController(u32 index)
+void HostInterface::UpdateControllersDigitalController(uint32_t index)
 {
   DigitalController* controller = static_cast<DigitalController*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<DigitalController::Button, u32>, 14> mapping = {
+  static constexpr std::array<std::pair<DigitalController::Button, uint32_t>, 14> mapping = {
     {{DigitalController::Button::Left, RETRO_DEVICE_ID_JOYPAD_LEFT},
      {DigitalController::Button::Right, RETRO_DEVICE_ID_JOYPAD_RIGHT},
      {DigitalController::Button::Up, RETRO_DEVICE_ID_JOYPAD_UP},
@@ -1435,9 +1435,9 @@ void HostInterface::UpdateControllersDigitalController(u32 index)
 
   if (m_supports_input_bitmasks)
   {
-    const u16 active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+    const uint16_t active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
     for (const auto& it : mapping)
-      controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+      controller->SetButtonState(it.first, (active & (static_cast<uint16_t>(1u) << it.second)) != 0u);
   }
   else
   {
@@ -1449,11 +1449,11 @@ void HostInterface::UpdateControllersDigitalController(u32 index)
   }
 }
 
-void HostInterface::UpdateControllersAnalogController(u32 index)
+void HostInterface::UpdateControllersAnalogController(uint32_t index)
 {
   AnalogController* controller = static_cast<AnalogController*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<AnalogController::Button, u32>, 16> button_mapping = {
+  static constexpr std::array<std::pair<AnalogController::Button, uint32_t>, 16> button_mapping = {
     {{AnalogController::Button::Left, RETRO_DEVICE_ID_JOYPAD_LEFT},
      {AnalogController::Button::Right, RETRO_DEVICE_ID_JOYPAD_RIGHT},
      {AnalogController::Button::Up, RETRO_DEVICE_ID_JOYPAD_UP},
@@ -1471,20 +1471,20 @@ void HostInterface::UpdateControllersAnalogController(u32 index)
      {AnalogController::Button::R2, RETRO_DEVICE_ID_JOYPAD_R2},
      {AnalogController::Button::R3, RETRO_DEVICE_ID_JOYPAD_R3}}};
 
-  static constexpr std::array<std::pair<AnalogController::Axis, std::pair<u32, u32>>, 4> axis_mapping = {
+  static constexpr std::array<std::pair<AnalogController::Axis, std::pair<uint32_t, uint32_t>>, 4> axis_mapping = {
     {{AnalogController::Axis::LeftX, {RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X}},
      {AnalogController::Axis::LeftY, {RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y}},
      {AnalogController::Axis::RightX, {RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X}},
      {AnalogController::Axis::RightY, {RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y}}}};
 
-  // Read all 16 RETRO_DEVICE_ID_JOYPAD_* buttons into a single u16
+  // Read all 16 RETRO_DEVICE_ID_JOYPAD_* buttons into a single uint16_t
   // bitmask so we can drive both SetButtonState() and the analog-mode
   // combo-press detection below from one source. The bitmask path
   // costs one callback into the libretro frontend; the fallback path
   // costs sixteen, but that's still strictly fewer than the previous
   // code, which made sixteen-or-one for the loop and then eight more
   // unconditionally for PadCombo_L1..PadCombo_Select.
-  u16 active;
+  uint16_t active;
   if (m_supports_input_bitmasks)
   {
     active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
@@ -1492,26 +1492,26 @@ void HostInterface::UpdateControllersAnalogController(u32 index)
   else
   {
     active = 0u;
-    for (u32 id = 0; id < 16u; id++)
+    for (uint32_t id = 0; id < 16u; id++)
     {
       if (g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, id) != 0)
-        active |= static_cast<u16>(1u << id);
+        active |= static_cast<uint16_t>(1u << id);
     }
   }
 
   for (const auto& it : button_mapping)
-    controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+    controller->SetButtonState(it.first, (active & (static_cast<uint16_t>(1u) << it.second)) != 0u);
 
   for (const auto& it : axis_mapping)
   {
     const int16_t state = g_retro_input_state_callback(index, RETRO_DEVICE_ANALOG, it.second.first, it.second.second);
-    controller->SetAxisState(static_cast<s32>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
+    controller->SetAxisState(static_cast<int32_t>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
   }
 
   if (m_rumble_interface_valid && g_settings.controller_enable_rumble)
   {
-    const u16 strong = static_cast<u16>(static_cast<u32>(controller->GetVibrationMotorStrength(0) * 65535.0f));
-    const u16 weak = static_cast<u16>(static_cast<u32>(controller->GetVibrationMotorStrength(1) * 65535.0f));
+    const uint16_t strong = static_cast<uint16_t>(static_cast<uint32_t>(controller->GetVibrationMotorStrength(0) * 65535.0f));
+    const uint16_t weak = static_cast<uint16_t>(static_cast<uint32_t>(controller->GetVibrationMotorStrength(1) * 65535.0f));
     m_rumble_interface.set_rumble_state(index, RETRO_RUMBLE_STRONG, strong);
     m_rumble_interface.set_rumble_state(index, RETRO_RUMBLE_WEAK, weak);
   }
@@ -1592,7 +1592,7 @@ void HostInterface::UpdateControllersAnalogController(u32 index)
 
   // Check if all possible combo buttons are released and the index matches the player slot.
   // Also make sure having another DualShock plugged in doesn't prematurely clear the button block.
-  if (((u32)analog_index == index) && analog_pressed &&
+  if (((uint32_t)analog_index == index) && analog_pressed &&
        !PadCombo_L1 && !PadCombo_R1 && !PadCombo_L2 && !PadCombo_R2 && !PadCombo_L3 && !PadCombo_R3 && !PadCombo_Start && !PadCombo_Select)
   {
     analog_pressed = false;
@@ -1600,11 +1600,11 @@ void HostInterface::UpdateControllersAnalogController(u32 index)
   }
 }
 
-void HostInterface::UpdateControllersAnalogJoystick(u32 index)
+void HostInterface::UpdateControllersAnalogJoystick(uint32_t index)
 {
   AnalogJoystick* controller = static_cast<AnalogJoystick*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<AnalogJoystick::Button, u32>, 16> button_mapping = {
+  static constexpr std::array<std::pair<AnalogJoystick::Button, uint32_t>, 16> button_mapping = {
     {{AnalogJoystick::Button::Left, RETRO_DEVICE_ID_JOYPAD_LEFT},
      {AnalogJoystick::Button::Right, RETRO_DEVICE_ID_JOYPAD_RIGHT},
      {AnalogJoystick::Button::Up, RETRO_DEVICE_ID_JOYPAD_UP},
@@ -1622,7 +1622,7 @@ void HostInterface::UpdateControllersAnalogJoystick(u32 index)
      {AnalogJoystick::Button::R2, RETRO_DEVICE_ID_JOYPAD_R2},
      {AnalogJoystick::Button::R3, RETRO_DEVICE_ID_JOYPAD_R3}}};
 
-  static constexpr std::array<std::pair<AnalogJoystick::Axis, std::pair<u32, u32>>, 4> axis_mapping = {
+  static constexpr std::array<std::pair<AnalogJoystick::Axis, std::pair<uint32_t, uint32_t>>, 4> axis_mapping = {
     {{AnalogJoystick::Axis::LeftX, {RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X}},
      {AnalogJoystick::Axis::LeftY, {RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y}},
      {AnalogJoystick::Axis::RightX, {RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X}},
@@ -1630,9 +1630,9 @@ void HostInterface::UpdateControllersAnalogJoystick(u32 index)
 
   if (m_supports_input_bitmasks)
   {
-    const u16 active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+    const uint16_t active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
     for (const auto& it : button_mapping)
-      controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+      controller->SetButtonState(it.first, (active & (static_cast<uint16_t>(1u) << it.second)) != 0u);
   }
   else
   {
@@ -1646,15 +1646,15 @@ void HostInterface::UpdateControllersAnalogJoystick(u32 index)
   for (const auto& it : axis_mapping)
   {
     const int16_t state = g_retro_input_state_callback(index, RETRO_DEVICE_ANALOG, it.second.first, it.second.second);
-    controller->SetAxisState(static_cast<s32>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
+    controller->SetAxisState(static_cast<int32_t>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
   }
 }
 
-void HostInterface::UpdateControllersNeGcon(u32 index)
+void HostInterface::UpdateControllersNeGcon(uint32_t index)
 {
   NeGcon* controller = static_cast<NeGcon*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<NeGcon::Button, u32>, 8> button_mapping = {
+  static constexpr std::array<std::pair<NeGcon::Button, uint32_t>, 8> button_mapping = {
     {{NeGcon::Button::Left, RETRO_DEVICE_ID_JOYPAD_LEFT},
      {NeGcon::Button::Right, RETRO_DEVICE_ID_JOYPAD_RIGHT},
      {NeGcon::Button::Up, RETRO_DEVICE_ID_JOYPAD_UP},
@@ -1664,7 +1664,7 @@ void HostInterface::UpdateControllersNeGcon(u32 index)
      {NeGcon::Button::Start, RETRO_DEVICE_ID_JOYPAD_START},
      {NeGcon::Button::R, RETRO_DEVICE_ID_JOYPAD_R}}};
 
-  static constexpr std::array<std::pair<NeGcon::Axis, std::pair<u32, u32>>, 4> axis_mapping = {
+  static constexpr std::array<std::pair<NeGcon::Axis, std::pair<uint32_t, uint32_t>>, 4> axis_mapping = {
     {{NeGcon::Axis::Steering, {RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X}},
      {NeGcon::Axis::I, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_B}},
      {NeGcon::Axis::II, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_Y}},
@@ -1672,9 +1672,9 @@ void HostInterface::UpdateControllersNeGcon(u32 index)
 
   if (m_supports_input_bitmasks)
   {
-    const u16 active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+    const uint16_t active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
     for (const auto& it : button_mapping)
-      controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+      controller->SetButtonState(it.first, (active & (static_cast<uint16_t>(1u) << it.second)) != 0u);
   }
   else
   {
@@ -1697,16 +1697,16 @@ void HostInterface::UpdateControllersNeGcon(u32 index)
         state = g_retro_input_state_callback(index, RETRO_DEVICE_ANALOG, it.second.first, RETRO_DEVICE_ID_JOYPAD_L2);
     }
 
-    controller->SetAxisState(static_cast<s32>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
+    controller->SetAxisState(static_cast<int32_t>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
   }
 
 }
 
-void HostInterface::UpdateControllersNeGconRumble(u32 index)
+void HostInterface::UpdateControllersNeGconRumble(uint32_t index)
 {
   NeGconRumble* controller = static_cast<NeGconRumble*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<NeGconRumble::Button, u32>, 8> button_mapping = {
+  static constexpr std::array<std::pair<NeGconRumble::Button, uint32_t>, 8> button_mapping = {
     {{NeGconRumble::Button::Left, RETRO_DEVICE_ID_JOYPAD_LEFT},
      {NeGconRumble::Button::Right, RETRO_DEVICE_ID_JOYPAD_RIGHT},
      {NeGconRumble::Button::Up, RETRO_DEVICE_ID_JOYPAD_UP},
@@ -1716,18 +1716,18 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
      {NeGconRumble::Button::Start, RETRO_DEVICE_ID_JOYPAD_START},
      {NeGconRumble::Button::R, RETRO_DEVICE_ID_JOYPAD_R}}};
 
-  static constexpr std::array<std::pair<NeGconRumble::Axis, std::pair<u32, u32>>, 4> axis_mapping = {
+  static constexpr std::array<std::pair<NeGconRumble::Axis, std::pair<uint32_t, uint32_t>>, 4> axis_mapping = {
     {{NeGconRumble::Axis::Steering, {RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X}},
      {NeGconRumble::Axis::I, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_B}},
      {NeGconRumble::Axis::II, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_Y}},
      {NeGconRumble::Axis::L, {RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_L}}}};
 
   // Same pattern as UpdateControllersAnalogController - read once into
-  // a u16 bitmask (one libretro callback when the frontend supports it,
+  // a uint16_t bitmask (one libretro callback when the frontend supports it,
   // eight buttons via the fallback loop when not), then drive both the
   // SetButtonState pass and the analog-mode-toggle detection from it
   // without re-querying.
-  u16 active;
+  uint16_t active;
   if (m_supports_input_bitmasks)
   {
     active = g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
@@ -1735,15 +1735,15 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
   else
   {
     active = 0u;
-    for (u32 id = 0; id < 16u; id++)
+    for (uint32_t id = 0; id < 16u; id++)
     {
       if (g_retro_input_state_callback(index, RETRO_DEVICE_JOYPAD, 0, id) != 0)
-        active |= static_cast<u16>(1u << id);
+        active |= static_cast<uint16_t>(1u << id);
     }
   }
 
   for (const auto& it : button_mapping)
-    controller->SetButtonState(it.first, (active & (static_cast<u16>(1u) << it.second)) != 0u);
+    controller->SetButtonState(it.first, (active & (static_cast<uint16_t>(1u) << it.second)) != 0u);
 
   for (const auto& it : axis_mapping)
   {
@@ -1757,13 +1757,13 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
         state = g_retro_input_state_callback(index, RETRO_DEVICE_ANALOG, it.second.first, RETRO_DEVICE_ID_JOYPAD_L2);
     }
 
-    controller->SetAxisState(static_cast<s32>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
+    controller->SetAxisState(static_cast<int32_t>(it.first), std::clamp(static_cast<float>(state) / 32767.0f, -1.0f, 1.0f));
   }
 
   if (m_rumble_interface_valid && g_settings.controller_enable_rumble)
   {
-    const u16 strong = static_cast<u16>(static_cast<u32>(controller->GetVibrationMotorStrength(0) * 65535.0f));
-    const u16 weak = static_cast<u16>(static_cast<u32>(controller->GetVibrationMotorStrength(1) * 65535.0f));
+    const uint16_t strong = static_cast<uint16_t>(static_cast<uint32_t>(controller->GetVibrationMotorStrength(0) * 65535.0f));
+    const uint16_t weak = static_cast<uint16_t>(static_cast<uint32_t>(controller->GetVibrationMotorStrength(1) * 65535.0f));
     m_rumble_interface.set_rumble_state(index, RETRO_RUMBLE_STRONG, strong);
     m_rumble_interface.set_rumble_state(index, RETRO_RUMBLE_WEAK, weak);
   }
@@ -1787,7 +1787,7 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
 
   // Check if all possible combo buttons are released and the index matches the player slot.
   // Also make sure having another DualShock plugged in doesn't prematurely clear the button block.
-  if (((u32)analog_index == index) && analog_pressed && !Analog_Select)
+  if (((uint32_t)analog_index == index) && analog_pressed && !Analog_Select)
   {
     analog_pressed = false;
     analog_index = -1;
@@ -1795,11 +1795,11 @@ void HostInterface::UpdateControllersNeGconRumble(u32 index)
 
 }
 
-void HostInterface::UpdateControllersNamcoGunCon(u32 index)
+void HostInterface::UpdateControllersNamcoGunCon(uint32_t index)
 {
   NamcoGunCon* controller = static_cast<NamcoGunCon*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<NamcoGunCon::Button, u32>, 4> button_mapping = {
+  static constexpr std::array<std::pair<NamcoGunCon::Button, uint32_t>, 4> button_mapping = {
     {{NamcoGunCon::Button::Trigger, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER},
      {NamcoGunCon::Button::ShootOffscreen, RETRO_DEVICE_ID_LIGHTGUN_RELOAD},
      {NamcoGunCon::Button::A, RETRO_DEVICE_ID_LIGHTGUN_AUX_A},
@@ -1816,8 +1816,8 @@ void HostInterface::UpdateControllersNamcoGunCon(u32 index)
   const int16_t gun_y = g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y);
   const bool offscreen =
     g_retro_input_state_callback(index, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN) != 0;
-  const s32 pos_x = offscreen ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * m_display->GetWindowWidth())  / 0xFFFF);
-  const s32 pos_y = offscreen ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * m_display->GetWindowHeight()) / 0xFFFF);
+  const int32_t pos_x = offscreen ? 0 : (((static_cast<int32_t>(gun_x) + 0x7FFF) * m_display->GetWindowWidth())  / 0xFFFF);
+  const int32_t pos_y = offscreen ? 0 : (((static_cast<int32_t>(gun_y) + 0x7FFF) * m_display->GetWindowHeight()) / 0xFFFF);
 
   // The cached display mouse position is what NamcoGunCon::UpdatePosition
   // reads during a SIO Transfer to compute the gun's beam-tick / scanline
@@ -1837,11 +1837,11 @@ void HostInterface::UpdateControllersNamcoGunCon(u32 index)
 
 }
 
-void HostInterface::UpdateControllersPlayStationMouse(u32 index)
+void HostInterface::UpdateControllersPlayStationMouse(uint32_t index)
 {
   PlayStationMouse* controller = static_cast<PlayStationMouse*>(System::GetController(index));
 
-  static constexpr std::array<std::pair<PlayStationMouse::Button, u32>, 2> button_mapping = {
+  static constexpr std::array<std::pair<PlayStationMouse::Button, uint32_t>, 2> button_mapping = {
     {{PlayStationMouse::Button::Left, RETRO_DEVICE_ID_MOUSE_LEFT},
      {PlayStationMouse::Button::Right, RETRO_DEVICE_ID_MOUSE_RIGHT}}};
 
@@ -1853,8 +1853,8 @@ void HostInterface::UpdateControllersPlayStationMouse(u32 index)
 
   const int16_t mouse_x = g_retro_input_state_callback(index, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
   const int16_t mouse_y = g_retro_input_state_callback(index, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
-  const s32 pos_x = (m_display->GetMousePositionX() + mouse_x);
-  const s32 pos_y = (m_display->GetMousePositionY() + mouse_y);
+  const int32_t pos_x = (m_display->GetMousePositionX() + mouse_x);
+  const int32_t pos_y = (m_display->GetMousePositionY() + mouse_y);
 
   // PlayStationMouse::UpdatePosition reads the cached display position
   // during a SIO Transfer to compute the per-frame delta the PSX sees,
@@ -2155,7 +2155,7 @@ bool HostInterface::DiskControlSetImageIndex(unsigned index)
       (index >= P_THIS->m_disk_control_info.image_count))
     return false;
 
-  P_THIS->m_disk_control_info.image_index = (u32)index;
+  P_THIS->m_disk_control_info.image_index = (uint32_t)index;
   return true;
 }
 

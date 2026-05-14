@@ -97,7 +97,7 @@ void HostInterface::AddFormattedOSDMessage(float duration, const char* format, .
   AddOSDMessage(std::move(message), duration);
 }
 
-std::optional<std::vector<u8>> HostInterface::GetBIOSImage(ConsoleRegion region)
+std::optional<std::vector<uint8_t>> HostInterface::GetBIOSImage(ConsoleRegion region)
 {
   std::string bios_dir = GetBIOSDirectory();
 
@@ -133,7 +133,7 @@ std::optional<std::vector<u8>> HostInterface::GetBIOSImage(ConsoleRegion region)
   return image;
 }
 
-std::optional<std::vector<u8>> HostInterface::FindBIOSImageInDirectory(ConsoleRegion region, const char* directory)
+std::optional<std::vector<uint8_t>> HostInterface::FindBIOSImageInDirectory(ConsoleRegion region, const char* directory)
 {
   Log_InfoPrintf("Searching for a %s BIOS in '%s'...", Settings::GetConsoleRegionDisplayName(region), directory);
 
@@ -352,7 +352,7 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
   }
 
   bool controllers_updated = false;
-  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     if (g_settings.controller_types[i] != old_settings.controller_types[i])
     {
@@ -491,7 +491,7 @@ void HostInterface::UpdateSoftwareCursor()
   bool relative_mode = false;
   bool hide_cursor = false;
 
-  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     Controller* controller = System::GetController(i);
     if (controller && controller->GetSoftwareCursor(&image, &image_scale, &relative_mode))

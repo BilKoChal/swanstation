@@ -23,11 +23,11 @@ public:
   ~LibretroOpenGLHostDisplayTexture() override = default;
 
   void* GetHandle() const override { return reinterpret_cast<void*>(static_cast<uintptr_t>(m_texture.GetGLId())); }
-  u32 GetWidth() const override { return m_texture.GetWidth(); }
-  u32 GetHeight() const override { return m_texture.GetHeight(); }
-  u32 GetLayers() const override { return 1; }
-  u32 GetLevels() const override { return 1; }
-  u32 GetSamples() const override { return m_texture.GetSamples(); }
+  uint32_t GetWidth() const override { return m_texture.GetWidth(); }
+  uint32_t GetHeight() const override { return m_texture.GetHeight(); }
+  uint32_t GetLayers() const override { return 1; }
+  uint32_t GetLevels() const override { return 1; }
+  uint32_t GetSamples() const override { return m_texture.GetSamples(); }
   HostDisplayPixelFormat GetFormat() const override { return m_format; }
 
   GLuint GetGLID() const { return m_texture.GetGLId(); }
@@ -56,7 +56,7 @@ void* LibretroOpenGLHostDisplay::GetRenderContext() const
   return nullptr;
 }
 
-static constexpr std::array<std::tuple<GLenum, GLenum, GLenum>, static_cast<u32>(HostDisplayPixelFormat::Count)>
+static constexpr std::array<std::tuple<GLenum, GLenum, GLenum>, static_cast<uint32_t>(HostDisplayPixelFormat::Count)>
   s_display_pixel_format_mapping = {{
     {},                                                  // Unknown
     {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE},               // RGBA8
@@ -65,16 +65,16 @@ static constexpr std::array<std::tuple<GLenum, GLenum, GLenum>, static_cast<u32>
     {GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV} // RGBA5551
   }};
 
-std::unique_ptr<HostDisplayTexture> LibretroOpenGLHostDisplay::CreateTexture(u32 width, u32 height, u32 layers,
-                                                                             u32 levels, u32 samples,
+std::unique_ptr<HostDisplayTexture> LibretroOpenGLHostDisplay::CreateTexture(uint32_t width, uint32_t height, uint32_t layers,
+                                                                             uint32_t levels, uint32_t samples,
                                                                              HostDisplayPixelFormat format,
-                                                                             const void* data, u32 data_stride,
+                                                                             const void* data, uint32_t data_stride,
                                                                              bool dynamic /* = false */)
 {
   if (layers != 1 || levels != 1)
     return {};
 
-  const auto [gl_internal_format, gl_format, gl_type] = s_display_pixel_format_mapping[static_cast<u32>(format)];
+  const auto [gl_internal_format, gl_format, gl_type] = s_display_pixel_format_mapping[static_cast<uint32_t>(format)];
 
   // TODO: Set pack width
   GL::Texture tex;
@@ -86,17 +86,17 @@ std::unique_ptr<HostDisplayTexture> LibretroOpenGLHostDisplay::CreateTexture(u32
 
 bool LibretroOpenGLHostDisplay::SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const
 {
-  return (std::get<0>(s_display_pixel_format_mapping[static_cast<u32>(format)]) != static_cast<GLenum>(0));
+  return (std::get<0>(s_display_pixel_format_mapping[static_cast<uint32_t>(format)]) != static_cast<GLenum>(0));
 }
 
-bool LibretroOpenGLHostDisplay::BeginSetDisplayPixels(HostDisplayPixelFormat format, u32 width, u32 height,
-                                                      void** out_buffer, u32* out_pitch)
+bool LibretroOpenGLHostDisplay::BeginSetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height,
+                                                      void** out_buffer, uint32_t* out_pitch)
 {
-  const u32 pixel_size = GetDisplayPixelFormatSize(format);
-  const u32 stride = Common::AlignUpPow2(width * pixel_size, 4);
-  const u32 size_required = stride * height * pixel_size;
+  const uint32_t pixel_size = GetDisplayPixelFormatSize(format);
+  const uint32_t stride = Common::AlignUpPow2(width * pixel_size, 4);
+  const uint32_t size_required = stride * height * pixel_size;
 
-  const u32 buffer_size = Common::AlignUpPow2(size_required * 2, 4 * 1024 * 1024);
+  const uint32_t buffer_size = Common::AlignUpPow2(size_required * 2, 4 * 1024 * 1024);
   if (!m_display_pixels_texture_pbo || m_display_pixels_texture_pbo->GetSize() < buffer_size)
   {
     m_display_pixels_texture_pbo.reset();
@@ -120,11 +120,11 @@ bool LibretroOpenGLHostDisplay::BeginSetDisplayPixels(HostDisplayPixelFormat for
 
 void LibretroOpenGLHostDisplay::EndSetDisplayPixels()
 {
-  const u32 width = static_cast<u32>(m_display_texture_view_width);
-  const u32 height = static_cast<u32>(m_display_texture_view_height);
+  const uint32_t width = static_cast<uint32_t>(m_display_texture_view_width);
+  const uint32_t height = static_cast<uint32_t>(m_display_texture_view_height);
 
   const auto [gl_internal_format, gl_format, gl_type] =
-    s_display_pixel_format_mapping[static_cast<u32>(m_display_texture_format)];
+    s_display_pixel_format_mapping[static_cast<uint32_t>(m_display_texture_format)];
 
   glBindTexture(GL_TEXTURE_2D, m_display_pixels_texture_id);
 
@@ -140,13 +140,13 @@ void LibretroOpenGLHostDisplay::EndSetDisplayPixels()
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-bool LibretroOpenGLHostDisplay::SetDisplayPixels(HostDisplayPixelFormat format, u32 width, u32 height,
-                                                 const void* buffer, u32 pitch)
+bool LibretroOpenGLHostDisplay::SetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height,
+                                                 const void* buffer, uint32_t pitch)
 {
   glBindTexture(GL_TEXTURE_2D, m_display_pixels_texture_id);
 
-  const auto [gl_internal_format, gl_format, gl_type] = s_display_pixel_format_mapping[static_cast<u32>(format)];
-  const u32 pixel_size = GetDisplayPixelFormatSize(format);
+  const auto [gl_internal_format, gl_format, gl_type] = s_display_pixel_format_mapping[static_cast<uint32_t>(format)];
+  const uint32_t pixel_size = GetDisplayPixelFormatSize(format);
   const bool is_packed_tightly = (pitch == (pixel_size * width));
 
   // If we have GLES3, we can set row_length.
@@ -217,7 +217,7 @@ static void APIENTRY GLDebugCallback(GLenum source, GLenum type, GLuint id, GLen
 
 static bool TryDesktopVersions(retro_hw_render_callback* cb)
 {
-  static constexpr std::array<std::tuple<u32, u32>, 11> desktop_versions_to_try = {
+  static constexpr std::array<std::tuple<uint32_t, uint32_t>, 11> desktop_versions_to_try = {
     {/*{4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0}, */ {3, 3}, {3, 2}, {3, 1}, {3, 0}}};
 
   for (const auto& [major, minor] : desktop_versions_to_try)
@@ -244,7 +244,7 @@ static bool TryDesktopVersions(retro_hw_render_callback* cb)
 
 static bool TryESVersions(retro_hw_render_callback* cb)
 {
-  static constexpr std::array<std::tuple<u32, u32>, 4> es_versions_to_try = {{{3, 2}, {3, 1}, {3, 0}}};
+  static constexpr std::array<std::tuple<uint32_t, uint32_t>, 4> es_versions_to_try = {{{3, 2}, {3, 1}, {3, 0}}};
 
   for (const auto& [major, minor] : es_versions_to_try)
   {
@@ -338,10 +338,10 @@ void LibretroOpenGLHostDisplay::DestroyRenderDevice()
   DestroyResources();
 }
 
-void LibretroOpenGLHostDisplay::ResizeRenderWindow(s32 new_window_width, s32 new_window_height)
+void LibretroOpenGLHostDisplay::ResizeRenderWindow(int32_t new_window_width, int32_t new_window_height)
 {
-  m_window_info.surface_width = static_cast<u32>(new_window_width);
-  m_window_info.surface_height = static_cast<u32>(new_window_height);
+  m_window_info.surface_width = static_cast<uint32_t>(new_window_width);
+  m_window_info.surface_height = static_cast<uint32_t>(new_window_height);
 }
 
 bool LibretroOpenGLHostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
@@ -461,7 +461,7 @@ void LibretroOpenGLHostDisplay::DestroyResources()
 
 void LibretroOpenGLHostDisplay::RenderSoftwareCursor() {}
 
-void LibretroOpenGLHostDisplay::RenderSoftwareCursor(s32 left, s32 bottom, s32 width, s32 height,
+void LibretroOpenGLHostDisplay::RenderSoftwareCursor(int32_t left, int32_t bottom, int32_t width, int32_t height,
                                              HostDisplayTexture* texture_handle)
 {
   glViewport(left, bottom, width, height);
@@ -498,19 +498,19 @@ bool LibretroOpenGLHostDisplay::Render()
 
   const GLuint fbo = static_cast<GLuint>(
     static_cast<retro_hw_render_callback*>(m_window_info.display_connection)->get_current_framebuffer());
-  const u32 resolution_scale = g_host_interface_storage.GetResolutionScale();
-  const u32 display_width = static_cast<u32>(m_display_width) * resolution_scale;
-  const u32 display_height = static_cast<u32>(m_display_height) * resolution_scale;
+  const uint32_t resolution_scale = g_host_interface_storage.GetResolutionScale();
+  const uint32_t display_width = static_cast<uint32_t>(m_display_width) * resolution_scale;
+  const uint32_t display_height = static_cast<uint32_t>(m_display_height) * resolution_scale;
   // Lightgun state was cached at controller-update time; do NOT call
   // g_retro_input_state_callback() from the renderer - that would
   // sample input twice per frame across two callsites, which is
   // undefined behavior per the libretro spec (frontends are not
   // required to keep input_state values fresh outside of a poll).
-  const s16  gun_x     = GetLightgunRawX();
-  const s16  gun_y     = GetLightgunRawY();
+  const int16_t  gun_x     = GetLightgunRawX();
+  const int16_t  gun_y     = GetLightgunRawY();
   const bool offscreen = IsLightgunOffscreen();
-  const s32 pos_x = offscreen ? 0 : (((static_cast<s32>(gun_x) + 0x7FFF) * display_width)  / 0xFFFF);
-  const s32 pos_y = offscreen ? 0 : (((static_cast<s32>(gun_y) + 0x7FFF) * display_height) / 0xFFFF);
+  const int32_t pos_x = offscreen ? 0 : (((static_cast<int32_t>(gun_x) + 0x7FFF) * display_width)  / 0xFFFF);
+  const int32_t pos_y = offscreen ? 0 : (((static_cast<int32_t>(gun_y) + 0x7FFF) * display_height) / 0xFFFF);
 
   glEnable(GL_SCISSOR_TEST);
   glScissor(0, 0, display_width, display_height);
@@ -530,13 +530,13 @@ bool LibretroOpenGLHostDisplay::Render()
   {
     const float width_scale = (display_width / 2400.0f);
     const float height_scale = (display_height / 1920.0f);
-    const u32 cursor_extents_x = static_cast<u32>(static_cast<float>(m_cursor_texture->GetWidth()) * width_scale);
-    const u32 cursor_extents_y = static_cast<u32>(static_cast<float>(m_cursor_texture->GetHeight()) * height_scale);
+    const uint32_t cursor_extents_x = static_cast<uint32_t>(static_cast<float>(m_cursor_texture->GetWidth()) * width_scale);
+    const uint32_t cursor_extents_y = static_cast<uint32_t>(static_cast<float>(m_cursor_texture->GetHeight()) * height_scale);
 
-    const s32 out_left = pos_x - cursor_extents_x;
-    const s32 out_top = pos_y - cursor_extents_y;
-    const s32 out_width = cursor_extents_x * 2u;
-    const s32 out_height = cursor_extents_y * 2u;
+    const int32_t out_left = pos_x - cursor_extents_x;
+    const int32_t out_top = pos_y - cursor_extents_y;
+    const int32_t out_width = cursor_extents_x * 2u;
+    const int32_t out_height = cursor_extents_y * 2u;
 
     RenderSoftwareCursor(out_left, display_height - out_top - out_height, out_width, out_height, m_cursor_texture.get());
   }
@@ -547,9 +547,9 @@ bool LibretroOpenGLHostDisplay::Render()
   return true;
 }
 
-void LibretroOpenGLHostDisplay::RenderDisplay(s32 left, s32 bottom, s32 width, s32 height, void* texture_handle,
-                                              u32 texture_width, s32 texture_height, s32 texture_view_x,
-                                              s32 texture_view_y, s32 texture_view_width, s32 texture_view_height)
+void LibretroOpenGLHostDisplay::RenderDisplay(int32_t left, int32_t bottom, int32_t width, int32_t height, void* texture_handle,
+                                              uint32_t texture_width, int32_t texture_height, int32_t texture_view_x,
+                                              int32_t texture_view_y, int32_t texture_view_width, int32_t texture_view_height)
 {
   glViewport(left, bottom, width, height);
   glDisable(GL_BLEND);
@@ -709,9 +709,9 @@ bool GPU_HW_OpenGL::DoState(StateWrapper& sw, HostDisplayTexture** host_texture,
   return GPU_HW::DoState(sw, host_texture, update_display);
 }
 
-void GPU_HW_OpenGL::CopyFramebufferForState(GLenum target, GLuint src_texture, u32 src_fbo, u32 src_x, u32 src_y,
-                                            GLuint dst_texture, u32 dst_fbo, u32 dst_x, u32 dst_y, u32 width,
-                                            u32 height)
+void GPU_HW_OpenGL::CopyFramebufferForState(GLenum target, GLuint src_texture, uint32_t src_fbo, uint32_t src_x, uint32_t src_y,
+                                            GLuint dst_texture, uint32_t dst_fbo, uint32_t dst_x, uint32_t dst_y, uint32_t width,
+                                            uint32_t height)
 {
   if (target != GL_TEXTURE_2D && GLAD_GL_VERSION_4_3)
   {
@@ -826,7 +826,7 @@ void GPU_HW_OpenGL::UpdateSettings()
   }
 }
 
-void GPU_HW_OpenGL::MapBatchVertexPointer(u32 required_vertices)
+void GPU_HW_OpenGL::MapBatchVertexPointer(uint32_t required_vertices)
 {
   const GL::StreamBuffer::MappingResult res =
     m_vertex_stream_buffer->Map(sizeof(BatchVertex), required_vertices * sizeof(BatchVertex));
@@ -837,7 +837,7 @@ void GPU_HW_OpenGL::MapBatchVertexPointer(u32 required_vertices)
   m_batch_base_vertex = res.index_aligned;
 }
 
-void GPU_HW_OpenGL::UnmapBatchVertexPointer(u32 used_vertices)
+void GPU_HW_OpenGL::UnmapBatchVertexPointer(uint32_t used_vertices)
 {
   m_vertex_stream_buffer->Unmap(used_vertices * sizeof(BatchVertex));
   m_vertex_stream_buffer->Bind();
@@ -846,9 +846,9 @@ void GPU_HW_OpenGL::UnmapBatchVertexPointer(u32 used_vertices)
   m_batch_current_vertex_ptr = nullptr;
 }
 
-std::tuple<s32, s32> GPU_HW_OpenGL::ConvertToFramebufferCoordinates(s32 x, s32 y)
+std::tuple<int32_t, int32_t> GPU_HW_OpenGL::ConvertToFramebufferCoordinates(int32_t x, int32_t y)
 {
-  return std::make_tuple(x, static_cast<s32>(VRAM_HEIGHT) - y);
+  return std::make_tuple(x, static_cast<int32_t>(VRAM_HEIGHT) - y);
 }
 
 void GPU_HW_OpenGL::SetCapabilities()
@@ -856,7 +856,7 @@ void GPU_HW_OpenGL::SetCapabilities()
   GLint max_texture_size = VRAM_WIDTH;
   glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
   Log_InfoPrintf("Max texture size: %dx%d", max_texture_size, max_texture_size);
-  m_max_resolution_scale = static_cast<u32>(max_texture_size / VRAM_WIDTH);
+  m_max_resolution_scale = static_cast<uint32_t>(max_texture_size / VRAM_WIDTH);
 
   m_max_multisamples = 1;
   if (GLAD_GL_ARB_texture_storage || GLAD_GL_ES_VERSION_3_2)
@@ -900,7 +900,7 @@ void GPU_HW_OpenGL::SetCapabilities()
     else
     {
       m_texture_stream_buffer_size =
-        std::min<u32>(VRAM_UPDATE_TEXTURE_BUFFER_SIZE, static_cast<u32>(max_texel_buffer_size) * sizeof(u16));
+        std::min<uint32_t>(VRAM_UPDATE_TEXTURE_BUFFER_SIZE, static_cast<uint32_t>(max_texel_buffer_size) * sizeof(uint16_t));
     }
   }
 
@@ -918,12 +918,12 @@ void GPU_HW_OpenGL::SetCapabilities()
     Log_InfoPrintf("Max fragment shader storage blocks: %d", max_fragment_storage_blocks);
     Log_InfoPrintf("Max shader storage buffer size: %" PRId64, max_ssbo_size);
     m_use_ssbo_for_vram_writes = (max_fragment_storage_blocks > 0 &&
-                                  max_ssbo_size >= static_cast<GLint64>(VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16)));
+                                  max_ssbo_size >= static_cast<GLint64>(VRAM_WIDTH * VRAM_HEIGHT * sizeof(uint16_t)));
     if (m_use_ssbo_for_vram_writes)
     {
       Log_InfoPrintf("Using shader storage buffers for VRAM writes.");
       m_texture_stream_buffer_size =
-        static_cast<u32>(std::min<u64>(VRAM_UPDATE_TEXTURE_BUFFER_SIZE, static_cast<u64>(max_ssbo_size)));
+        static_cast<uint32_t>(std::min<uint64_t>(VRAM_UPDATE_TEXTURE_BUFFER_SIZE, static_cast<uint64_t>(max_ssbo_size)));
     }
     else
     {
@@ -950,9 +950,9 @@ void GPU_HW_OpenGL::SetCapabilities()
 bool GPU_HW_OpenGL::CreateFramebuffer()
 {
   // scale vram size to internal resolution
-  const u32 texture_width = VRAM_WIDTH * m_resolution_scale;
-  const u32 texture_height = VRAM_HEIGHT * m_resolution_scale;
-  const u32 multisamples = m_multisamples;
+  const uint32_t texture_width = VRAM_WIDTH * m_resolution_scale;
+  const uint32_t texture_height = VRAM_HEIGHT * m_resolution_scale;
+  const uint32_t multisamples = m_multisamples;
 
   if (!m_vram_texture.Create(texture_width, texture_height, multisamples, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, nullptr,
                              false, true) ||
@@ -1122,21 +1122,21 @@ bool GPU_HW_OpenGL::CompilePrograms()
   // commits.
   const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
   const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
-  const u32 batch_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(4 * 9 * 2 * 2) : 0u;
+  const uint32_t batch_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Programs",
                                         batch_progress_units + (2 * 3) + (2 * 2) + 1 + 1 + 1 + 1 + 1);
 
   if (precompile_sync)
   {
-    for (u8 render_mode = 0; render_mode < 4; render_mode++)
+    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
-      for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+      for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
       {
-        for (u8 dithering = 0; dithering < 2; dithering++)
+        for (uint8_t dithering = 0; dithering < 2; dithering++)
         {
-          for (u8 interlacing = 0; interlacing < 2; interlacing++)
+          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
           {
             const GL::Program* prog = GetBatchProgram(render_mode, texture_mode, static_cast<bool>(dithering),
                                                       static_cast<bool>(interlacing));
@@ -1152,9 +1152,9 @@ bool GPU_HW_OpenGL::CompilePrograms()
   // constructed (program id 0); each cell is filled on first draw
   // by GetBatchProgram on the runloop thread.
 
-  for (u8 depth_24bit = 0; depth_24bit < 2; depth_24bit++)
+  for (uint8_t depth_24bit = 0; depth_24bit < 2; depth_24bit++)
   {
-    for (u8 interlaced = 0; interlaced < 3; interlaced++)
+    for (uint8_t interlaced = 0; interlaced < 3; interlaced++)
     {
       const std::string vs = shadergen.GenerateScreenQuadVertexShader();
       const std::string fs = shadergen.GenerateDisplayFragmentShader(
@@ -1179,9 +1179,9 @@ bool GPU_HW_OpenGL::CompilePrograms()
     }
   }
 
-  for (u8 wrapped = 0; wrapped < 2; wrapped++)
+  for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
   {
-    for (u8 interlaced = 0; interlaced < 2; interlaced++)
+    for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
     {
       std::optional<GL::Program> prog = shader_cache.GetProgram(
         shadergen.GenerateScreenQuadVertexShader(), {},
@@ -1295,7 +1295,7 @@ bool GPU_HW_OpenGL::CompilePrograms()
   return true;
 }
 
-const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing)
+const GL::Program* GPU_HW_OpenGL::GetBatchProgram(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing)
 {
   // Reserved_*Direct16Bit dedup. The fragment shader source for
   // texture_mode 3 / 7 is byte-for-byte identical to 2 / 6 after
@@ -1306,11 +1306,11 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mod
   // separate program object. The disk-backed program cache hits on
   // the second GetProgram call and reloads the linked binary
   // instead of recompiling, so the duplicate is cheap.
-  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+  const uint8_t lookup_mode = (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
-  GL::Program& slot = m_render_programs[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
+  GL::Program& slot = m_render_programs[render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
   if (slot.IsValid())
     return &slot;
 
@@ -1357,7 +1357,7 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mod
   if (!prog)
   {
     Log_ErrorPrintf("Lazy batch program compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode, texture_mode,
-                    static_cast<u8>(dithering), static_cast<u8>(interlacing));
+                    static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
     return nullptr;
   }
 
@@ -1375,7 +1375,7 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mod
   return &slot;
 }
 
-void GPU_HW_OpenGL::DrawBatchVertices(BatchRenderMode render_mode, u32 base_vertex, u32 num_vertices)
+void GPU_HW_OpenGL::DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices)
 {
   // Fetch the batch program via the lazy helper. In 'Enabled'
   // precompile mode every slot was filled at CompilePrograms time
@@ -1384,7 +1384,7 @@ void GPU_HW_OpenGL::DrawBatchVertices(BatchRenderMode render_mode, u32 base_vert
   // combination, then cached. Single-threaded - no mutex / no
   // atomic - because the libretro hardware-renderer protocol only
   // gives us one GL context bound to this thread.
-  const GL::Program* prog = GetBatchProgram(static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode),
+  const GL::Program* prog = GetBatchProgram(static_cast<uint8_t>(render_mode), static_cast<uint8_t>(m_batch.texture_mode),
                                             m_batch.dithering, m_batch.interlacing);
   if (!prog)
     return;
@@ -1429,8 +1429,8 @@ void GPU_HW_OpenGL::SetBlendMode()
   }
 }
 
-bool GPU_HW_OpenGL::BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, u32 dst_x, u32 dst_y, u32 width,
-                                               u32 height)
+bool GPU_HW_OpenGL::BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, uint32_t dst_x, uint32_t dst_y, uint32_t width,
+                                               uint32_t height)
 {
   if (!m_vram_write_replacement_texture.IsValid())
   {
@@ -1486,7 +1486,7 @@ void GPU_HW_OpenGL::SetScissorFromDrawingArea()
   glScissor(x, y, width, height);
 }
 
-void GPU_HW_OpenGL::UploadUniformBuffer(const void* data, u32 data_size)
+void GPU_HW_OpenGL::UploadUniformBuffer(const void* data, uint32_t data_size)
 {
   const GL::StreamBuffer::MappingResult res = m_uniform_stream_buffer->Map(m_uniform_buffer_alignment, data_size);
   std::memcpy(res.pointer, data, data_size);
@@ -1518,15 +1518,15 @@ void GPU_HW_OpenGL::UpdateDisplay()
                                          m_crtc_state.display_vram_width, m_crtc_state.display_vram_height,
                                          GetDisplayAspectRatio());
 
-    const u32 resolution_scale = m_GPUSTAT.display_area_color_depth_24 ? 1 : m_resolution_scale;
-    const u32 vram_offset_x = m_crtc_state.display_vram_left;
-    const u32 vram_offset_y = m_crtc_state.display_vram_top;
-    const u32 scaled_vram_offset_x = vram_offset_x * resolution_scale;
-    const u32 scaled_vram_offset_y = vram_offset_y * resolution_scale;
-    const u32 display_width = m_crtc_state.display_vram_width;
-    const u32 display_height = m_crtc_state.display_vram_height;
-    const u32 scaled_display_width = display_width * resolution_scale;
-    const u32 scaled_display_height = display_height * resolution_scale;
+    const uint32_t resolution_scale = m_GPUSTAT.display_area_color_depth_24 ? 1 : m_resolution_scale;
+    const uint32_t vram_offset_x = m_crtc_state.display_vram_left;
+    const uint32_t vram_offset_y = m_crtc_state.display_vram_top;
+    const uint32_t scaled_vram_offset_x = vram_offset_x * resolution_scale;
+    const uint32_t scaled_vram_offset_y = vram_offset_y * resolution_scale;
+    const uint32_t display_width = m_crtc_state.display_vram_width;
+    const uint32_t display_height = m_crtc_state.display_vram_height;
+    const uint32_t scaled_display_width = display_width * resolution_scale;
+    const uint32_t scaled_display_height = display_height * resolution_scale;
     const InterlacedRenderMode interlaced = GetInterlacedRenderMode();
 
     if (IsDisplayDisabled())
@@ -1548,7 +1548,7 @@ void GPU_HW_OpenGL::UpdateDisplay()
                                           HostDisplayPixelFormat::RGBA8, m_vram_texture.GetWidth(),
                                           m_vram_texture.GetHeight(), scaled_vram_offset_x,
                                           m_vram_texture.GetHeight() - scaled_vram_offset_y, scaled_display_width,
-                                          -static_cast<s32>(scaled_display_height));
+                                          -static_cast<int32_t>(scaled_display_height));
       }
     }
     else
@@ -1557,7 +1557,7 @@ void GPU_HW_OpenGL::UpdateDisplay()
       glDisable(GL_SCISSOR_TEST);
       glDisable(GL_DEPTH_TEST);
 
-      m_display_programs[static_cast<u8>(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Bind();
+      m_display_programs[static_cast<uint8_t>(m_GPUSTAT.display_area_color_depth_24)][static_cast<uint8_t>(interlaced)].Bind();
       m_display_texture.BindFramebuffer(GL_DRAW_FRAMEBUFFER);
       m_vram_texture.Bind();
 
@@ -1567,13 +1567,13 @@ void GPU_HW_OpenGL::UpdateDisplay()
         glInvalidateFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLsizei>(attachments.size()), attachments.data());
       }
 
-      const u8 height_div2 = static_cast<u8>(interlaced == GPU_HW::InterlacedRenderMode::SeparateFields);
-      const u32 reinterpret_field_offset = (interlaced != InterlacedRenderMode::None) ? GetInterlacedDisplayField() : 0;
-      const u32 scaled_flipped_vram_offset_y = m_vram_texture.GetHeight() - scaled_vram_offset_y -
+      const uint8_t height_div2 = static_cast<uint8_t>(interlaced == GPU_HW::InterlacedRenderMode::SeparateFields);
+      const uint32_t reinterpret_field_offset = (interlaced != InterlacedRenderMode::None) ? GetInterlacedDisplayField() : 0;
+      const uint32_t scaled_flipped_vram_offset_y = m_vram_texture.GetHeight() - scaled_vram_offset_y -
                                                reinterpret_field_offset - (scaled_display_height >> height_div2);
-      const u32 reinterpret_start_x = m_crtc_state.regs.X * resolution_scale;
-      const u32 reinterpret_crop_left = (m_crtc_state.display_vram_left - m_crtc_state.regs.X) * resolution_scale;
-      const u32 uniforms[4] = {reinterpret_start_x, scaled_flipped_vram_offset_y, reinterpret_crop_left,
+      const uint32_t reinterpret_start_x = m_crtc_state.regs.X * resolution_scale;
+      const uint32_t reinterpret_crop_left = (m_crtc_state.display_vram_left - m_crtc_state.regs.X) * resolution_scale;
+      const uint32_t uniforms[4] = {reinterpret_start_x, scaled_flipped_vram_offset_y, reinterpret_crop_left,
                                reinterpret_field_offset};
       UploadUniformBuffer(uniforms, sizeof(uniforms));
       m_batch_ubo_dirty = true;
@@ -1591,7 +1591,7 @@ void GPU_HW_OpenGL::UpdateDisplay()
         m_host_display->SetDisplayTexture(reinterpret_cast<void*>(static_cast<uintptr_t>(m_display_texture.GetGLId())),
                                           HostDisplayPixelFormat::RGBA8, m_display_texture.GetWidth(),
                                           m_display_texture.GetHeight(), 0, scaled_display_height, scaled_display_width,
-                                          -static_cast<s32>(scaled_display_height));
+                                          -static_cast<int32_t>(scaled_display_height));
       }
 
       // restore state
@@ -1606,7 +1606,7 @@ void GPU_HW_OpenGL::UpdateDisplay()
     }
 }
 
-void GPU_HW_OpenGL::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
+void GPU_HW_OpenGL::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
 {
   if (IsUsingSoftwareRendererForReadbacks())
   {
@@ -1615,12 +1615,12 @@ void GPU_HW_OpenGL::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
   }
 
   // Get bounds with wrap-around handled.
-  const Common::Rectangle<u32> copy_rect = GetVRAMTransferBounds(x, y, width, height);
-  const u32 encoded_width = (copy_rect.GetWidth() + 1) / 2;
-  const u32 encoded_height = copy_rect.GetHeight();
+  const Common::Rectangle<uint32_t> copy_rect = GetVRAMTransferBounds(x, y, width, height);
+  const uint32_t encoded_width = (copy_rect.GetWidth() + 1) / 2;
+  const uint32_t encoded_height = copy_rect.GetHeight();
 
   // Encode the 24-bit texture as 16-bit.
-  const u32 uniforms[4] = {copy_rect.left, VRAM_HEIGHT - copy_rect.top - copy_rect.GetHeight(), copy_rect.GetWidth(),
+  const uint32_t uniforms[4] = {copy_rect.left, VRAM_HEIGHT - copy_rect.top - copy_rect.GetHeight(), copy_rect.GetWidth(),
                            copy_rect.GetHeight()};
   m_vram_encoding_texture.BindFramebuffer(GL_DRAW_FRAMEBUFFER);
   m_vram_texture.Bind();
@@ -1643,14 +1643,14 @@ void GPU_HW_OpenGL::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
   RestoreGraphicsAPIState();
 }
 
-void GPU_HW_OpenGL::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
+void GPU_HW_OpenGL::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color)
 {
   if (IsUsingSoftwareRendererForReadbacks())
     FillSoftwareRendererVRAM(x, y, width, height, color);
 
   GPU_HW::FillVRAM(x, y, width, height, color);
 
-  const Common::Rectangle<u32> bounds(GetVRAMTransferBounds(x, y, width, height));
+  const Common::Rectangle<uint32_t> bounds(GetVRAMTransferBounds(x, y, width, height));
   glScissor(bounds.left * m_resolution_scale,
             m_vram_texture.GetHeight() - (bounds.top * m_resolution_scale) - (height * m_resolution_scale),
             width * m_resolution_scale, height * m_resolution_scale);
@@ -1671,7 +1671,7 @@ void GPU_HW_OpenGL::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   {
     const VRAMFillUBOData uniforms = GetVRAMFillUBOData(x, y, width, height, color);
 
-    m_vram_fill_programs[static_cast<u8>(wrapped)][static_cast<u8>(interlaced)].Bind();
+    m_vram_fill_programs[static_cast<uint8_t>(wrapped)][static_cast<uint8_t>(interlaced)].Bind();
     UploadUniformBuffer(&uniforms, sizeof(uniforms));
     glDisable(GL_BLEND);
     SetDepthFunc(GL_ALWAYS);
@@ -1682,12 +1682,12 @@ void GPU_HW_OpenGL::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   }
 }
 
-void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, bool set_mask, bool check_mask)
+void GPU_HW_OpenGL::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask)
 {
   if (IsUsingSoftwareRendererForReadbacks())
     UpdateSoftwareRendererVRAM(x, y, width, height, data, set_mask, check_mask);
 
-  const Common::Rectangle<u32> bounds = GetVRAMTransferBounds(x, y, width, height);
+  const Common::Rectangle<uint32_t> bounds = GetVRAMTransferBounds(x, y, width, height);
   GPU_HW::UpdateVRAM(bounds.left, bounds.top, bounds.GetWidth(), bounds.GetHeight(), data, set_mask, check_mask);
 
   if (!check_mask)
@@ -1700,12 +1700,12 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
     }
   }
 
-  const u32 num_pixels = width * height;
+  const uint32_t num_pixels = width * height;
   if (m_use_texture_buffer_for_vram_writes || m_use_ssbo_for_vram_writes)
   {
-    const auto map_result = m_texture_stream_buffer->Map(sizeof(u16), num_pixels * sizeof(u16));
-    std::memcpy(map_result.pointer, data, num_pixels * sizeof(u16));
-    m_texture_stream_buffer->Unmap(num_pixels * sizeof(u16));
+    const auto map_result = m_texture_stream_buffer->Map(sizeof(uint16_t), num_pixels * sizeof(uint16_t));
+    std::memcpy(map_result.pointer, data, num_pixels * sizeof(uint16_t));
+    m_texture_stream_buffer->Unmap(num_pixels * sizeof(uint16_t));
     m_texture_stream_buffer->Unbind();
 
     glDisable(GL_BLEND);
@@ -1722,7 +1722,7 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
     UploadUniformBuffer(&uniforms, sizeof(uniforms));
 
     // the viewport should already be set to the full vram, so just adjust the scissor
-    const Common::Rectangle<u32> scaled_bounds = bounds * m_resolution_scale;
+    const Common::Rectangle<uint32_t> scaled_bounds = bounds * m_resolution_scale;
     glScissor(scaled_bounds.left, m_vram_texture.GetHeight() - scaled_bounds.top - scaled_bounds.GetHeight(),
               scaled_bounds.GetWidth(), scaled_bounds.GetHeight());
 
@@ -1745,20 +1745,20 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
 
     GPU_HW::UpdateVRAM(x, y, width, height, data, set_mask, check_mask);
 
-    const auto map_result = m_texture_stream_buffer->Map(sizeof(u32), num_pixels * sizeof(u32));
+    const auto map_result = m_texture_stream_buffer->Map(sizeof(uint32_t), num_pixels * sizeof(uint32_t));
 
     // reverse copy the rows so it matches opengl's lower-left origin
-    const u32 source_stride = width * sizeof(u16);
-    const u8* source_ptr = static_cast<const u8*>(data) + (source_stride * (height - 1));
-    const u16 mask_or = set_mask ? 0x8000 : 0x0000;
-    u32* dest_ptr = static_cast<u32*>(map_result.pointer);
-    for (u32 row = 0; row < height; row++)
+    const uint32_t source_stride = width * sizeof(uint16_t);
+    const uint8_t* source_ptr = static_cast<const uint8_t*>(data) + (source_stride * (height - 1));
+    const uint16_t mask_or = set_mask ? 0x8000 : 0x0000;
+    uint32_t* dest_ptr = static_cast<uint32_t*>(map_result.pointer);
+    for (uint32_t row = 0; row < height; row++)
     {
-      const u8* source_row_ptr = source_ptr;
+      const uint8_t* source_row_ptr = source_ptr;
 
-      for (u32 col = 0; col < width; col++)
+      for (uint32_t col = 0; col < width; col++)
       {
-        u16 src_col;
+        uint16_t src_col;
         std::memcpy(&src_col, source_row_ptr, sizeof(src_col));
         source_row_ptr += sizeof(src_col);
         *(dest_ptr++) = VRAMRGBA5551ToRGBA8888(src_col | mask_or);
@@ -1767,7 +1767,7 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
       source_ptr -= source_stride;
     }
 
-    m_texture_stream_buffer->Unmap(num_pixels * sizeof(u32));
+    m_texture_stream_buffer->Unmap(num_pixels * sizeof(uint32_t));
     m_texture_stream_buffer->Bind();
 
     // have to write to the 1x texture first
@@ -1777,7 +1777,7 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
       m_vram_texture.Bind();
 
     // lower-left origin flip happens here
-    const u32 flipped_y = VRAM_HEIGHT - y - height;
+    const uint32_t flipped_y = VRAM_HEIGHT - y - height;
 
     // update texture data
     glTexSubImage2D(m_vram_texture.GetGLTarget(), 0, x, flipped_y, width, height, GL_RGBA, GL_UNSIGNED_BYTE,
@@ -1787,11 +1787,11 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
     if (m_resolution_scale > 1)
     {
       // scale to internal resolution
-      const u32 scaled_width = width * m_resolution_scale;
-      const u32 scaled_height = height * m_resolution_scale;
-      const u32 scaled_x = x * m_resolution_scale;
-      const u32 scaled_y = y * m_resolution_scale;
-      const u32 scaled_flipped_y = m_vram_texture.GetHeight() - scaled_y - scaled_height;
+      const uint32_t scaled_width = width * m_resolution_scale;
+      const uint32_t scaled_height = height * m_resolution_scale;
+      const uint32_t scaled_x = x * m_resolution_scale;
+      const uint32_t scaled_y = y * m_resolution_scale;
+      const uint32_t scaled_flipped_y = m_vram_texture.GetHeight() - scaled_y - scaled_height;
       glDisable(GL_SCISSOR_TEST);
       m_vram_encoding_texture.BindFramebuffer(GL_READ_FRAMEBUFFER);
       glBlitFramebuffer(x, flipped_y, x + width, flipped_y + height, scaled_x, scaled_flipped_y,
@@ -1801,13 +1801,13 @@ void GPU_HW_OpenGL::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
   }
 }
 
-void GPU_HW_OpenGL::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height)
+void GPU_HW_OpenGL::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height)
 {
   if (IsUsingSoftwareRendererForReadbacks())
     CopySoftwareRendererVRAM(src_x, src_y, dst_x, dst_y, width, height);
 
-  const Common::Rectangle<u32> dst_bounds = GetVRAMTransferBounds(dst_x, dst_y, width, height);
-  const Common::Rectangle<u32> src_bounds = GetVRAMTransferBounds(src_x, src_y, width, height);
+  const Common::Rectangle<uint32_t> dst_bounds = GetVRAMTransferBounds(dst_x, dst_y, width, height);
+  const Common::Rectangle<uint32_t> src_bounds = GetVRAMTransferBounds(src_x, src_y, width, height);
   const bool src_dirty = m_vram_dirty_rect.Intersects(src_bounds);
 
   if (UseVRAMCopyShader(src_x, src_y, dst_x, dst_y, width, height))
@@ -1825,7 +1825,7 @@ void GPU_HW_OpenGL::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wid
     glDisable(GL_BLEND);
     SetDepthFunc((m_GPUSTAT.check_mask_before_draw && !m_pgxp_depth_buffer) ? GL_GEQUAL : GL_ALWAYS);
 
-    const Common::Rectangle<u32> dst_bounds_scaled(dst_bounds * m_resolution_scale);
+    const Common::Rectangle<uint32_t> dst_bounds_scaled(dst_bounds * m_resolution_scale);
     glViewport(dst_bounds_scaled.left,
                m_vram_texture.GetHeight() - dst_bounds_scaled.top - dst_bounds_scaled.GetHeight(),
                dst_bounds_scaled.GetWidth(), dst_bounds_scaled.GetHeight());
@@ -1890,10 +1890,10 @@ void GPU_HW_OpenGL::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wid
 void GPU_HW_OpenGL::UpdateVRAMReadTexture()
 {
   const auto scaled_rect = m_vram_dirty_rect * m_resolution_scale;
-  const u32 width = scaled_rect.GetWidth();
-  const u32 height = scaled_rect.GetHeight();
-  const u32 x = scaled_rect.left;
-  const u32 y = m_vram_texture.GetHeight() - scaled_rect.top - height;
+  const uint32_t width = scaled_rect.GetWidth();
+  const uint32_t height = scaled_rect.GetHeight();
+  const uint32_t x = scaled_rect.left;
+  const uint32_t y = m_vram_texture.GetHeight() - scaled_rect.top - height;
   const bool multisampled = m_vram_texture.IsMultisampled();
 
   if (!multisampled && GLAD_GL_VERSION_4_3)
@@ -1955,17 +1955,17 @@ void GPU_HW_OpenGL::ClearDepthBuffer()
   m_last_depth_z = 1.0f;
 }
 
-void GPU_HW_OpenGL::DownsampleFramebuffer(GL::Texture& source, u32 left, u32 top, u32 width, u32 height)
+void GPU_HW_OpenGL::DownsampleFramebuffer(GL::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height)
 {
   DownsampleFramebufferBoxFilter(source, left, top, width, height);
 }
 
-void GPU_HW_OpenGL::DownsampleFramebufferBoxFilter(GL::Texture& source, u32 left, u32 top, u32 width, u32 height)
+void GPU_HW_OpenGL::DownsampleFramebufferBoxFilter(GL::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height)
 {
-  const u32 ds_left = left / m_resolution_scale;
-  const u32 ds_top = top / m_resolution_scale;
-  const u32 ds_width = width / m_resolution_scale;
-  const u32 ds_height = height / m_resolution_scale;
+  const uint32_t ds_left = left / m_resolution_scale;
+  const uint32_t ds_top = top / m_resolution_scale;
+  const uint32_t ds_width = width / m_resolution_scale;
+  const uint32_t ds_height = height / m_resolution_scale;
 
   glDisable(GL_BLEND);
   glDisable(GL_DEPTH_TEST);
@@ -1982,7 +1982,7 @@ void GPU_HW_OpenGL::DownsampleFramebufferBoxFilter(GL::Texture& source, u32 left
   m_host_display->SetDisplayTexture(reinterpret_cast<void*>(static_cast<uintptr_t>(m_downsample_texture.GetGLId())),
                                     HostDisplayPixelFormat::RGBA8, m_downsample_texture.GetWidth(),
                                     m_downsample_texture.GetHeight(), ds_left,
-                                    m_downsample_texture.GetHeight() - ds_top, ds_width, -static_cast<s32>(ds_height));
+                                    m_downsample_texture.GetHeight() - ds_top, ds_width, -static_cast<int32_t>(ds_height));
 }
 
 std::unique_ptr<GPU> GPU::CreateHardwareOpenGLRenderer()

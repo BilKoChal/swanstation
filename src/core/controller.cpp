@@ -21,32 +21,32 @@ bool Controller::DoState(StateWrapper& sw, bool apply_input_state)
 
 void Controller::ResetTransferState() {}
 
-bool Controller::Transfer(const u8 data_in, u8* data_out)
+bool Controller::Transfer(const uint8_t data_in, uint8_t* data_out)
 {
   *data_out = 0xFF;
   return false;
 }
 
-void Controller::SetAxisState(s32 axis_code, float value) {}
+void Controller::SetAxisState(int32_t axis_code, float value) {}
 
-void Controller::SetButtonState(s32 button_code, bool pressed) {}
+void Controller::SetButtonState(int32_t button_code, bool pressed) {}
 
-u32 Controller::GetButtonStateBits() const
+uint32_t Controller::GetButtonStateBits() const
 {
   return 0;
 }
 
-std::optional<u32> Controller::GetAnalogInputBytes() const
+std::optional<uint32_t> Controller::GetAnalogInputBytes() const
 {
   return std::nullopt;
 }
 
-u32 Controller::GetVibrationMotorCount() const
+uint32_t Controller::GetVibrationMotorCount() const
 {
   return 0;
 }
 
-float Controller::GetVibrationMotorStrength(u32 motor)
+float Controller::GetVibrationMotorStrength(uint32_t motor)
 {
   return 0.0f;
 }
@@ -58,7 +58,7 @@ bool Controller::GetSoftwareCursor(const Common::RGBA8Image** image, float* imag
   return false;
 }
 
-std::unique_ptr<Controller> Controller::Create(ControllerType type, u32 index)
+std::unique_ptr<Controller> Controller::Create(ControllerType type, uint32_t index)
 {
   switch (type)
   {
@@ -89,7 +89,7 @@ std::unique_ptr<Controller> Controller::Create(ControllerType type, u32 index)
   }
 }
 
-u32 Controller::GetVibrationMotorCount(ControllerType type)
+uint32_t Controller::GetVibrationMotorCount(ControllerType type)
 {
   switch (type)
   {

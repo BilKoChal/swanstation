@@ -24,7 +24,7 @@ enum class Type
 void DeinitializeGlslang();
 
 // SPIR-V compiled code type
-using SPIRVCodeType = u32;
+using SPIRVCodeType = uint32_t;
 using SPIRVCodeVector = std::vector<SPIRVCodeType>;
 
 std::optional<SPIRVCodeVector> CompileShader(Type type, std::string_view source_code, bool debug);

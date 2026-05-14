@@ -9,8 +9,8 @@
 
 struct TextureReplacementHash
 {
-  u64 low;
-  u64 high;
+  uint64_t low;
+  uint64_t high;
 
   std::string ToString() const;
   bool ParseString(const std::string_view& sv);
@@ -26,7 +26,7 @@ struct hash<TextureReplacementHash>
 {
   size_t operator()(const TextureReplacementHash& h) const
   {
-    size_t hash_hash = std::hash<u64>{}(h.low);
+    size_t hash_hash = std::hash<uint64_t>{}(h.low);
     hash_combine(hash_hash, h.high);
     return hash_hash;
   }
@@ -51,8 +51,8 @@ public:
 
   void Reload();
 
-  const TextureReplacementTexture* GetVRAMWriteReplacement(u32 width, u32 height, const void* pixels);
-  void DumpVRAMWrite(u32 width, u32 height, const void* pixels);
+  const TextureReplacementTexture* GetVRAMWriteReplacement(uint32_t width, uint32_t height, const void* pixels);
+  void DumpVRAMWrite(uint32_t width, uint32_t height, const void* pixels);
 
   void Shutdown();
 
@@ -70,8 +70,8 @@ private:
 
   std::string GetSourceDirectory() const;
 
-  TextureReplacementHash GetVRAMWriteHash(u32 width, u32 height, const void* pixels) const;
-  std::string GetVRAMWriteDumpFilename(u32 width, u32 height, const void* pixels) const;
+  TextureReplacementHash GetVRAMWriteHash(uint32_t width, uint32_t height, const void* pixels) const;
+  std::string GetVRAMWriteDumpFilename(uint32_t width, uint32_t height, const void* pixels) const;
 
   void FindTextures(const std::string& dir);
 

@@ -104,8 +104,8 @@ void ProgressCallback::DisplayFormattedModalInformation(const char* format, ...)
 
 void ProgressCallback::UpdateProgressFromStream(ByteStream* pStream)
 {
-  u32 streamSize = (u32)pStream->GetSize();
-  u32 streamPosition = (u32)pStream->GetPosition();
+  uint32_t streamSize = (uint32_t)pStream->GetSize();
+  uint32_t streamPosition = (uint32_t)pStream->GetPosition();
 
   SetProgressRange(streamSize);
   SetProgressValue(streamPosition);
@@ -123,8 +123,8 @@ public:
   void SetCancellable(bool cancellable) override {}
   void SetTitle(const char* title) override {}
   void SetStatusText(const char* statusText) override {}
-  void SetProgressRange(u32 range) override {}
-  void SetProgressValue(u32 value) override {}
+  void SetProgressRange(uint32_t range) override {}
+  void SetProgressValue(uint32_t value) override {}
   void IncrementProgressValue() override {}
 
   void DisplayError(const char* message) override { Log_ErrorPrint(message); }
@@ -179,9 +179,9 @@ void BaseProgressCallback::PopState()
   m_saved_state = nullptr;
 
   // impose the current position into the previous range
-  const u32 new_progress_value =
+  const uint32_t new_progress_value =
     (m_progress_range != 0) ?
-      static_cast<u32>(((float)m_progress_value / (float)m_progress_range) * (float)state->progress_range) :
+      static_cast<uint32_t>(((float)m_progress_value / (float)m_progress_range) * (float)state->progress_range) :
       state->progress_value;
 
   m_cancellable = state->cancellable;
@@ -214,7 +214,7 @@ void BaseProgressCallback::SetStatusText(const char* text)
   m_status_text = text;
 }
 
-void BaseProgressCallback::SetProgressRange(u32 range)
+void BaseProgressCallback::SetProgressRange(uint32_t range)
 {
   if (m_saved_state)
   {
@@ -230,7 +230,7 @@ void BaseProgressCallback::SetProgressRange(u32 range)
   }
 }
 
-void BaseProgressCallback::SetProgressValue(u32 value)
+void BaseProgressCallback::SetProgressValue(uint32_t value)
 {
   m_progress_value = m_base_progress_value + value;
 }

@@ -13,7 +13,7 @@
 const String::StringData String::s_EmptyStringData = {const_cast<char*>(""), 0, 1, -1, true};
 
 // helper functions
-static String::StringData* StringDataAllocate(u32 allocSize)
+static String::StringData* StringDataAllocate(uint32_t allocSize)
 {
   String::StringData* pStringData =
     reinterpret_cast<String::StringData*>(std::malloc(sizeof(String::StringData) + allocSize));
@@ -40,17 +40,17 @@ static inline void StringDataRelease(String::StringData* pStringData)
   if (pStringData->ReferenceCount == -1)
     return;
 
-  u32 newRefCount = --pStringData->ReferenceCount;
+  uint32_t newRefCount = --pStringData->ReferenceCount;
   if (!newRefCount)
     std::free(pStringData);
 }
 
-static String::StringData* StringDataClone(const String::StringData* pStringData, u32 newSize, bool copyPastString)
+static String::StringData* StringDataClone(const String::StringData* pStringData, uint32_t newSize, bool copyPastString)
 {
   String::StringData* pClone = StringDataAllocate(newSize);
   if (pStringData->StringLength > 0)
   {
-    u32 copyLength;
+    uint32_t copyLength;
 
     if (copyPastString)
     {
@@ -78,7 +78,7 @@ static String::StringData* StringDataClone(const String::StringData* pStringData
   return pClone;
 }
 
-static String::StringData* StringDataReallocate(String::StringData* pStringData, u32 newSize)
+static String::StringData* StringDataReallocate(String::StringData* pStringData, uint32_t newSize)
 {
   // perform realloc
   pStringData = reinterpret_cast<String::StringData*>(std::realloc(pStringData, sizeof(String::StringData) + newSize));
@@ -88,7 +88,7 @@ static String::StringData* StringDataReallocate(String::StringData* pStringData,
 #ifdef _DEBUG
   if (newSize > pStringData->BufferSize)
   {
-    u32 bytesToZero = newSize - pStringData->BufferSize;
+    uint32_t bytesToZero = newSize - pStringData->BufferSize;
     std::memset(pStringData->pBuffer + (newSize - bytesToZero), 0, bytesToZero);
   }
 #else
@@ -140,7 +140,7 @@ String::String(const char* Text) : m_pStringData(const_cast<String::StringData*>
   Assign(Text);
 }
 
-String::String(const char* Text, u32 Count) : m_pStringData(const_cast<String::StringData*>(&s_EmptyStringData))
+String::String(const char* Text, uint32_t Count) : m_pStringData(const_cast<String::StringData*>(&s_EmptyStringData))
 {
   AppendString(Text, Count);
 }
@@ -152,7 +152,7 @@ String::String(String&& moveString)
 
 String::String(const std::string_view& sv)
 {
-  AppendString(sv.data(), static_cast<u32>(sv.size()));
+  AppendString(sv.data(), static_cast<uint32_t>(sv.size()));
 }
 
 String::~String()
@@ -170,10 +170,10 @@ void String::EnsureOwnWritableCopy()
   }
 }
 
-void String::EnsureRemainingSpace(u32 spaceRequired)
+void String::EnsureRemainingSpace(uint32_t spaceRequired)
 {
   StringData* pNewStringData;
-  u32 requiredReserve = m_pStringData->StringLength + spaceRequired + 1;
+  uint32_t requiredReserve = m_pStringData->StringLength + spaceRequired + 1;
 
   if (StringDataIsShared(m_pStringData) || m_pStringData->ReadOnly)
   {
@@ -183,7 +183,7 @@ void String::EnsureRemainingSpace(u32 spaceRequired)
   }
   else if (m_pStringData->BufferSize < requiredReserve)
   {
-    u32 newSize = std::max(requiredReserve, m_pStringData->BufferSize * 2);
+    uint32_t newSize = std::max(requiredReserve, m_pStringData->BufferSize * 2);
 
     // if we are the only owner of the buffer, we can simply realloc it
     if (m_pStringData->ReferenceCount == 1)
@@ -201,7 +201,7 @@ void String::EnsureRemainingSpace(u32 spaceRequired)
   }
 }
 
-void String::InternalAppend(const char* pString, u32 Length)
+void String::InternalAppend(const char* pString, uint32_t Length)
 {
   EnsureRemainingSpace(Length);
 
@@ -218,12 +218,12 @@ void String::AppendString(const String& appendStr)
 
 void String::AppendString(const char* appendText)
 {
-  u32 textLength = static_cast<u32>(std::strlen(appendText));
+  uint32_t textLength = static_cast<uint32_t>(std::strlen(appendText));
   if (textLength > 0)
     InternalAppend(appendText, textLength);
 }
 
-void String::AppendString(const char* appendString, u32 Count)
+void String::AppendString(const char* appendString, uint32_t Count)
 {
   if (Count > 0)
     InternalAppend(appendString, Count);
@@ -232,13 +232,13 @@ void String::AppendString(const char* appendString, u32 Count)
 void String::AppendString(const std::string& appendString)
 {
   if (!appendString.empty())
-    InternalAppend(appendString.c_str(), static_cast<u32>(appendString.size()));
+    InternalAppend(appendString.c_str(), static_cast<uint32_t>(appendString.size()));
 }
 
 void String::AppendString(const std::string_view& appendString)
 {
   if (!appendString.empty())
-    InternalAppend(appendString.data(), static_cast<u32>(appendString.size()));
+    InternalAppend(appendString.data(), static_cast<uint32_t>(appendString.size()));
 }
 
 void String::Format(const char* FormatString, ...)
@@ -259,8 +259,8 @@ void String::FormatVA(const char* FormatString, std::va_list ArgPtr)
   char stackBuffer[1024];
   char* pHeapBuffer = NULL;
   char* pBuffer = stackBuffer;
-  u32 currentBufferSize = countof(stackBuffer);
-  u32 charsWritten;
+  uint32_t currentBufferSize = countof(stackBuffer);
+  uint32_t charsWritten;
 
   for (;;)
   {
@@ -268,14 +268,14 @@ void String::FormatVA(const char* FormatString, std::va_list ArgPtr)
     va_copy(ArgPtrCopy, ArgPtr);
     int ret = std::vsnprintf(pBuffer, currentBufferSize, FormatString, ArgPtrCopy);
     va_end(ArgPtrCopy);
-    if (ret < 0 || ((u32)ret >= (currentBufferSize - 1)))
+    if (ret < 0 || ((uint32_t)ret >= (currentBufferSize - 1)))
     {
       currentBufferSize *= 2;
       pBuffer = pHeapBuffer = reinterpret_cast<char*>(std::realloc(pHeapBuffer, currentBufferSize));
       continue;
     }
 
-    charsWritten = (u32)ret;
+    charsWritten = (uint32_t)ret;
     break;
   }
 
@@ -323,13 +323,13 @@ void String::Assign(String&& moveString)
 void String::Assign(const std::string& copyString)
 {
   Clear();
-  AppendString(copyString.data(), static_cast<u32>(copyString.size()));
+  AppendString(copyString.data(), static_cast<uint32_t>(copyString.size()));
 }
 
 void String::Assign(const std::string_view& copyString)
 {
   Clear();
-  AppendString(copyString.data(), static_cast<u32>(copyString.size()));
+  AppendString(copyString.data(), static_cast<uint32_t>(copyString.size()));
 }
 
 bool String::Compare(const String& otherString) const
@@ -344,7 +344,7 @@ bool String::Compare(const char* otherText) const
 
 bool String::StartsWith(const char* compareString, bool caseSensitive /*= true*/) const
 {
-  u32 compareStringLength = static_cast<u32>(std::strlen(compareString));
+  uint32_t compareStringLength = static_cast<uint32_t>(std::strlen(compareString));
   if (compareStringLength > m_pStringData->StringLength)
     return false;
 
@@ -354,7 +354,7 @@ bool String::StartsWith(const char* compareString, bool caseSensitive /*= true*/
 
 bool String::StartsWith(const String& compareString, bool caseSensitive /*= true*/) const
 {
-  u32 compareStringLength = compareString.GetLength();
+  uint32_t compareStringLength = compareString.GetLength();
   if (compareStringLength > m_pStringData->StringLength)
     return false;
 
@@ -365,11 +365,11 @@ bool String::StartsWith(const String& compareString, bool caseSensitive /*= true
 
 bool String::EndsWith(const char* compareString, bool caseSensitive /*= true*/) const
 {
-  u32 compareStringLength = static_cast<u32>(std::strlen(compareString));
+  uint32_t compareStringLength = static_cast<uint32_t>(std::strlen(compareString));
   if (compareStringLength > m_pStringData->StringLength)
     return false;
 
-  u32 startOffset = m_pStringData->StringLength - compareStringLength;
+  uint32_t startOffset = m_pStringData->StringLength - compareStringLength;
   return (caseSensitive) ?
            (std::strncmp(compareString, m_pStringData->pBuffer + startOffset, compareStringLength) == 0) :
            (CASE_N_COMPARE(compareString, m_pStringData->pBuffer + startOffset, compareStringLength) == 0);
@@ -377,11 +377,11 @@ bool String::EndsWith(const char* compareString, bool caseSensitive /*= true*/) 
 
 bool String::EndsWith(const String& compareString, bool caseSensitive /*= true*/) const
 {
-  u32 compareStringLength = compareString.GetLength();
+  uint32_t compareStringLength = compareString.GetLength();
   if (compareStringLength > m_pStringData->StringLength)
     return false;
 
-  u32 startOffset = m_pStringData->StringLength - compareStringLength;
+  uint32_t startOffset = m_pStringData->StringLength - compareStringLength;
   return (caseSensitive) ? (std::strncmp(compareString.m_pStringData->pBuffer, m_pStringData->pBuffer + startOffset,
                                          compareStringLength) == 0) :
                            (CASE_N_COMPARE(compareString.m_pStringData->pBuffer, m_pStringData->pBuffer + startOffset,
@@ -415,9 +415,9 @@ void String::Clear()
 
 // Internal: ensure the buffer can hold at least newReserve characters plus the
 // terminator. Only used by Replace below.
-static void StringReserve(String::StringData*& pStringData, u32 newReserve)
+static void StringReserve(String::StringData*& pStringData, uint32_t newReserve)
 {
-  u32 newSize = std::max(newReserve + 1, pStringData->BufferSize);
+  uint32_t newSize = std::max(newReserve + 1, pStringData->BufferSize);
   String::StringData* pNewStringData;
 
   if (StringDataIsShared(pStringData) || pStringData->ReadOnly)
@@ -448,7 +448,7 @@ static void StringReserve(String::StringData*& pStringData, u32 newReserve)
   }
 }
 
-void String::Resize(u32 newSize, char fillerCharacter /* = ' ' */)
+void String::Resize(uint32_t newSize, char fillerCharacter /* = ' ' */)
 {
   StringData* pNewStringData;
 
@@ -483,13 +483,13 @@ void String::Resize(u32 newSize, char fillerCharacter /* = ' ' */)
 void String::UpdateSize()
 {
   EnsureOwnWritableCopy();
-  m_pStringData->StringLength = static_cast<u32>(std::strlen(m_pStringData->pBuffer));
+  m_pStringData->StringLength = static_cast<uint32_t>(std::strlen(m_pStringData->pBuffer));
 }
 
-u32 String::Replace(const char* searchString, const char* replaceString)
+uint32_t String::Replace(const char* searchString, const char* replaceString)
 {
-  u32 nReplacements = 0;
-  u32 searchStringLength = static_cast<u32>(std::strlen(searchString));
+  uint32_t nReplacements = 0;
+  uint32_t searchStringLength = static_cast<uint32_t>(std::strlen(searchString));
 
   // TODO: Fastpath if strlen(searchString) == strlen(replaceString)
 
@@ -503,7 +503,7 @@ u32 String::Replace(const char* searchString, const char* replaceString)
       StringReserve(tempString.m_pStringData, m_pStringData->StringLength);
 
     // append [pStart, pCurrent) range from this string into tempString
-    u32 chunkLen = static_cast<u32>(pCurrent - pStart);
+    uint32_t chunkLen = static_cast<uint32_t>(pCurrent - pStart);
     if (chunkLen > 0)
       tempString.InternalAppend(pStart, chunkLen);
     tempString.AppendString(replaceString);
@@ -517,7 +517,7 @@ u32 String::Replace(const char* searchString, const char* replaceString)
   if (pLast != NULL)
   {
     // append remainder [pStart, end) into tempString
-    u32 remainLen = m_pStringData->StringLength - static_cast<u32>(pStart - m_pStringData->pBuffer);
+    uint32_t remainLen = m_pStringData->StringLength - static_cast<uint32_t>(pStart - m_pStringData->pBuffer);
     if (remainLen > 0)
       tempString.InternalAppend(pStart, remainLen);
   }

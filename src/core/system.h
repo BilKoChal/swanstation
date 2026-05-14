@@ -27,7 +27,7 @@ struct SystemBootParameters
   std::string filename;
   std::optional<bool> override_fast_boot;
   std::unique_ptr<ByteStream> state_stream;
-  u32 media_playlist_index = 0;
+  uint32_t media_playlist_index = 0;
   bool load_image_to_ram = false;
   bool force_software_renderer = false;
 };
@@ -35,7 +35,7 @@ struct SystemBootParameters
 namespace System {
 
 // 5 megabytes is sufficient for now, at the moment they're around 4.3MB, or 10.3MB with 8MB RAM enabled.
-inline constexpr u32 MAX_SAVE_STATE_SIZE = 11 * 1024 * 1024;
+inline constexpr uint32_t MAX_SAVE_STATE_SIZE = 11 * 1024 * 1024;
 
 inline constexpr TickCount MASTER_CLOCK = 44100 * 0x300; // 33868800Hz or 33.8688MHz, also used as CPU clock
 
@@ -52,7 +52,7 @@ extern TickCount g_ticks_per_second;
 ConsoleRegion GetConsoleRegionForDiscRegion(DiscRegion region);
 
 std::string GetExecutableNameForImage(CDImage* cdi);
-bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<u8>* out_executable_data);
+bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data);
 
 std::string GetGameHashCodeForImage(CDImage* cdi);
 std::string GetGameCodeForImage(CDImage* cdi, bool fallback_to_hash);
@@ -74,7 +74,7 @@ ALWAYS_INLINE_RELEASE TickCount ScaleTicksToOverclock(TickCount ticks)
   if (!g_settings.cpu_overclock_active)
     return ticks;
 
-  return static_cast<TickCount>((static_cast<u64>(static_cast<u32>(ticks)) * g_settings.cpu_overclock_numerator) /
+  return static_cast<TickCount>((static_cast<uint64_t>(static_cast<uint32_t>(ticks)) * g_settings.cpu_overclock_numerator) /
                                 g_settings.cpu_overclock_denominator);
 }
 
@@ -83,9 +83,9 @@ void UpdateOverclock();
 
 /// Injects a PS-EXE into memory at its specified load location. If patch_loader is set, the BIOS will be patched to
 /// direct execution to this executable.
-bool InjectEXEFromBuffer(const void* buffer, u32 buffer_size, bool patch_loader = true);
+bool InjectEXEFromBuffer(const void* buffer, uint32_t buffer_size, bool patch_loader = true);
 
-u32 GetFrameNumber();
+uint32_t GetFrameNumber();
 void FrameDone();
 
 const std::string& GetRunningCode();
@@ -107,7 +107,7 @@ void RunFrame();
 void SetThrottleFrequency(float frequency);
 
 // Access controllers for simulating input.
-Controller* GetController(u32 slot);
+Controller* GetController(uint32_t slot);
 void UpdateControllers();
 void UpdateControllerSettings();
 void ResetControllers();
@@ -124,22 +124,22 @@ void RemoveMedia();
 bool HasMediaSubImages();
 
 /// Returns the number of entries in the media/disc playlist.
-u32 GetMediaSubImageCount();
+uint32_t GetMediaSubImageCount();
 
 /// Returns the current image from the media/disc playlist.
-u32 GetMediaSubImageIndex();
+uint32_t GetMediaSubImageIndex();
 
 /// Returns the index of the specified path in the playlist, or UINT32_MAX if it does not exist.
-u32 GetMediaSubImageIndexForTitle(const std::string_view& title);
+uint32_t GetMediaSubImageIndexForTitle(const std::string_view& title);
 
 /// Returns the path to the specified playlist index.
-std::string GetMediaSubImageTitle(u32 index);
+std::string GetMediaSubImageTitle(uint32_t index);
 
 /// Returns the sub-image path corresponding to the specified playlist index.
-std::string GetMediaSubImagePath(u32 index);
+std::string GetMediaSubImagePath(uint32_t index);
 
 /// Switches to the specified media/disc playlist index.
-bool SwitchMediaSubImage(u32 index);
+bool SwitchMediaSubImage(uint32_t index);
 
 /// Accesses the current cheat list.
 CheatList* GetCheatList();

@@ -19,8 +19,8 @@ public:
 
   virtual void SetTitle(const char* title) = 0;
   virtual void SetStatusText(const char* text) = 0;
-  virtual void SetProgressRange(u32 range) = 0;
-  virtual void SetProgressValue(u32 value) = 0;
+  virtual void SetProgressRange(uint32_t range) = 0;
+  virtual void SetProgressValue(uint32_t value) = 0;
   virtual void IncrementProgressValue() = 0;
 
   void SetFormattedStatusText(const char* Format, ...) printflike(2, 3);
@@ -62,8 +62,8 @@ public:
 
   virtual void SetCancellable(bool cancellable) override;
   virtual void SetStatusText(const char* text) override;
-  virtual void SetProgressRange(u32 range) override;
-  virtual void SetProgressValue(u32 value) override;
+  virtual void SetProgressRange(uint32_t range) override;
+  virtual void SetProgressValue(uint32_t value) override;
   virtual void IncrementProgressValue() override;
 
 protected:
@@ -71,19 +71,19 @@ protected:
   {
     State* next_saved_state;
     String status_text;
-    u32 progress_range;
-    u32 progress_value;
-    u32 base_progress_value;
+    uint32_t progress_range;
+    uint32_t progress_value;
+    uint32_t base_progress_value;
     bool cancellable;
   };
 
   bool m_cancellable;
   bool m_cancelled;
   String m_status_text;
-  u32 m_progress_range;
-  u32 m_progress_value;
+  uint32_t m_progress_range;
+  uint32_t m_progress_value;
 
-  u32 m_base_progress_value;
+  uint32_t m_base_progress_value;
 
   State* m_saved_state;
 };

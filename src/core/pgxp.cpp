@@ -27,7 +27,7 @@
 #include <cstring>
 namespace PGXP {
 
-inline constexpr u32 VERTEX_CACHE_WIDTH = 0x800 * 2, VERTEX_CACHE_HEIGHT = 0x800 * 2,
+inline constexpr uint32_t VERTEX_CACHE_WIDTH = 0x800 * 2, VERTEX_CACHE_HEIGHT = 0x800 * 2,
                      VERTEX_CACHE_SIZE = VERTEX_CACHE_WIDTH * VERTEX_CACHE_HEIGHT,
                      PGXP_MEM_SIZE = (Bus::RAM_8MB_SIZE + CPU::DCACHE_SIZE) / 4,
                      PGXP_MEM_SCRATCH_OFFSET = Bus::RAM_8MB_SIZE / 4;
@@ -62,36 +62,36 @@ typedef union
 {
   struct
   {
-    u8 l, h, h2, h3;
+    uint8_t l, h, h2, h3;
   } b;
   struct
   {
-    u16 l, h;
+    uint16_t l, h;
   } w;
   struct
   {
-    s8 l, h, h2, h3;
+    int8_t l, h, h2, h3;
   } sb;
   struct
   {
-    s16 l, h;
+    int16_t l, h;
   } sw;
-  u32 d;
-  s32 sd;
+  uint32_t d;
+  int32_t sd;
 } psx_value;
 
-static void PGXP_CacheVertex(s16 sx, s16 sy, const PGXP_value& vertex);
+static void PGXP_CacheVertex(int16_t sx, int16_t sy, const PGXP_value& vertex);
 
-static void MakeValid(PGXP_value* pV, u32 psxV);
-static void Validate(PGXP_value* pV, u32 psxV);
-static void MaskValidate(PGXP_value* pV, u32 psxV, u32 mask, u32 validMask);
+static void MakeValid(PGXP_value* pV, uint32_t psxV);
+static void Validate(PGXP_value* pV, uint32_t psxV);
+static void MaskValidate(PGXP_value* pV, uint32_t psxV, uint32_t mask, uint32_t validMask);
 
 static double f16Sign(double in);
 static double f16Unsign(double in);
 static double f16Overflow(double in);
 
-static PGXP_value* GetPtr(u32 addr);
-static PGXP_value* ReadMem(u32 addr);
+static PGXP_value* GetPtr(uint32_t addr);
+static PGXP_value* ReadMem(uint32_t addr);
 
 static const PGXP_value PGXP_value_invalid = {0.f, 0.f, 0.f, {0}, 0};
 static const PGXP_value PGXP_value_zero = {0.f, 0.f, 0.f, {VALID_ALL}, 0};
@@ -108,25 +108,25 @@ static PGXP_value GTE_ctrl_reg[32];
 static PGXP_value* Mem = nullptr;
 static PGXP_value* vertexCache = nullptr;
 
-ALWAYS_INLINE_RELEASE void MakeValid(PGXP_value* pV, u32 psxV)
+ALWAYS_INLINE_RELEASE void MakeValid(PGXP_value* pV, uint32_t psxV)
 {
   if (VALID_01 != (pV->flags & VALID_01))
   {
-    pV->x = static_cast<float>(static_cast<s16>(static_cast<u16>(psxV)));
-    pV->y = static_cast<float>(static_cast<s16>(static_cast<u16>(psxV >> 16)));
+    pV->x = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(psxV)));
+    pV->y = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(psxV >> 16)));
     pV->z = 0.f;
     pV->flags |= VALID_01;
     pV->value = psxV;
   }
 }
 
-ALWAYS_INLINE_RELEASE void Validate(PGXP_value* pV, u32 psxV)
+ALWAYS_INLINE_RELEASE void Validate(PGXP_value* pV, uint32_t psxV)
 {
   // assume pV is not NULL
   pV->flags &= (pV->value == psxV) ? ALL : INV_VALID_ALL;
 }
 
-ALWAYS_INLINE_RELEASE void MaskValidate(PGXP_value* pV, u32 psxV, u32 mask, u32 validMask)
+ALWAYS_INLINE_RELEASE void MaskValidate(PGXP_value* pV, uint32_t psxV, uint32_t mask, uint32_t validMask)
 {
   // assume pV is not NULL
   pV->flags &= ((pV->value & mask) == (psxV & mask)) ? ALL : (ALL ^ (validMask));
@@ -134,8 +134,8 @@ ALWAYS_INLINE_RELEASE void MaskValidate(PGXP_value* pV, u32 psxV, u32 mask, u32 
 
 ALWAYS_INLINE_RELEASE double f16Sign(double in)
 {
-  u32 s = (u32)(in * (double)((u32)1 << 16));
-  return ((double)*((s32*)&s)) / (double)((s32)1 << 16);
+  uint32_t s = (uint32_t)(in * (double)((uint32_t)1 << 16));
+  return ((double)*((int32_t*)&s)) / (double)((int32_t)1 << 16);
 }
 ALWAYS_INLINE_RELEASE double f16Unsign(double in)
 {
@@ -144,29 +144,29 @@ ALWAYS_INLINE_RELEASE double f16Unsign(double in)
 ALWAYS_INLINE_RELEASE double f16Overflow(double in)
 {
   double out = 0;
-  s64 v = ((s64)in) >> 16;
+  int64_t v = ((int64_t)in) >> 16;
   out = (double)v;
   return out;
 }
 
-ALWAYS_INLINE_RELEASE PGXP_value* GetPtr(u32 addr)
+ALWAYS_INLINE_RELEASE PGXP_value* GetPtr(uint32_t addr)
 {
   if ((addr & CPU::DCACHE_LOCATION_MASK) == CPU::DCACHE_LOCATION)
     return &Mem[PGXP_MEM_SCRATCH_OFFSET + ((addr & CPU::DCACHE_OFFSET_MASK) >> 2)];
 
-  const u32 paddr = (addr & CPU::PHYSICAL_MEMORY_ADDRESS_MASK);
+  const uint32_t paddr = (addr & CPU::PHYSICAL_MEMORY_ADDRESS_MASK);
   if (paddr < Bus::RAM_MIRROR_END)
     return &Mem[(paddr & Bus::g_ram_mask) >> 2];
   else
     return nullptr;
 }
 
-ALWAYS_INLINE_RELEASE PGXP_value* ReadMem(u32 addr)
+ALWAYS_INLINE_RELEASE PGXP_value* ReadMem(uint32_t addr)
 {
   return GetPtr(addr);
 }
 
-ALWAYS_INLINE_RELEASE void ValidateAndCopyMem(PGXP_value* dest, u32 addr, u32 value)
+ALWAYS_INLINE_RELEASE void ValidateAndCopyMem(PGXP_value* dest, uint32_t addr, uint32_t value)
 {
   PGXP_value* pMem = GetPtr(addr);
   if (pMem != NULL)
@@ -179,9 +179,9 @@ ALWAYS_INLINE_RELEASE void ValidateAndCopyMem(PGXP_value* dest, u32 addr, u32 va
   *dest = PGXP_value_invalid;
 }
 
-ALWAYS_INLINE_RELEASE static void ValidateAndCopyMem16(PGXP_value* dest, u32 addr, u32 value, int sign)
+ALWAYS_INLINE_RELEASE static void ValidateAndCopyMem16(PGXP_value* dest, uint32_t addr, uint32_t value, int sign)
 {
-  u32 validMask = 0;
+  uint32_t validMask = 0;
   psx_value val, mask;
   PGXP_value* pMem = GetPtr(addr);
   if (pMem != NULL)
@@ -190,13 +190,13 @@ ALWAYS_INLINE_RELEASE static void ValidateAndCopyMem16(PGXP_value* dest, u32 add
     // determine if high or low word
     if ((addr % 4) == 2)
     {
-      val.w.h = static_cast<u16>(value);
+      val.w.h = static_cast<uint16_t>(value);
       mask.w.h = 0xFFFF;
       validMask = VALID_1;
     }
     else
     {
-      val.w.l = static_cast<u16>(value);
+      val.w.l = static_cast<uint16_t>(value);
       mask.w.l = 0xFFFF;
       validMask = VALID_0;
     }
@@ -222,7 +222,7 @@ ALWAYS_INLINE_RELEASE static void ValidateAndCopyMem16(PGXP_value* dest, u32 add
   *dest = PGXP_value_invalid;
 }
 
-ALWAYS_INLINE_RELEASE void WriteMem(const PGXP_value* value, u32 addr)
+ALWAYS_INLINE_RELEASE void WriteMem(const PGXP_value* value, uint32_t addr)
 {
   PGXP_value* pMem = GetPtr(addr);
 
@@ -230,7 +230,7 @@ ALWAYS_INLINE_RELEASE void WriteMem(const PGXP_value* value, u32 addr)
     *pMem = *value;
 }
 
-ALWAYS_INLINE_RELEASE static void WriteMem16(const PGXP_value* src, u32 addr)
+ALWAYS_INLINE_RELEASE static void WriteMem16(const PGXP_value* src, uint32_t addr)
 {
   PGXP_value* dest = GetPtr(addr);
   psx_value* pVal = NULL;
@@ -243,13 +243,13 @@ ALWAYS_INLINE_RELEASE static void WriteMem16(const PGXP_value* src, u32 addr)
     {
       dest->y = src->x;
       dest->compFlags[1] = src->compFlags[0];
-      pVal->w.h = (u16)src->value;
+      pVal->w.h = (uint16_t)src->value;
     }
     else
     {
       dest->x = src->x;
       dest->compFlags[0] = src->compFlags[0];
-      pVal->w.l = (u16)src->value;
+      pVal->w.l = (uint16_t)src->value;
     }
 
     // overwrite z/w if valid
@@ -348,7 +348,7 @@ void Shutdown()
 #define SXY2 (GTE_data_reg[14])
 #define SXYP (GTE_data_reg[15])
 
-void GTE_PushSXYZ2f(float x, float y, float z, u32 v)
+void GTE_PushSXYZ2f(float x, float y, float z, uint32_t v)
 {
   // push values down FIFO
   SXY0 = SXY1;
@@ -361,14 +361,14 @@ void GTE_PushSXYZ2f(float x, float y, float z, u32 v)
   SXY2.flags = VALID_ALL;
 
   if (g_settings.gpu_pgxp_vertex_cache)
-    PGXP_CacheVertex(static_cast<s16>(static_cast<u16>(v)), static_cast<s16>(static_cast<u16>(v >> 16)), SXY2);
+    PGXP_CacheVertex(static_cast<int16_t>(static_cast<uint16_t>(v)), static_cast<int16_t>(static_cast<uint16_t>(v >> 16)), SXY2);
 }
 
 #define VX(n) (psxRegs.CP2D.p[n << 1].sw.l)
 #define VY(n) (psxRegs.CP2D.p[n << 1].sw.h)
 #define VZ(n) (psxRegs.CP2D.p[(n << 1) + 1].sw.l)
 
-int GTE_NCLIP_valid(u32 sxy0, u32 sxy1, u32 sxy2)
+int GTE_NCLIP_valid(uint32_t sxy0, uint32_t sxy1, uint32_t sxy2)
 {
   Validate(&SXY0, sxy0);
   Validate(&SXY1, sxy1);
@@ -403,7 +403,7 @@ float GTE_NCLIP()
   return nclip;
 }
 
-static void PGXP_MTC2_int(PGXP_value value, u32 reg)
+static void PGXP_MTC2_int(PGXP_value value, uint32_t reg)
 {
   switch (reg)
   {
@@ -426,7 +426,7 @@ static void PGXP_MTC2_int(PGXP_value value, u32 reg)
 // Data transfer tracking
 ////////////////////////////////////
 
-void CPU_MFC2(u32 instr, u32 rtVal, u32 rdVal)
+void CPU_MFC2(uint32_t instr, uint32_t rtVal, uint32_t rdVal)
 {
   // CPU[Rt] = GTE_D[Rd]
   Validate(&GTE_data_reg[rd(instr)], rdVal);
@@ -434,7 +434,7 @@ void CPU_MFC2(u32 instr, u32 rtVal, u32 rdVal)
   CPU_reg[rt(instr)].value = rtVal;
 }
 
-void CPU_MTC2(u32 instr, u32 rdVal, u32 rtVal)
+void CPU_MTC2(uint32_t instr, uint32_t rdVal, uint32_t rtVal)
 {
   // GTE_D[Rd] = CPU[Rt]
   Validate(&CPU_reg[rt(instr)], rtVal);
@@ -442,7 +442,7 @@ void CPU_MTC2(u32 instr, u32 rdVal, u32 rtVal)
   GTE_data_reg[rd(instr)].value = rdVal;
 }
 
-void CPU_CFC2(u32 instr, u32 rtVal, u32 rdVal)
+void CPU_CFC2(uint32_t instr, uint32_t rtVal, uint32_t rdVal)
 {
   // CPU[Rt] = GTE_C[Rd]
   Validate(&GTE_ctrl_reg[rd(instr)], rdVal);
@@ -450,7 +450,7 @@ void CPU_CFC2(u32 instr, u32 rtVal, u32 rdVal)
   CPU_reg[rt(instr)].value = rtVal;
 }
 
-void CPU_CTC2(u32 instr, u32 rdVal, u32 rtVal)
+void CPU_CTC2(uint32_t instr, uint32_t rdVal, uint32_t rtVal)
 {
   // GTE_C[Rd] = CPU[Rt]
   Validate(&CPU_reg[rt(instr)], rtVal);
@@ -461,7 +461,7 @@ void CPU_CTC2(u32 instr, u32 rdVal, u32 rtVal)
 ////////////////////////////////////
 // Memory Access
 ////////////////////////////////////
-void CPU_LWC2(u32 instr, u32 rtVal, u32 addr)
+void CPU_LWC2(uint32_t instr, uint32_t rtVal, uint32_t addr)
 {
   // GTE_D[Rt] = Mem[addr]
   PGXP_value val;
@@ -469,14 +469,14 @@ void CPU_LWC2(u32 instr, u32 rtVal, u32 addr)
   PGXP_MTC2_int(val, rt(instr));
 }
 
-void CPU_SWC2(u32 instr, u32 rtVal, u32 addr)
+void CPU_SWC2(uint32_t instr, uint32_t rtVal, uint32_t addr)
 {
   //  Mem[addr] = GTE_D[Rt]
   Validate(&GTE_data_reg[rt(instr)], rtVal);
   WriteMem(&GTE_data_reg[rt(instr)], addr);
 }
 
-ALWAYS_INLINE_RELEASE void PGXP_CacheVertex(s16 sx, s16 sy, const PGXP_value& vertex)
+ALWAYS_INLINE_RELEASE void PGXP_CacheVertex(int16_t sx, int16_t sy, const PGXP_value& vertex)
 {
   if (sx >= -0x800 && sx <= 0x7ff && sy >= -0x800 && sy <= 0x7ff)
   {
@@ -498,13 +498,13 @@ static ALWAYS_INLINE_RELEASE PGXP_value* PGXP_GetCachedVertex(short sx, short sy
 
 static ALWAYS_INLINE_RELEASE float TruncateVertexPosition(float p)
 {
-  const s32 int_part = static_cast<s32>(p);
+  const int32_t int_part = static_cast<int32_t>(p);
   const float int_part_f = static_cast<float>(int_part);
   // Sign-extend the low 11 bits via shift idiom. Do the left shift in
   // unsigned space to avoid C++<20 UB on negative int_part (the GPU
   // truncates positions to an 11-bit signed range, so int_part is
   // routinely negative).
-  return static_cast<float>(static_cast<s16>(static_cast<u32>(int_part) << 5) >> 5) + (p - int_part_f);
+  return static_cast<float>(static_cast<int16_t>(static_cast<uint32_t>(int_part) << 5) >> 5) + (p - int_part_f);
 }
 
 static ALWAYS_INLINE_RELEASE bool IsWithinTolerance(float precise_x, float precise_y, int int_x, int int_y)
@@ -517,7 +517,7 @@ static ALWAYS_INLINE_RELEASE bool IsWithinTolerance(float precise_x, float preci
           std::abs(precise_y - static_cast<float>(int_y)) <= tolerance);
 }
 
-bool GetPreciseVertex(u32 addr, u32 value, int x, int y, int xOffs, int yOffs, float* out_x, float* out_y, float* out_w)
+bool GetPreciseVertex(uint32_t addr, uint32_t value, int x, int y, int xOffs, int yOffs, float* out_x, float* out_y, float* out_w)
 {
   const PGXP_value* vert = ReadMem(addr);
   if (vert && ((vert->flags & VALID_01) == VALID_01) && (vert->value == value))
@@ -568,31 +568,31 @@ bool GetPreciseVertex(u32 addr, u32 value, int x, int y, int xOffs, int yOffs, f
 #define rs(_instr) ((_instr >> 21) & 0x1F) // The rs part of the instruction register
 #define imm(_instr) (_instr & 0xFFFF) // The immediate part of the instruction register
 #define imm_sext(_instr)                                                                                               \
-  static_cast<s32>(static_cast<s16>(_instr & 0xFFFF)) // The immediate part of the instruction register
+  static_cast<int32_t>(static_cast<int16_t>(_instr & 0xFFFF)) // The immediate part of the instruction register
 
-void CPU_LW(u32 instr, u32 rtVal, u32 addr)
+void CPU_LW(uint32_t instr, uint32_t rtVal, uint32_t addr)
 {
   // Rt = Mem[Rs + Im]
   ValidateAndCopyMem(&CPU_reg[rt(instr)], addr, rtVal);
 }
 
-void CPU_LBx(u32 instr, u32 rtVal, u32 addr)
+void CPU_LBx(uint32_t instr, uint32_t rtVal, uint32_t addr)
 {
   CPU_reg[rt(instr)] = PGXP_value_invalid;
 }
 
-void CPU_LHx(u32 instr, u32 rtVal, u32 addr)
+void CPU_LHx(uint32_t instr, uint32_t rtVal, uint32_t addr)
 {
   // Rt = Mem[Rs + Im] (sign/zero extended)
   ValidateAndCopyMem16(&CPU_reg[rt(instr)], addr, rtVal, 1);
 }
 
-void CPU_SB(u32 instr, u8 rtVal, u32 addr)
+void CPU_SB(uint32_t instr, uint8_t rtVal, uint32_t addr)
 {
   WriteMem(&PGXP_value_invalid, addr);
 }
 
-void CPU_SH(u32 instr, u16 rtVal, u32 addr)
+void CPU_SH(uint32_t instr, uint16_t rtVal, uint32_t addr)
 {
   PGXP_value* val = &CPU_reg[rt(instr)];
 
@@ -601,7 +601,7 @@ void CPU_SH(u32 instr, u16 rtVal, u32 addr)
   WriteMem16(val, addr);
 }
 
-void CPU_SW(u32 instr, u32 rtVal, u32 addr)
+void CPU_SW(uint32_t instr, uint32_t rtVal, uint32_t addr)
 {
   // Mem[Rs + Im] = Rt
   PGXP_value* val = &CPU_reg[rt(instr)];
@@ -609,14 +609,14 @@ void CPU_SW(u32 instr, u32 rtVal, u32 addr)
   WriteMem(val, addr);
 }
 
-void CPU_MOVE(u32 rd_and_rs, u32 rsVal)
+void CPU_MOVE(uint32_t rd_and_rs, uint32_t rsVal)
 {
-  const u32 Rs = (rd_and_rs & 0xFFu);
+  const uint32_t Rs = (rd_and_rs & 0xFFu);
   Validate(&CPU_reg[Rs], rsVal);
   CPU_reg[(rd_and_rs >> 8)] = CPU_reg[Rs];
 }
 
-void CPU_ADDI(u32 instr, u32 rsVal)
+void CPU_ADDI(uint32_t instr, uint32_t rsVal)
 {
   // Rt = Rs + Imm (signed)
   psx_value tempImm;
@@ -646,10 +646,10 @@ void CPU_ADDI(u32 instr, u32 rsVal)
   CPU_reg[rt(instr)].value = rsVal + imm_sext(instr);
 }
 
-void CPU_ANDI(u32 instr, u32 rsVal)
+void CPU_ANDI(uint32_t instr, uint32_t rsVal)
 {
   // Rt = Rs & Imm
-  const u32 rtVal = rsVal & imm(instr);
+  const uint32_t rtVal = rsVal & imm(instr);
   psx_value vRt;
   PGXP_value ret;
 
@@ -681,10 +681,10 @@ void CPU_ANDI(u32 instr, u32 rsVal)
   CPU_reg[rt(instr)].value = rtVal;
 }
 
-void CPU_ORI(u32 instr, u32 rsVal)
+void CPU_ORI(uint32_t instr, uint32_t rsVal)
 {
   // Rt = Rs | Imm
-  const u32 rtVal = rsVal | imm(instr);
+  const uint32_t rtVal = rsVal | imm(instr);
   psx_value vRt;
   PGXP_value ret;
 
@@ -708,10 +708,10 @@ void CPU_ORI(u32 instr, u32 rsVal)
   CPU_reg[rt(instr)] = ret;
 }
 
-void CPU_XORI(u32 instr, u32 rsVal)
+void CPU_XORI(uint32_t instr, uint32_t rsVal)
 {
   // Rt = Rs ^ Imm
-  const u32 rtVal = rsVal ^ imm(instr);
+  const uint32_t rtVal = rsVal ^ imm(instr);
   psx_value vRt;
   PGXP_value ret;
 
@@ -735,7 +735,7 @@ void CPU_XORI(u32 instr, u32 rsVal)
   CPU_reg[rt(instr)] = ret;
 }
 
-void CPU_SLTI(u32 instr, u32 rsVal)
+void CPU_SLTI(uint32_t instr, uint32_t rsVal)
 {
   // Rt = Rs < Imm (signed)
   psx_value tempImm;
@@ -748,12 +748,12 @@ void CPU_SLTI(u32 instr, u32 rsVal)
   ret.y = 0.f;
   ret.x = (CPU_reg[rs(instr)].x < tempImm.sw.h) ? 1.f : 0.f;
   ret.flags |= VALID_1;
-  ret.value = static_cast<u32>(static_cast<s32>(rsVal) < imm_sext(instr));
+  ret.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal) < imm_sext(instr));
 
   CPU_reg[rt(instr)] = ret;
 }
 
-void CPU_SLTIU(u32 instr, u32 rsVal)
+void CPU_SLTIU(uint32_t instr, uint32_t rsVal)
 {
   // Rt = Rs < Imm (Unsigned)
   psx_value tempImm;
@@ -766,7 +766,7 @@ void CPU_SLTIU(u32 instr, u32 rsVal)
   ret.y = 0.f;
   ret.x = (f16Unsign(CPU_reg[rs(instr)].x) < tempImm.w.h) ? 1.f : 0.f;
   ret.flags |= VALID_1;
-  ret.value = static_cast<u32>(rsVal < imm(instr));
+  ret.value = static_cast<uint32_t>(rsVal < imm(instr));
 
   CPU_reg[rt(instr)] = ret;
 }
@@ -774,12 +774,12 @@ void CPU_SLTIU(u32 instr, u32 rsVal)
 ////////////////////////////////////
 // Load Upper
 ////////////////////////////////////
-void CPU_LUI(u32 instr)
+void CPU_LUI(uint32_t instr)
 {
   // Rt = Imm << 16
   CPU_reg[rt(instr)] = PGXP_value_zero;
-  CPU_reg[rt(instr)].y = (float)(s16)imm(instr);
-  CPU_reg[rt(instr)].value = static_cast<u32>(imm(instr)) << 16;
+  CPU_reg[rt(instr)].y = (float)(int16_t)imm(instr);
+  CPU_reg[rt(instr)].value = static_cast<uint32_t>(imm(instr)) << 16;
   CPU_reg[rt(instr)].flags = VALID_01;
 }
 
@@ -787,7 +787,7 @@ void CPU_LUI(u32 instr)
 // Register Arithmetic
 ////////////////////////////////////
 
-void CPU_ADD(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_ADD(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs + Rt (signed)
   PGXP_value ret;
@@ -831,7 +831,7 @@ void CPU_ADD(u32 instr, u32 rsVal, u32 rtVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_SUB(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_SUB(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs - Rt (signed)
   PGXP_value ret;
@@ -866,7 +866,7 @@ void CPU_SUB(u32 instr, u32 rsVal, u32 rtVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-static void CPU_BITWISE(u32 instr, u32 rdVal, u32 rsVal, u32 rtVal)
+static void CPU_BITWISE(uint32_t instr, uint32_t rdVal, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs & Rt
   psx_value vald, vals, valt;
@@ -950,35 +950,35 @@ static void CPU_BITWISE(u32 instr, u32 rdVal, u32 rsVal, u32 rtVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_AND_(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_AND_(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs & Rt
-  const u32 rdVal = rsVal & rtVal;
+  const uint32_t rdVal = rsVal & rtVal;
   CPU_BITWISE(instr, rdVal, rsVal, rtVal);
 }
 
-void CPU_OR_(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_OR_(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs | Rt
-  const u32 rdVal = rsVal | rtVal;
+  const uint32_t rdVal = rsVal | rtVal;
   CPU_BITWISE(instr, rdVal, rsVal, rtVal);
 }
 
-void CPU_XOR_(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_XOR_(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs ^ Rt
-  const u32 rdVal = rsVal ^ rtVal;
+  const uint32_t rdVal = rsVal ^ rtVal;
   CPU_BITWISE(instr, rdVal, rsVal, rtVal);
 }
 
-void CPU_NOR(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_NOR(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs NOR Rt
-  const u32 rdVal = ~(rsVal | rtVal);
+  const uint32_t rdVal = ~(rsVal | rtVal);
   CPU_BITWISE(instr, rdVal, rsVal, rtVal);
 }
 
-void CPU_SLT(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_SLT(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs < Rt (signed)
   PGXP_value ret;
@@ -1000,11 +1000,11 @@ void CPU_SLT(u32 instr, u32 rsVal, u32 rtVal)
           (f16Unsign(CPU_reg[rs(instr)].x) < f16Unsign(CPU_reg[rt(instr)].x)) ? 1.f :
                                                                                 0.f;
 
-  ret.value = static_cast<u32>(static_cast<s32>(rsVal) < static_cast<s32>(rtVal));
+  ret.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal) < static_cast<int32_t>(rtVal));
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_SLTU(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_SLTU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Rd = Rs < Rt (unsigned)
   PGXP_value ret;
@@ -1026,7 +1026,7 @@ void CPU_SLTU(u32 instr, u32 rsVal, u32 rtVal)
           (f16Unsign(CPU_reg[rs(instr)].x) < f16Unsign(CPU_reg[rt(instr)].x)) ? 1.f :
                                                                                 0.f;
 
-  ret.value = static_cast<u32>(rsVal < rtVal);
+  ret.value = static_cast<uint32_t>(rsVal < rtVal);
   CPU_reg[rd(instr)] = ret;
 }
 
@@ -1034,7 +1034,7 @@ void CPU_SLTU(u32 instr, u32 rsVal, u32 rtVal)
 // Register mult/div
 ////////////////////////////////////
 
-void CPU_MULT(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_MULT(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Hi/Lo = Rs * Rt (signed)
   Validate(&CPU_reg[rs(instr)], rsVal);
@@ -1077,12 +1077,12 @@ void CPU_MULT(u32 instr, u32 rsVal, u32 rtVal)
   CPU_Hi.y = (float)f16Sign(hy);
 
   // compute PSX value (signed 32x32 -> 64 multiply matching MIPS MULT)
-  const u64 result = static_cast<u64>(static_cast<s64>(static_cast<s32>(rsVal)) * static_cast<s64>(static_cast<s32>(rtVal)));
-  CPU_Hi.value = static_cast<u32>(result >> 32);
-  CPU_Lo.value = static_cast<u32>(result);
+  const uint64_t result = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rsVal)) * static_cast<int64_t>(static_cast<int32_t>(rtVal)));
+  CPU_Hi.value = static_cast<uint32_t>(result >> 32);
+  CPU_Lo.value = static_cast<uint32_t>(result);
 }
 
-void CPU_MULTU(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_MULTU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Hi/Lo = Rs * Rt (unsigned)
   Validate(&CPU_reg[rs(instr)], rsVal);
@@ -1125,12 +1125,12 @@ void CPU_MULTU(u32 instr, u32 rsVal, u32 rtVal)
   CPU_Hi.y = (float)f16Sign(hy);
 
   // compute PSX value
-  const u64 result = static_cast<u64>(rsVal) * static_cast<u64>(rtVal);
-  CPU_Hi.value = static_cast<u32>(result >> 32);
-  CPU_Lo.value = static_cast<u32>(result);
+  const uint64_t result = static_cast<uint64_t>(rsVal) * static_cast<uint64_t>(rtVal);
+  CPU_Hi.value = static_cast<uint32_t>(result >> 32);
+  CPU_Lo.value = static_cast<uint32_t>(result);
 }
 
-void CPU_DIV(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_DIV(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Lo = Rs / Rt (signed)
   // Hi = Rs % Rt (signed)
@@ -1160,13 +1160,13 @@ void CPU_DIV(u32 instr, u32 rsVal, u32 rtVal)
   CPU_Hi.x = (float)f16Sign(hi);
 
   // compute PSX value
-  if (static_cast<s32>(rtVal) == 0)
+  if (static_cast<int32_t>(rtVal) == 0)
   {
     // divide by zero
-    CPU_Lo.value = (static_cast<s32>(rsVal) >= 0) ? UINT32_C(0xFFFFFFFF) : UINT32_C(1);
-    CPU_Hi.value = static_cast<u32>(static_cast<s32>(rsVal));
+    CPU_Lo.value = (static_cast<int32_t>(rsVal) >= 0) ? UINT32_C(0xFFFFFFFF) : UINT32_C(1);
+    CPU_Hi.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal));
   }
-  else if (rsVal == UINT32_C(0x80000000) && static_cast<s32>(rtVal) == -1)
+  else if (rsVal == UINT32_C(0x80000000) && static_cast<int32_t>(rtVal) == -1)
   {
     // unrepresentable
     CPU_Lo.value = UINT32_C(0x80000000);
@@ -1174,12 +1174,12 @@ void CPU_DIV(u32 instr, u32 rsVal, u32 rtVal)
   }
   else
   {
-    CPU_Lo.value = static_cast<u32>(static_cast<s32>(rsVal) / static_cast<s32>(rtVal));
-    CPU_Hi.value = static_cast<u32>(static_cast<s32>(rsVal) % static_cast<s32>(rtVal));
+    CPU_Lo.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal) / static_cast<int32_t>(rtVal));
+    CPU_Hi.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal) % static_cast<int32_t>(rtVal));
   }
 }
 
-void CPU_DIVU(u32 instr, u32 rsVal, u32 rtVal)
+void CPU_DIVU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
 {
   // Lo = Rs / Rt (unsigned)
   // Hi = Rs % Rt (unsigned)
@@ -1224,12 +1224,12 @@ void CPU_DIVU(u32 instr, u32 rsVal, u32 rtVal)
 ////////////////////////////////////
 // Shift operations (sa)
 ////////////////////////////////////
-void CPU_SLL(u32 instr, u32 rtVal)
+void CPU_SLL(uint32_t instr, uint32_t rtVal)
 {
   // Rd = Rt << Sa
-  const u32 rdVal = rtVal << sa(instr);
+  const uint32_t rdVal = rtVal << sa(instr);
   PGXP_value ret;
-  u32 sh = sa(instr);
+  uint32_t sh = sa(instr);
   Validate(&CPU_reg[rt(instr)], rtVal);
 
   ret = CPU_reg[rt(instr)];
@@ -1269,12 +1269,12 @@ void CPU_SLL(u32 instr, u32 rtVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_SRL(u32 instr, u32 rtVal)
+void CPU_SRL(uint32_t instr, uint32_t rtVal)
 {
   // Rd = Rt >> Sa
-  const u32 rdVal = rtVal >> sa(instr);
+  const uint32_t rdVal = rtVal >> sa(instr);
   PGXP_value ret;
-  u32 sh = sa(instr);
+  uint32_t sh = sa(instr);
   Validate(&CPU_reg[rt(instr)], rtVal);
 
   ret = CPU_reg[rt(instr)];
@@ -1333,12 +1333,12 @@ void CPU_SRL(u32 instr, u32 rtVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_SRA(u32 instr, u32 rtVal)
+void CPU_SRA(uint32_t instr, uint32_t rtVal)
 {
   // Rd = Rt >> Sa
-  const u32 rdVal = static_cast<u32>(static_cast<s32>(rtVal) >> sa(instr));
+  const uint32_t rdVal = static_cast<uint32_t>(static_cast<int32_t>(rtVal) >> sa(instr));
   PGXP_value ret;
-  u32 sh = sa(instr);
+  uint32_t sh = sa(instr);
   Validate(&CPU_reg[rt(instr)], rtVal);
   ret = CPU_reg[rt(instr)];
 
@@ -1399,12 +1399,12 @@ void CPU_SRA(u32 instr, u32 rtVal)
 ////////////////////////////////////
 // Shift operations variable
 ////////////////////////////////////
-void CPU_SLLV(u32 instr, u32 rtVal, u32 rsVal)
+void CPU_SLLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
 {
   // Rd = Rt << Rs
-  const u32 rdVal = rtVal << rsVal;
+  const uint32_t rdVal = rtVal << rsVal;
   PGXP_value ret;
-  u32 sh = rsVal & 0x1F;
+  uint32_t sh = rsVal & 0x1F;
   Validate(&CPU_reg[rt(instr)], rtVal);
   Validate(&CPU_reg[rs(instr)], rsVal);
 
@@ -1444,12 +1444,12 @@ void CPU_SLLV(u32 instr, u32 rtVal, u32 rsVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_SRLV(u32 instr, u32 rtVal, u32 rsVal)
+void CPU_SRLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
 {
   // Rd = Rt >> Sa
-  const u32 rdVal = rtVal >> rsVal;
+  const uint32_t rdVal = rtVal >> rsVal;
   PGXP_value ret;
-  u32 sh = rsVal & 0x1F;
+  uint32_t sh = rsVal & 0x1F;
   Validate(&CPU_reg[rt(instr)], rtVal);
   Validate(&CPU_reg[rs(instr)], rsVal);
 
@@ -1509,12 +1509,12 @@ void CPU_SRLV(u32 instr, u32 rtVal, u32 rsVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_SRAV(u32 instr, u32 rtVal, u32 rsVal)
+void CPU_SRAV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
 {
   // Rd = Rt >> Sa
-  const u32 rdVal = static_cast<u32>(static_cast<s32>(rtVal) >> rsVal);
+  const uint32_t rdVal = static_cast<uint32_t>(static_cast<int32_t>(rtVal) >> rsVal);
   PGXP_value ret;
-  u32 sh = rsVal & 0x1F;
+  uint32_t sh = rsVal & 0x1F;
   Validate(&CPU_reg[rt(instr)], rtVal);
   Validate(&CPU_reg[rs(instr)], rsVal);
 
@@ -1574,7 +1574,7 @@ void CPU_SRAV(u32 instr, u32 rtVal, u32 rsVal)
   CPU_reg[rd(instr)] = ret;
 }
 
-void CPU_MFHI(u32 instr, u32 hiVal)
+void CPU_MFHI(uint32_t instr, uint32_t hiVal)
 {
   // Rd = Hi
   Validate(&CPU_Hi, hiVal);
@@ -1582,7 +1582,7 @@ void CPU_MFHI(u32 instr, u32 hiVal)
   CPU_reg[rd(instr)] = CPU_Hi;
 }
 
-void CPU_MTHI(u32 instr, u32 rdVal)
+void CPU_MTHI(uint32_t instr, uint32_t rdVal)
 {
   // Hi = Rd
   Validate(&CPU_reg[rd(instr)], rdVal);
@@ -1590,7 +1590,7 @@ void CPU_MTHI(u32 instr, u32 rdVal)
   CPU_Hi = CPU_reg[rd(instr)];
 }
 
-void CPU_MFLO(u32 instr, u32 loVal)
+void CPU_MFLO(uint32_t instr, uint32_t loVal)
 {
   // Rd = Lo
   Validate(&CPU_Lo, loVal);
@@ -1598,7 +1598,7 @@ void CPU_MFLO(u32 instr, u32 loVal)
   CPU_reg[rd(instr)] = CPU_Lo;
 }
 
-void CPU_MTLO(u32 instr, u32 rdVal)
+void CPU_MTLO(uint32_t instr, uint32_t rdVal)
 {
   // Lo = Rd
   Validate(&CPU_reg[rd(instr)], rdVal);
@@ -1606,7 +1606,7 @@ void CPU_MTLO(u32 instr, u32 rdVal)
   CPU_Lo = CPU_reg[rd(instr)];
 }
 
-void CPU_MFC0(u32 instr, u32 rdVal)
+void CPU_MFC0(uint32_t instr, uint32_t rdVal)
 {
   // CPU[Rt] = CP0[Rd]
   Validate(&CP0_reg[rd(instr)], rdVal);
@@ -1614,7 +1614,7 @@ void CPU_MFC0(u32 instr, u32 rdVal)
   CPU_reg[rt(instr)].value = rdVal;
 }
 
-void CPU_MTC0(u32 instr, u32 rdVal, u32 rtVal)
+void CPU_MTC0(uint32_t instr, uint32_t rdVal, uint32_t rtVal)
 {
   // CP0[Rd] = CPU[Rt]
   Validate(&CPU_reg[rt(instr)], rtVal);

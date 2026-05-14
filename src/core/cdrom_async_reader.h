@@ -9,7 +9,7 @@
 class CDROMAsyncReader
 {
 public:
-  using SectorBuffer = std::array<u8, CDImage::RAW_SECTOR_SIZE>;
+  using SectorBuffer = std::array<uint8_t, CDImage::RAW_SECTOR_SIZE>;
 
   struct BufferSlot
   {
@@ -25,16 +25,16 @@ public:
   CDImage::LBA GetLastReadSector() const { return m_buffers[m_buffer_front.load()].lba; }
   const SectorBuffer& GetSectorBuffer() const { return m_buffers[m_buffer_front.load()].data; }
   const CDImage::SubChannelQ& GetSectorSubQ() const { return m_buffers[m_buffer_front.load()].subq; }
-  u32 GetBufferedSectorCount() const { return m_buffer_count.load(); }
+  uint32_t GetBufferedSectorCount() const { return m_buffer_count.load(); }
   bool HasBufferedSectors() const { return (m_buffer_count.load() > 0); }
-  u32 GetReadaheadCount() const { return static_cast<u32>(m_buffers.size()); }
+  uint32_t GetReadaheadCount() const { return static_cast<uint32_t>(m_buffers.size()); }
 
   bool HasMedia() const { return static_cast<bool>(m_media); }
   const CDImage* GetMedia() const { return m_media.get(); }
   const std::string& GetMediaFileName() const { return m_media->GetFileName(); }
 
   bool IsUsingThread() const { return m_read_thread.joinable(); }
-  void StartThread(u32 readahead_count = 8);
+  void StartThread(uint32_t readahead_count = 8);
   void StopThread();
 
   void SetMedia(std::unique_ptr<CDImage> media);
@@ -73,7 +73,7 @@ private:
   std::atomic_bool m_seek_error{false};
 
   std::vector<BufferSlot> m_buffers;
-  std::atomic<u32> m_buffer_front{0};
-  std::atomic<u32> m_buffer_back{0};
-  std::atomic<u32> m_buffer_count{0};
+  std::atomic<uint32_t> m_buffer_front{0};
+  std::atomic<uint32_t> m_buffer_back{0};
+  std::atomic<uint32_t> m_buffer_count{0};
 };

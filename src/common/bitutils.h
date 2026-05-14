@@ -12,17 +12,17 @@ ALWAYS_INLINE unsigned CountLeadingZeros(T value)
 {
 #ifdef _WIN32
   unsigned long index;
-  if constexpr (sizeof(value) >= sizeof(u64))
-    _BitScanReverse64(&index, static_cast<u64>(static_cast<typename std::make_unsigned<T>::type>(value)));
+  if constexpr (sizeof(value) >= sizeof(uint64_t))
+    _BitScanReverse64(&index, static_cast<uint64_t>(static_cast<typename std::make_unsigned<T>::type>(value)));
   else
-    _BitScanReverse(&index, static_cast<u32>(static_cast<typename std::make_unsigned<T>::type>(value)));
+    _BitScanReverse(&index, static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value)));
   return static_cast<unsigned>(index) ^ static_cast<unsigned>((sizeof(value) * 8u) - 1u);
 #else
-  if constexpr (sizeof(value) >= sizeof(u64))
-    return static_cast<unsigned>(__builtin_clzl(static_cast<u64>(static_cast<typename std::make_unsigned<T>::type>(value))));
-  else if constexpr (sizeof(value) == sizeof(u32))
-    return static_cast<unsigned>(__builtin_clz(static_cast<u32>(static_cast<typename std::make_unsigned<T>::type>(value))));
-  return static_cast<unsigned>(__builtin_clz(static_cast<u32>(static_cast<typename std::make_unsigned<T>::type>(value)))) &
+  if constexpr (sizeof(value) >= sizeof(uint64_t))
+    return static_cast<unsigned>(__builtin_clzl(static_cast<uint64_t>(static_cast<typename std::make_unsigned<T>::type>(value))));
+  else if constexpr (sizeof(value) == sizeof(uint32_t))
+    return static_cast<unsigned>(__builtin_clz(static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value))));
+  return static_cast<unsigned>(__builtin_clz(static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value)))) &
          static_cast<unsigned>((sizeof(value) * 8u) - 1u);
 #endif
 }
@@ -33,14 +33,14 @@ ALWAYS_INLINE unsigned CountTrailingZeros(T value)
 {
 #ifdef _WIN32
   unsigned long index;
-  if constexpr (sizeof(value) >= sizeof(u64))
-    _BitScanForward64(&index, static_cast<u64>(static_cast<typename std::make_unsigned<T>::type>(value)));
+  if constexpr (sizeof(value) >= sizeof(uint64_t))
+    _BitScanForward64(&index, static_cast<uint64_t>(static_cast<typename std::make_unsigned<T>::type>(value)));
   else
-    _BitScanForward(&index, static_cast<u32>(static_cast<typename std::make_unsigned<T>::type>(value)));
+    _BitScanForward(&index, static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value)));
   return index;
 #else
-  if constexpr (sizeof(value) >= sizeof(u64))
-    return static_cast<unsigned>(__builtin_ctzl(static_cast<u64>(static_cast<typename std::make_unsigned<T>::type>(value))));
-  return static_cast<unsigned>(__builtin_ctz(static_cast<u32>(static_cast<typename std::make_unsigned<T>::type>(value))));
+  if constexpr (sizeof(value) >= sizeof(uint64_t))
+    return static_cast<unsigned>(__builtin_ctzl(static_cast<uint64_t>(static_cast<typename std::make_unsigned<T>::type>(value))));
+  return static_cast<unsigned>(__builtin_ctz(static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value))));
 #endif
 }

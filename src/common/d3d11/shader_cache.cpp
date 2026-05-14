@@ -14,12 +14,12 @@ namespace D3D11 {
 #pragma pack(push, 1)
 struct CacheIndexEntry
 {
-  u64 source_hash_low;
-  u64 source_hash_high;
-  u32 source_length;
-  u32 shader_type;
-  u32 file_offset;
-  u32 blob_size;
+  uint64_t source_hash_low;
+  uint64_t source_hash_high;
+  uint32_t source_length;
+  uint32_t shader_type;
+  uint32_t file_offset;
+  uint32_t blob_size;
 };
 #pragma pack(pop)
 
@@ -45,7 +45,7 @@ bool ShaderCache::CacheIndexKey::operator!=(const CacheIndexKey& key) const
           source_length != key.source_length || shader_type != key.shader_type);
 }
 
-void ShaderCache::Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_level, u32 version, bool debug)
+void ShaderCache::Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_level, uint32_t version, bool debug)
 {
   m_feature_level = feature_level;
   m_version = version;
@@ -82,7 +82,7 @@ bool ShaderCache::CreateNew(const std::string& index_filename, const std::string
     return false;
   }
 
-  const u32 index_version = FILE_VERSION;
+  const uint32_t index_version = FILE_VERSION;
   if (rfwrite(&index_version, sizeof(index_version), 1, m_index_file) != 1 ||
       rfwrite(&m_version, sizeof(m_version), 1, m_index_file) != 1)
   {
@@ -112,8 +112,8 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   if (!m_index_file)
     return false;
 
-  u32 file_version = 0;
-  u32 data_version = 0;
+  uint32_t file_version = 0;
+  uint32_t data_version = 0;
   if (rfread(&file_version, sizeof(file_version), 1, m_index_file) != 1 || file_version != FILE_VERSION ||
       rfread(&data_version, sizeof(data_version), 1, m_index_file) != 1 || data_version != m_version)
   {
@@ -133,7 +133,7 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   }
 
   rfseek(m_blob_file, 0, SEEK_END);
-  const u32 blob_file_size = static_cast<u32>(rftell(m_blob_file));
+  const uint32_t blob_file_size = static_cast<uint32_t>(rftell(m_blob_file));
 
   for (;;)
   {
@@ -200,17 +200,17 @@ ShaderCache::CacheIndexKey ShaderCache::GetCacheKey(ShaderCompiler::Type type, c
   {
     struct
     {
-      u64 hash_low;
-      u64 hash_high;
+      uint64_t hash_low;
+      uint64_t hash_high;
     } s;
-    u8 hash[16];
+    uint8_t hash[16];
   };
 
   MD5Digest digest;
-  digest.Update(shader_code.data(), static_cast<u32>(shader_code.length()));
+  digest.Update(shader_code.data(), static_cast<uint32_t>(shader_code.length()));
   digest.Final(hash);
 
-  return CacheIndexKey{s.hash_low, s.hash_high, static_cast<u32>(shader_code.length()), type};
+  return CacheIndexKey{s.hash_low, s.hash_high, static_cast<uint32_t>(shader_code.length()), type};
 }
 
 ShaderCache::ComPtr<ID3DBlob> ShaderCache::GetShaderBlob(ShaderCompiler::Type type, std::string_view shader_code)
@@ -261,14 +261,14 @@ ShaderCache::ComPtr<ID3DBlob> ShaderCache::CompileAndAddShaderBlob(const CacheIn
     return blob;
 
   CacheIndexData data;
-  data.file_offset = static_cast<u32>(rftell(m_blob_file));
-  data.blob_size = static_cast<u32>(blob->GetBufferSize());
+  data.file_offset = static_cast<uint32_t>(rftell(m_blob_file));
+  data.blob_size = static_cast<uint32_t>(blob->GetBufferSize());
 
   CacheIndexEntry entry = {};
   entry.source_hash_low = key.source_hash_low;
   entry.source_hash_high = key.source_hash_high;
   entry.source_length = key.source_length;
-  entry.shader_type = static_cast<u32>(key.shader_type);
+  entry.shader_type = static_cast<uint32_t>(key.shader_type);
   entry.blob_size = data.blob_size;
   entry.file_offset = data.file_offset;
 

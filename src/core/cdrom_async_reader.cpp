@@ -10,7 +10,7 @@ CDROMAsyncReader::~CDROMAsyncReader()
   StopThread();
 }
 
-void CDROMAsyncReader::StartThread(u32 readahead_count)
+void CDROMAsyncReader::StartThread(uint32_t readahead_count)
 {
   if (IsUsingThread())
     StopThread();
@@ -64,17 +64,17 @@ void CDROMAsyncReader::QueueReadSector(CDImage::LBA lba)
     return;
   }
 
-  const u32 buffer_count = m_buffer_count.load();
+  const uint32_t buffer_count = m_buffer_count.load();
   if (buffer_count > 0)
   {
     // don't re-read the same sector if it was the last one we read
     // the CDC code does this when seeking->reading
-    const u32 buffer_front = m_buffer_front.load();
+    const uint32_t buffer_front = m_buffer_front.load();
     if (m_buffers[buffer_front].lba == lba)
       return;
 
     // did we readahead to the correct sector?
-    const u32 next_buffer = (buffer_front + 1) % static_cast<u32>(m_buffers.size());
+    const uint32_t next_buffer = (buffer_front + 1) % static_cast<uint32_t>(m_buffers.size());
     if (m_buffer_count > 1 && m_buffers[next_buffer].lba == lba)
     {
       // great, don't need a seek, but still kick the thread to start reading ahead again
@@ -149,7 +149,7 @@ bool CDROMAsyncReader::WaitForReadToComplete()
     return false;
   }
 
-  const u32 front = m_buffer_front.load();
+  const uint32_t front = m_buffer_front.load();
   const double wait_time = wait_timer.GetTimeMilliseconds();
   if (wait_time > 1.0f)
     Log_WarningPrintf("Had to wait %.2f msec for LBA %u", wait_time, m_buffers[front].lba);
@@ -177,8 +177,8 @@ bool CDROMAsyncReader::ReadSectorIntoBuffer(std::unique_lock<std::mutex>& lock)
 {
   Common::Timer timer;
 
-  const u32 slot = m_buffer_back.load();
-  m_buffer_back.store((slot + 1) % static_cast<u32>(m_buffers.size()));
+  const uint32_t slot = m_buffer_back.load();
+  m_buffer_back.store((slot + 1) % static_cast<uint32_t>(m_buffers.size()));
 
   BufferSlot& buffer = m_buffers[slot];
   buffer.lba = m_media->GetPositionOnDisc();
@@ -279,7 +279,7 @@ void CDROMAsyncReader::WorkerThreadEntryPoint()
         break;
 
       // readahead time! read as many sectors as we have space for
-      while (m_buffer_count.load() < static_cast<u32>(m_buffers.size()))
+      while (m_buffer_count.load() < static_cast<uint32_t>(m_buffers.size()))
       {
         if (m_next_position_set.load())
         {

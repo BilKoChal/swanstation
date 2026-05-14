@@ -17,7 +17,7 @@ namespace CPU::Recompiler {
 class CodeGenerator
 {
 public:
-  using SpeculativeValue = std::optional<u32>;
+  using SpeculativeValue = std::optional<uint32_t>;
 
   CodeGenerator(JitCodeBuffer* code_buffer);
   ~CodeGenerator();
@@ -25,10 +25,10 @@ public:
   static void AlignCodeBuffer(JitCodeBuffer* code_buffer);
 
   static bool BackpatchLoadStore(const LoadStoreBackpatchInfo& lbi);
-  static void BackpatchBranch(void* pc, u32 pc_size, void* target);
-  static void BackpatchReturn(void* pc, u32 pc_size);
+  static void BackpatchBranch(void* pc, uint32_t pc_size, void* target);
+  static void BackpatchReturn(void* pc, uint32_t pc_size);
 
-  bool CompileBlock(CodeBlock* block, CodeBlock::HostCodePointer* out_host_code, u32* out_host_code_size);
+  bool CompileBlock(CodeBlock* block, CodeBlock::HostCodePointer* out_host_code, uint32_t* out_host_code_size);
 
   CodeCache::DispatcherFunction CompileDispatcher();
   CodeCache::SingleBlockDispatcherFunction CompileSingleBlockDispatcher();
@@ -40,7 +40,7 @@ public:
   void EmitEndBlock(bool free_registers = true, bool emit_return = true);
   void EmitExceptionExit();
   void EmitExceptionExitOnBool(const Value& value);
-  void FinalizeBlock(CodeBlock::HostCodePointer* out_host_code, u32* out_host_code_size);
+  void FinalizeBlock(CodeBlock::HostCodePointer* out_host_code, uint32_t* out_host_code_size);
 
   void EmitSignExtend(HostReg to_reg, RegSize to_size, HostReg from_reg, RegSize from_size);
   void EmitZeroExtend(HostReg to_reg, RegSize to_size, HostReg from_reg, RegSize from_size);
@@ -74,9 +74,9 @@ public:
   void EmitCancelInterpreterLoadDelayForReg(Reg reg);
   void EmitICacheCheckAndUpdate();
   void EmitStallUntilGTEComplete();
-  void EmitLoadCPUStructField(HostReg host_reg, RegSize size, u32 offset);
-  void EmitStoreCPUStructField(u32 offset, const Value& value);
-  void EmitAddCPUStructField(u32 offset, const Value& value);
+  void EmitLoadCPUStructField(HostReg host_reg, RegSize size, uint32_t offset);
+  void EmitStoreCPUStructField(uint32_t offset, const Value& value);
+  void EmitAddCPUStructField(uint32_t offset, const Value& value);
   void EmitLoadGlobal(HostReg host_reg, RegSize size, const void* ptr);
   void EmitStoreGlobal(void* ptr, const Value& value);
   void EmitLoadGlobalAddress(HostReg host_reg, const void* ptr);
@@ -106,12 +106,12 @@ public:
   void EmitConditionalBranch(Condition condition, bool invert, HostReg value, RegSize size, LabelType* label);
   void EmitConditionalBranch(Condition condition, bool invert, HostReg lhs, const Value& rhs, LabelType* label);
   void EmitConditionalBranch(Condition condition, bool invert, LabelType* label);
-  void EmitBranchIfBitClear(HostReg reg, RegSize size, u8 bit, LabelType* label);
-  void EmitBranchIfBitSet(HostReg reg, RegSize size, u8 bit, LabelType* label);
+  void EmitBranchIfBitClear(HostReg reg, RegSize size, uint8_t bit, LabelType* label);
+  void EmitBranchIfBitSet(HostReg reg, RegSize size, uint8_t bit, LabelType* label);
   void EmitBindLabel(LabelType* label);
 
-  u32 PrepareStackForCall();
-  void RestoreStackAfterCall(u32 adjust_size);
+  uint32_t PrepareStackForCall();
+  void RestoreStackAfterCall(uint32_t adjust_size);
 
   void EmitCall(const void* ptr);
   void EmitFunctionCallPtr(Value* return_value, const void* ptr);
@@ -155,10 +155,10 @@ public:
   }
 
   // Host register saving.
-  void EmitPushHostReg(HostReg reg, u32 position);
-  void EmitPushHostRegPair(HostReg reg, HostReg reg2, u32 position);
-  void EmitPopHostReg(HostReg reg, u32 position);
-  void EmitPopHostRegPair(HostReg reg, HostReg reg2, u32 position);
+  void EmitPushHostReg(HostReg reg, uint32_t position);
+  void EmitPushHostRegPair(HostReg reg, HostReg reg2, uint32_t position);
+  void EmitPopHostReg(HostReg reg, uint32_t position);
+  void EmitPopHostRegPair(HostReg reg, HostReg reg2, uint32_t position);
 
   // Value ops
   Value AddValues(const Value& lhs, const Value& rhs, bool set_flags);
@@ -207,12 +207,12 @@ private:
   void AddGTETicks(TickCount ticks);
   void StallUntilGTEComplete();
 
-  Value CalculatePC(u32 offset = 0);
-  Value GetCurrentInstructionPC(u32 offset = 0);
+  Value CalculatePC(uint32_t offset = 0);
+  Value GetCurrentInstructionPC(uint32_t offset = 0);
   void WriteNewPC(const Value& value, bool commit);
 
-  Value DoGTERegisterRead(u32 index);
-  void DoGTERegisterWrite(u32 index, const Value& value);
+  Value DoGTERegisterRead(uint32_t index);
+  void DoGTERegisterWrite(uint32_t index, const Value& value);
 
   //////////////////////////////////////////////////////////////////////////
   // Instruction Code Generators
@@ -251,7 +251,7 @@ private:
   TickCount m_delayed_cycles_add = 0;
   TickCount m_gte_done_cycle = 0;
 
-  u32 m_pc = 0;
+  uint32_t m_pc = 0;
   bool m_pc_valid = false;
   bool m_block_linked = false;
 
@@ -271,7 +271,7 @@ private:
   //////////////////////////////////////////////////////////////////////////
   struct SpeculativeConstants
   {
-    std::array<SpeculativeValue, static_cast<u8>(Reg::count)> regs;
+    std::array<SpeculativeValue, static_cast<uint8_t>(Reg::count)> regs;
     std::unordered_map<PhysicalMemoryAddress, SpeculativeValue> memory;
     SpeculativeValue cop0_sr;
   };
@@ -280,7 +280,7 @@ private:
   void InvalidateSpeculativeValues();
   SpeculativeValue SpeculativeReadReg(Reg reg);
   void SpeculativeWriteReg(Reg reg, SpeculativeValue value);
-  SpeculativeValue SpeculativeReadMemory(u32 address);
+  SpeculativeValue SpeculativeReadMemory(uint32_t address);
   void SpeculativeWriteMemory(VirtualMemoryAddress address, SpeculativeValue value);
   bool SpeculativeIsCacheIsolated();
 

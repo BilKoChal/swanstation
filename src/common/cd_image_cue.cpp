@@ -29,7 +29,7 @@ private:
   {
     std::string filename;
     RFILE* file;
-    u64 file_position;
+    uint64_t file_position;
   };
 
   std::vector<TrackFile> m_files;
@@ -63,10 +63,10 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
 
   m_filename = filename;
 
-  u32 disc_lba = 0;
+  uint32_t disc_lba = 0;
 
   // for each track..
-  for (u32 track_num = 1; track_num <= CueParser::MAX_TRACK_NUMBER; track_num++)
+  for (uint32_t track_num = 1; track_num <= CueParser::MAX_TRACK_NUMBER; track_num++)
   {
     const CueParser::Track* track = parser.GetTrack(track_num);
     if (!track)
@@ -75,7 +75,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
     const std::string track_filename(track->file);
     LBA track_start = track->start.ToLBA();
 
-    u32 track_file_index = 0;
+    uint32_t track_file_index = 0;
     for (; track_file_index < m_files.size(); track_file_index++)
     {
       const TrackFile& t = m_files[track_file_index];
@@ -119,7 +119,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
 
     // data type determines the sector size
     const TrackMode mode = track->mode;
-    const u32 track_sector_size = GetBytesPerSector(mode);
+    const uint32_t track_sector_size = GetBytesPerSector(mode);
 
     // precompute subchannel q flags for the whole track
     SubChannelQ::Control control{};
@@ -133,7 +133,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
     if (!track->length.has_value())
     {
       FileSystem::FSeek64(m_files[track_file_index].file, 0, SEEK_END);
-      u64 file_size = static_cast<u64>(FileSystem::FTell64(m_files[track_file_index].file));
+      uint64_t file_size = static_cast<uint64_t>(FileSystem::FTell64(m_files[track_file_index].file));
       FileSystem::FSeek64(m_files[track_file_index].file, 0, SEEK_SET);
 
       file_size /= track_sector_size;
@@ -166,7 +166,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
       // Pregap/index 0 is in the file, easy.
       Index pregap_index = {};
       pregap_index.start_lba_on_disc = disc_lba;
-      pregap_index.start_lba_in_track = static_cast<LBA>(-static_cast<s32>(pregap_frames));
+      pregap_index.start_lba_in_track = static_cast<LBA>(-static_cast<int32_t>(pregap_frames));
       pregap_index.length = pregap_frames;
       pregap_index.track_number = track_num;
       pregap_index.index_number = 0;
@@ -174,7 +174,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
       pregap_index.control.bits = control.bits;
       pregap_index.is_pregap = true;
       pregap_index.file_index = track_file_index;
-      pregap_index.file_offset = static_cast<u64>(static_cast<s64>(track_start - pregap_frames)) * track_sector_size;
+      pregap_index.file_offset = static_cast<uint64_t>(static_cast<int64_t>(track_start - pregap_frames)) * track_sector_size;
       pregap_index.file_sector_size = track_sector_size;
 
       m_indices.push_back(pregap_index);
@@ -205,7 +205,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
       {
         Index pregap_index = {};
         pregap_index.start_lba_on_disc = disc_lba;
-        pregap_index.start_lba_in_track = static_cast<LBA>(-static_cast<s32>(pregap_frames));
+        pregap_index.start_lba_in_track = static_cast<LBA>(-static_cast<int32_t>(pregap_frames));
         pregap_index.length = pregap_frames;
         pregap_index.track_number = track_num;
         pregap_index.index_number = 0;
@@ -220,7 +220,7 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
 
     // add the track itself
     m_tracks.push_back(
-      Track{track_num, disc_lba, static_cast<u32>(m_indices.size()), track_length + pregap_frames, mode, control});
+      Track{track_num, disc_lba, static_cast<uint32_t>(m_indices.size()), track_length + pregap_frames, mode, control});
 
     // how many indices in this track?
     Index last_index;
@@ -230,19 +230,19 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
     last_index.index_number = 1;
     last_index.file_index = track_file_index;
     last_index.file_sector_size = track_sector_size;
-    last_index.file_offset = static_cast<u64>(track_start) * track_sector_size;
+    last_index.file_offset = static_cast<uint64_t>(track_start) * track_sector_size;
     last_index.mode = mode;
     last_index.control.bits = control.bits;
     last_index.is_pregap = false;
 
-    u32 last_index_offset = track_start;
-    for (u32 index_num = 1;; index_num++)
+    uint32_t last_index_offset = track_start;
+    for (uint32_t index_num = 1;; index_num++)
     {
       const Position* pos = track->GetIndex(index_num);
       if (!pos)
         break;
 
-      const u32 index_offset = pos->ToLBA();
+      const uint32_t index_offset = pos->ToLBA();
 
       // add an index between the track indices
       if (index_offset > last_index_offset)
@@ -257,12 +257,12 @@ bool CDImageCueSheet::OpenAndParse(const char* filename, Common::Error* error)
       }
 
       last_index.file_offset = index_offset * last_index.file_sector_size;
-      last_index.index_number = static_cast<u32>(index_num);
+      last_index.index_number = static_cast<uint32_t>(index_num);
       last_index_offset = index_offset;
     }
 
     // and the last index is added here
-    const u32 track_end_index = track_start + track_length;
+    const uint32_t track_end_index = track_start + track_length;
     if (track_end_index > last_index_offset)
     {
       last_index.length = track_end_index - last_index_offset;
@@ -304,7 +304,7 @@ bool CDImageCueSheet::HasNonStandardSubchannel() const
 bool CDImageCueSheet::ReadSectorFromIndex(void* buffer, const Index& index, LBA lba_in_index)
 {
   TrackFile& tf = m_files[index.file_index];
-  const u64 file_position = index.file_offset + (static_cast<u64>(lba_in_index) * index.file_sector_size);
+  const uint64_t file_position = index.file_offset + (static_cast<uint64_t>(lba_in_index) * index.file_sector_size);
   if (tf.file_position != file_position)
   {
     if (rfseek(tf.file, static_cast<long>(file_position), SEEK_SET) != 0)

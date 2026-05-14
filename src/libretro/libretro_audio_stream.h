@@ -28,20 +28,20 @@
 class LibretroAudioStream
 {
 public:
-  using SampleType = s16;
+  using SampleType = int16_t;
 
   // PSX audio is 44.1 kHz stereo. These values are referenced by the
   // libretro retro_get_system_av_info path and by the FIFO sizing
   // below; they are not configurable.
-  static constexpr u32 SAMPLE_RATE = 44100;
-  static constexpr u32 CHANNELS = 2;
+  static constexpr uint32_t SAMPLE_RATE = 44100;
+  static constexpr uint32_t CHANNELS = 2;
 
   // Per-frame draining batch size (in stereo frames). The SPU's
   // UpdateEventInterval() schedules tick events to produce no more
   // than this many frames per slice, which both bounds the worst-case
   // SPU work per timing event and ensures BeginWrite never has to clip
   // a request that would have fit.
-  static constexpr u32 BUFFER_SIZE = 2048;
+  static constexpr uint32_t BUFFER_SIZE = 2048;
 
   // FIFO backing storage size in samples (= stereo frames * channels).
   // Sized generously above BUFFER_SIZE so the wrap-tolerant
@@ -50,17 +50,17 @@ public:
   // skip-audio frames during fast-forward where UploadToFrontend
   // doesn't actually feed the frontend) have headroom to absorb a few
   // slices' worth of samples before pressure shows up.
-  static constexpr u32 FIFO_CAPACITY = 32768;
+  static constexpr uint32_t FIFO_CAPACITY = 32768;
 
   LibretroAudioStream() = default;
   ~LibretroAudioStream() = default;
 
   // Per-frame slice budget (in stereo frames). Used by the SPU to size
   // its tick-event interval. Constant by construction.
-  static constexpr u32 GetBufferSize() { return BUFFER_SIZE; }
+  static constexpr uint32_t GetBufferSize() { return BUFFER_SIZE; }
 
-  void BeginWrite(SampleType** buffer_ptr, u32* num_frames);
-  void EndWrite(u32 num_frames);
+  void BeginWrite(SampleType** buffer_ptr, uint32_t* num_frames);
+  void EndWrite(uint32_t num_frames);
 
   void UploadToFrontend();
 

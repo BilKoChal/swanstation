@@ -19,7 +19,7 @@ class ShaderCache
 public:
   ~ShaderCache();
 
-  static void Create(std::string_view base_path, u32 version, bool debug);
+  static void Create(std::string_view base_path, uint32_t version, bool debug);
   static void Destroy();
 
   /// Returns a handle to the pipeline cache. Set set_dirty to true if you are planning on writing to it externally.
@@ -35,13 +35,13 @@ public:
   VkShaderModule GetFragmentShader(std::string_view shader_code);
 
 private:
-  static constexpr u32 FILE_VERSION = 2;
+  static constexpr uint32_t FILE_VERSION = 2;
 
   struct CacheIndexKey
   {
-    u64 source_hash_low;
-    u64 source_hash_high;
-    u32 source_length;
+    uint64_t source_hash_low;
+    uint64_t source_hash_high;
+    uint32_t source_length;
     ShaderCompiler::Type shader_type;
 
     bool operator==(const CacheIndexKey& key) const;
@@ -60,8 +60,8 @@ private:
 
   struct CacheIndexData
   {
-    u32 file_offset;
-    u32 blob_size;
+    uint32_t file_offset;
+    uint32_t blob_size;
   };
 
   using CacheIndex = std::unordered_map<CacheIndexKey, CacheIndexData, CacheIndexEntryHasher>;
@@ -72,7 +72,7 @@ private:
   static std::string GetPipelineCacheBaseFileName(const std::string_view& base_path, bool debug);
   static CacheIndexKey GetCacheKey(ShaderCompiler::Type type, const std::string_view& shader_code);
 
-  void Open(std::string_view base_path, u32 version, bool debug);
+  void Open(std::string_view base_path, uint32_t version, bool debug);
 
   bool CreateNewShaderCache(const std::string& index_filename, const std::string& blob_filename);
   bool ReadExistingShaderCache(const std::string& index_filename, const std::string& blob_filename);
@@ -92,7 +92,7 @@ private:
   CacheIndex m_index;
 
   VkPipelineCache m_pipeline_cache = VK_NULL_HANDLE;
-  u32 m_version = 0;
+  uint32_t m_version = 0;
   bool m_debug = false;
   bool m_pipeline_cache_dirty = false;
 };

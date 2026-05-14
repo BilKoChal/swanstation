@@ -168,9 +168,9 @@ void GPU_HW_D3D12::UpdateSettings()
   }
 }
 
-void GPU_HW_D3D12::MapBatchVertexPointer(u32 required_vertices)
+void GPU_HW_D3D12::MapBatchVertexPointer(uint32_t required_vertices)
 {
-  const u32 required_space = required_vertices * sizeof(BatchVertex);
+  const uint32_t required_space = required_vertices * sizeof(BatchVertex);
   if (!m_vertex_stream_buffer.ReserveMemory(required_space, sizeof(BatchVertex)))
   {
     g_d3d12_context->ExecuteCommandList(false);
@@ -184,7 +184,7 @@ void GPU_HW_D3D12::MapBatchVertexPointer(u32 required_vertices)
   m_batch_base_vertex = m_vertex_stream_buffer.GetCurrentOffset() / sizeof(BatchVertex);
 }
 
-void GPU_HW_D3D12::UnmapBatchVertexPointer(u32 used_vertices)
+void GPU_HW_D3D12::UnmapBatchVertexPointer(uint32_t used_vertices)
 {
   if (used_vertices > 0)
     m_vertex_stream_buffer.CommitMemory(used_vertices * sizeof(BatchVertex));
@@ -194,7 +194,7 @@ void GPU_HW_D3D12::UnmapBatchVertexPointer(u32 used_vertices)
   m_batch_current_vertex_ptr = nullptr;
 }
 
-void GPU_HW_D3D12::UploadUniformBuffer(const void* data, u32 data_size)
+void GPU_HW_D3D12::UploadUniformBuffer(const void* data, uint32_t data_size)
 {
   if (!m_uniform_stream_buffer.ReserveMemory(data_size, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
   {
@@ -214,13 +214,13 @@ void GPU_HW_D3D12::UploadUniformBuffer(const void* data, u32 data_size)
 void GPU_HW_D3D12::SetCapabilities()
 {
   // TODO: Query from device
-  const u32 max_texture_size = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
-  const u32 max_texture_scale = max_texture_size / VRAM_WIDTH;
+  const uint32_t max_texture_size = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+  const uint32_t max_texture_scale = max_texture_size / VRAM_WIDTH;
   Log_InfoPrintf("Max texture size: %ux%u", max_texture_size, max_texture_size);
   m_max_resolution_scale = max_texture_scale;
 
   m_max_multisamples = 1;
-  for (u32 multisamples = 2; multisamples < D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT; multisamples++)
+  for (uint32_t multisamples = 2; multisamples < D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT; multisamples++)
   {
     D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS fd = {DXGI_FORMAT_R8G8B8A8_UNORM, static_cast<UINT>(multisamples)};
 
@@ -272,7 +272,7 @@ bool GPU_HW_D3D12::CreateRootSignatures()
   if (!m_batch_root_signature)
     return false;
 
-  rsbuilder.Add32BitConstants(0, MAX_PUSH_CONSTANTS_SIZE / sizeof(u32), D3D12_SHADER_VISIBILITY_ALL);
+  rsbuilder.Add32BitConstants(0, MAX_PUSH_CONSTANTS_SIZE / sizeof(uint32_t), D3D12_SHADER_VISIBILITY_ALL);
   rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
   rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
   m_single_sampler_root_signature = rsbuilder.Create();
@@ -309,8 +309,8 @@ bool GPU_HW_D3D12::CreateFramebuffer()
   DestroyFramebuffer();
 
   // scale vram size to internal resolution
-  const u32 texture_width = VRAM_WIDTH * m_resolution_scale;
-  const u32 texture_height = VRAM_HEIGHT * m_resolution_scale;
+  const uint32_t texture_width = VRAM_WIDTH * m_resolution_scale;
+  const uint32_t texture_height = VRAM_HEIGHT * m_resolution_scale;
   const DXGI_FORMAT texture_format = DXGI_FORMAT_R8G8B8A8_UNORM;
   const DXGI_FORMAT depth_format = DXGI_FORMAT_D16_UNORM;
 
@@ -395,7 +395,7 @@ bool GPU_HW_D3D12::CreateTextureBuffer()
   D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
   desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
   desc.Format = DXGI_FORMAT_R16_UINT;
-  desc.Buffer.NumElements = VRAM_UPDATE_TEXTURE_BUFFER_SIZE / sizeof(u16);
+  desc.Buffer.NumElements = VRAM_UPDATE_TEXTURE_BUFFER_SIZE / sizeof(uint16_t);
   desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
   g_d3d12_context->GetDevice()->CreateShaderResourceView(m_texture_stream_buffer.GetBuffer(), &desc,
                                                          m_texture_stream_buffer_srv);
@@ -439,10 +439,10 @@ bool GPU_HW_D3D12::CompilePipelines()
   // comment on GPUShaderPrecompileMode in core/types.h.
   const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
   const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
-  const u32 batch_shader_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(4 * 9 * 2 * 2) : 0u;
-  const u32 batch_pipeline_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<u32>(2 * 4 * 5 * 9 * 2 * 2) : 0u;
+  const uint32_t batch_shader_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
+  const uint32_t batch_pipeline_progress_units =
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(2 * 4 * 5 * 9 * 2 * 2) : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Pipelines",
                                         2 + batch_shader_progress_units + batch_pipeline_progress_units + 1 + (2 * 2) +
@@ -456,7 +456,7 @@ bool GPU_HW_D3D12::CompilePipelines()
   auto& batch_vertex_shaders = m_batch_vertex_shader_blobs;
   auto& batch_fragment_shaders = m_batch_fragment_shader_blobs;
 
-  for (u8 textured = 0; textured < 2; textured++)
+  for (uint8_t textured = 0; textured < 2; textured++)
   {
     const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
     batch_vertex_shaders[textured] = shader_cache.GetVertexShader(vs);
@@ -485,13 +485,13 @@ bool GPU_HW_D3D12::CompilePipelines()
   // filled the canonical slot.
   if (precompile_sync)
   {
-    for (u8 render_mode = 0; render_mode < 4; render_mode++)
+    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
-      for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+      for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
       {
-        for (u8 dithering = 0; dithering < 2; dithering++)
+        for (uint8_t dithering = 0; dithering < 2; dithering++)
         {
-          for (u8 interlacing = 0; interlacing < 2; interlacing++)
+          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
           {
             ComPtr<ID3DBlob> blob = GetBatchFragmentShader(render_mode, texture_mode,
                                                           static_cast<bool>(dithering),
@@ -504,17 +504,17 @@ bool GPU_HW_D3D12::CompilePipelines()
       }
     }
 
-    for (u8 depth_test = 0; depth_test < 2; depth_test++)
+    for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
     {
-      for (u8 render_mode = 0; render_mode < 4; render_mode++)
+      for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
       {
-        for (u8 transparency_mode = 0; transparency_mode < 5; transparency_mode++)
+        for (uint8_t transparency_mode = 0; transparency_mode < 5; transparency_mode++)
         {
-          for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+          for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
           {
-            for (u8 dithering = 0; dithering < 2; dithering++)
+            for (uint8_t dithering = 0; dithering < 2; dithering++)
             {
-              for (u8 interlacing = 0; interlacing < 2; interlacing++)
+              for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
               {
                 ComPtr<ID3D12PipelineState> pso =
                   GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
@@ -562,9 +562,9 @@ bool GPU_HW_D3D12::CompilePipelines()
   gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
 
   // VRAM fill
-  for (u8 wrapped = 0; wrapped < 2; wrapped++)
+  for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
   {
-    for (u8 interlaced = 0; interlaced < 2; interlaced++)
+    for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
     {
       ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(
         shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
@@ -592,7 +592,7 @@ bool GPU_HW_D3D12::CompilePipelines()
       return false;
 
     gpbuilder.SetPixelShader(fs.Get());
-    for (u8 depth_test = 0; depth_test < 2; depth_test++)
+    for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
     {
       gpbuilder.SetDepthState((depth_test != 0), true,
                               (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
@@ -614,7 +614,7 @@ bool GPU_HW_D3D12::CompilePipelines()
       return false;
 
     gpbuilder.SetPixelShader(fs.Get());
-    for (u8 depth_test = 0; depth_test < 2; depth_test++)
+    for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
     {
       gpbuilder.SetDepthState(true, true,
                               (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
@@ -690,9 +690,9 @@ bool GPU_HW_D3D12::CompilePipelines()
     gpbuilder.SetNoBlendingState();
     gpbuilder.SetRenderTarget(0, m_display_texture.GetFormat());
 
-    for (u8 depth_24 = 0; depth_24 < 2; depth_24++)
+    for (uint8_t depth_24 = 0; depth_24 < 2; depth_24++)
     {
-      for (u8 interlace_mode = 0; interlace_mode < 3; interlace_mode++)
+      for (uint8_t interlace_mode = 0; interlace_mode < 3; interlace_mode++)
       {
         ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateDisplayFragmentShader(
           static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
@@ -788,17 +788,17 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   // PSO compile worth of latency (D3D12 PSO compiles can be ~50-200
   // ms for the heavier filters - the same cell-level bound applies
   // to ShaderCompileThreadEntryPoint on the D3D11 side).
-  for (u8 depth_test = 0; depth_test < 2; depth_test++)
+  for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
   {
-    for (u8 render_mode = 0; render_mode < 4; render_mode++)
+    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
-      for (u8 transparency_mode = 0; transparency_mode < 5; transparency_mode++)
+      for (uint8_t transparency_mode = 0; transparency_mode < 5; transparency_mode++)
       {
-        for (u8 texture_mode = 0; texture_mode < 9; texture_mode++)
+        for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
         {
-          for (u8 dithering = 0; dithering < 2; dithering++)
+          for (uint8_t dithering = 0; dithering < 2; dithering++)
           {
-            for (u8 interlacing = 0; interlacing < 2; interlacing++)
+            for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
             {
               if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
                 return;
@@ -813,7 +813,7 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   }
 }
 
-GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mode, u8 texture_mode, bool dithering,
+GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(uint8_t render_mode, uint8_t texture_mode, bool dithering,
                                                                     bool interlacing)
 {
   // Reserved_*Direct16Bit shader-source dedup is applied at the
@@ -823,8 +823,8 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   // The parallel _fastpath atomic array gets the same raw pointer
   // in both slots, which is safe because the ComPtr keeps the blob
   // alive for the lifetime of the GPU backend.
-  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+  const uint8_t lookup_mode = (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
   // Fast path: lock-free acquire-load. Both the worker (via
@@ -832,7 +832,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   // a slot concurrently without serialising against each other or
   // each other's slow-path compiles.
   std::atomic<ID3DBlob*>& fast_slot =
-    m_batch_fragment_shader_blobs_fastpath[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
+    m_batch_fragment_shader_blobs_fastpath[render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
   ID3DBlob* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
   {
@@ -858,7 +858,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   }
 
   ComPtr<ID3DBlob>& canonical_slot =
-    m_batch_fragment_shader_blobs[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
+    m_batch_fragment_shader_blobs[render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
 
   if (!canonical_slot)
   {
@@ -873,19 +873,19 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
     if (!canonical_slot)
     {
       Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                      texture_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
+                      texture_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
       return {};
     }
     // Publish the canonical raw pointer so future fast-path readers
     // for the canonical slot don't have to take the mutex.
-    m_batch_fragment_shader_blobs_fastpath[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)]
+    m_batch_fragment_shader_blobs_fastpath[render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)]
       .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3DBlob>& dup_slot =
-      m_batch_fragment_shader_blobs[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
+      m_batch_fragment_shader_blobs[render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
   }
@@ -895,8 +895,8 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   return canonical_slot;
 }
 
-GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 depth_test, u8 render_mode,
-                                                                         u8 texture_mode, u8 transparency_mode,
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(uint8_t depth_test, uint8_t render_mode,
+                                                                         uint8_t texture_mode, uint8_t transparency_mode,
                                                                          bool dithering, bool interlacing)
 {
   // Reserved_*Direct16Bit PSO dedup. Because the only texture_mode-
@@ -906,8 +906,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
   // and we can share the ComPtr across both slots. The atomic
   // _fastpath array gets the same raw pointer in both slots, kept
   // alive by the ComPtr for the lifetime of the GPU backend.
-  const u8 lookup_mode = (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                         (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
+  const uint8_t lookup_mode = (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
+                         (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
   // Fast path: lock-free acquire-load. DrawBatchVertices hits this
@@ -915,8 +915,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
   // an earlier main-thread fault-in). No mutex, no contention
   // against the worker.
   std::atomic<ID3D12PipelineState*>& fast_slot =
-    m_batch_pipelines_fastpath[depth_test][render_mode][texture_mode][transparency_mode][static_cast<u8>(dithering)]
-                              [static_cast<u8>(interlacing)];
+    m_batch_pipelines_fastpath[depth_test][render_mode][texture_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+                              [static_cast<uint8_t>(interlacing)];
   ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
   {
@@ -947,8 +947,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
   }
 
   ComPtr<ID3D12PipelineState>& canonical_slot =
-    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<u8>(dithering)]
-                     [static_cast<u8>(interlacing)];
+    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+                     [static_cast<uint8_t>(interlacing)];
 
   if (!canonical_slot)
   {
@@ -974,7 +974,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
     }
 
     gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<u8>(textured)].Get());
+    gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<uint8_t>(textured)].Get());
     gpbuilder.SetPixelShader(fs_blob.Get());
 
     gpbuilder.SetRasterizationState(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, false);
@@ -1005,25 +1005,25 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
     if (!canonical_slot)
     {
       Log_ErrorPrintf("Lazy batch PSO compile failed for (dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)", depth_test,
-                      render_mode, texture_mode, transparency_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
+                      render_mode, texture_mode, transparency_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
       return {};
     }
 
     D3D12::SetObjectNameFormatted(canonical_slot.Get(), "Batch Pipeline %u,%u,%u,%u,%u,%u", depth_test, render_mode,
-                                  lookup_mode, transparency_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
+                                  lookup_mode, transparency_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
 
     // Publish the canonical raw pointer for future fast-path
     // readers of the canonical slot.
-    m_batch_pipelines_fastpath[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<u8>(dithering)]
-                              [static_cast<u8>(interlacing)]
+    m_batch_pipelines_fastpath[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+                              [static_cast<uint8_t>(interlacing)]
                                 .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3D12PipelineState>& dup_slot =
-      m_batch_pipelines[depth_test][render_mode][texture_mode][transparency_mode][static_cast<u8>(dithering)]
-                       [static_cast<u8>(interlacing)];
+      m_batch_pipelines[depth_test][render_mode][texture_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+                       [static_cast<uint8_t>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
   }
@@ -1074,8 +1074,8 @@ bool GPU_HW_D3D12::CreateTextureReplacementStreamBuffer()
   return true;
 }
 
-bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, u32 dst_x, u32 dst_y, u32 width,
-                                              u32 height)
+bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, uint32_t dst_x, uint32_t dst_y, uint32_t width,
+                                              uint32_t height)
 {
   if (!CreateTextureReplacementStreamBuffer())
     return false;
@@ -1089,8 +1089,8 @@ bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* t
       return false;
   }
 
-  const u32 copy_pitch = Common::AlignUpPow2<u32>(tex->GetWidth() * sizeof(u32), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-  const u32 required_size = copy_pitch * tex->GetHeight();
+  const uint32_t copy_pitch = Common::AlignUpPow2<uint32_t>(tex->GetWidth() * sizeof(uint32_t), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+  const uint32_t required_size = copy_pitch * tex->GetHeight();
   if (!m_texture_replacment_stream_buffer.ReserveMemory(required_size, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
   {
     g_d3d12_context->ExecuteCommandList(false);
@@ -1100,7 +1100,7 @@ bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* t
   }
 
   // buffer -> texture
-  const u32 sb_offset = m_texture_replacment_stream_buffer.GetCurrentOffset();
+  const uint32_t sb_offset = m_texture_replacment_stream_buffer.GetCurrentOffset();
   D3D12::Texture::CopyToUploadBuffer(tex->GetPixels(), tex->GetByteStride(), tex->GetHeight(),
                                      m_texture_replacment_stream_buffer.GetCurrentHostPointer(), copy_pitch);
   m_texture_replacment_stream_buffer.CommitMemory(sb_offset);
@@ -1114,7 +1114,7 @@ bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* t
     static_cast<float>(tex->GetHeight()) / static_cast<float>(m_vram_write_replacement_texture.GetHeight())};
   ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
-  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), uniforms, 0);
+  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_write_replacement_texture.GetSRVDescriptor());
   cmdlist->SetGraphicsRootDescriptorTable(2, m_linear_sampler.gpu_handle);
   cmdlist->SetPipelineState(m_copy_pipeline.Get());
@@ -1124,7 +1124,7 @@ bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* t
   return true;
 }
 
-void GPU_HW_D3D12::DrawBatchVertices(BatchRenderMode render_mode, u32 base_vertex, u32 num_vertices)
+void GPU_HW_D3D12::DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices)
 {
   ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
 
@@ -1138,10 +1138,10 @@ void GPU_HW_D3D12::DrawBatchVertices(BatchRenderMode render_mode, u32 base_verte
   // mutation; cost is ~20 ns uncontended per modern std::mutex impl.
   //
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
-  const u8 depth_test = static_cast<u8>(m_batch.check_mask_before_draw || m_batch.use_depth_buffer);
+  const uint8_t depth_test = static_cast<uint8_t>(m_batch.check_mask_before_draw || m_batch.use_depth_buffer);
   ComPtr<ID3D12PipelineState> pipeline =
-    GetBatchPipeline(depth_test, static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode),
-                     static_cast<u8>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
+    GetBatchPipeline(depth_test, static_cast<uint8_t>(render_mode), static_cast<uint8_t>(m_batch.texture_mode),
+                     static_cast<uint8_t>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
 
   cmdlist->SetPipelineState(pipeline.Get());
   cmdlist->DrawInstanced(num_vertices, 1, base_vertex, 0);
@@ -1177,15 +1177,15 @@ void GPU_HW_D3D12::UpdateDisplay()
                                          m_crtc_state.display_vram_width, m_crtc_state.display_vram_height,
                                          GetDisplayAspectRatio());
 
-    const u32 resolution_scale = m_GPUSTAT.display_area_color_depth_24 ? 1 : m_resolution_scale;
-    const u32 vram_offset_x = m_crtc_state.display_vram_left;
-    const u32 vram_offset_y = m_crtc_state.display_vram_top;
-    const u32 scaled_vram_offset_x = vram_offset_x * resolution_scale;
-    const u32 scaled_vram_offset_y = vram_offset_y * resolution_scale;
-    const u32 display_width = m_crtc_state.display_vram_width;
-    const u32 display_height = m_crtc_state.display_vram_height;
-    const u32 scaled_display_width = display_width * resolution_scale;
-    const u32 scaled_display_height = display_height * resolution_scale;
+    const uint32_t resolution_scale = m_GPUSTAT.display_area_color_depth_24 ? 1 : m_resolution_scale;
+    const uint32_t vram_offset_x = m_crtc_state.display_vram_left;
+    const uint32_t vram_offset_y = m_crtc_state.display_vram_top;
+    const uint32_t scaled_vram_offset_x = vram_offset_x * resolution_scale;
+    const uint32_t scaled_vram_offset_y = vram_offset_y * resolution_scale;
+    const uint32_t display_width = m_crtc_state.display_vram_width;
+    const uint32_t display_height = m_crtc_state.display_vram_height;
+    const uint32_t scaled_display_width = display_width * resolution_scale;
+    const uint32_t scaled_display_height = display_height * resolution_scale;
     const InterlacedRenderMode interlaced = GetInterlacedRenderMode();
 
     if (IsDisplayDisabled())
@@ -1203,10 +1203,10 @@ void GPU_HW_D3D12::UpdateDisplay()
     }
     else
     {
-      const u32 reinterpret_field_offset = (interlaced != InterlacedRenderMode::None) ? GetInterlacedDisplayField() : 0;
-      const u32 reinterpret_start_x = m_crtc_state.regs.X * resolution_scale;
-      const u32 reinterpret_crop_left = (m_crtc_state.display_vram_left - m_crtc_state.regs.X) * resolution_scale;
-      const u32 uniforms[4] = {reinterpret_start_x, scaled_vram_offset_y + reinterpret_field_offset,
+      const uint32_t reinterpret_field_offset = (interlaced != InterlacedRenderMode::None) ? GetInterlacedDisplayField() : 0;
+      const uint32_t reinterpret_start_x = m_crtc_state.regs.X * resolution_scale;
+      const uint32_t reinterpret_crop_left = (m_crtc_state.display_vram_left - m_crtc_state.regs.X) * resolution_scale;
+      const uint32_t uniforms[4] = {reinterpret_start_x, scaled_vram_offset_y + reinterpret_field_offset,
                                reinterpret_crop_left, reinterpret_field_offset};
 
       ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
@@ -1215,10 +1215,10 @@ void GPU_HW_D3D12::UpdateDisplay()
 
       cmdlist->OMSetRenderTargets(1, &m_display_texture.GetRTVOrDSVDescriptor().cpu_handle, FALSE, nullptr);
       cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
-      cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), uniforms, 0);
+      cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
       cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_texture.GetSRVDescriptor());
       cmdlist->SetPipelineState(
-        m_display_pipelines[static_cast<u8>(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Get());
+        m_display_pipelines[static_cast<uint8_t>(m_GPUSTAT.display_area_color_depth_24)][static_cast<uint8_t>(interlaced)].Get());
       D3D12::SetViewportAndScissor(cmdlist, 0, 0, scaled_display_width, scaled_display_height);
       cmdlist->DrawInstanced(3, 1, 0, 0);
 
@@ -1234,7 +1234,7 @@ void GPU_HW_D3D12::UpdateDisplay()
   }
 }
 
-void GPU_HW_D3D12::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
+void GPU_HW_D3D12::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
 {
   if (IsUsingSoftwareRendererForReadbacks())
   {
@@ -1243,19 +1243,19 @@ void GPU_HW_D3D12::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
   }
 
   // Get bounds with wrap-around handled.
-  const Common::Rectangle<u32> copy_rect = GetVRAMTransferBounds(x, y, width, height);
-  const u32 encoded_width = (copy_rect.GetWidth() + 1) / 2;
-  const u32 encoded_height = copy_rect.GetHeight();
+  const Common::Rectangle<uint32_t> copy_rect = GetVRAMTransferBounds(x, y, width, height);
+  const uint32_t encoded_width = (copy_rect.GetWidth() + 1) / 2;
+  const uint32_t encoded_height = copy_rect.GetHeight();
 
   ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
   m_vram_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   m_vram_readback_texture.TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
   // Encode the 24-bit texture as 16-bit.
-  const u32 uniforms[4] = {copy_rect.left, copy_rect.top, copy_rect.GetWidth(), copy_rect.GetHeight()};
+  const uint32_t uniforms[4] = {copy_rect.left, copy_rect.top, copy_rect.GetWidth(), copy_rect.GetHeight()};
   cmdlist->OMSetRenderTargets(1, &m_vram_readback_texture.GetRTVOrDSVDescriptor().cpu_handle, FALSE, nullptr);
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
-  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), uniforms, 0);
+  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_texture.GetSRVDescriptor());
   cmdlist->SetPipelineState(m_vram_readback_pipeline.Get());
   D3D12::SetViewportAndScissor(cmdlist, 0, 0, encoded_width, encoded_height);
@@ -1271,12 +1271,12 @@ void GPU_HW_D3D12::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
   // And copy it into our shadow buffer (will execute command buffer and stall).
   m_vram_readback_staging_texture.ReadPixels(0, 0, encoded_width, encoded_height,
                                              &m_vram_shadow[copy_rect.top * VRAM_WIDTH + copy_rect.left],
-                                             VRAM_WIDTH * sizeof(u16));
+                                             VRAM_WIDTH * sizeof(uint16_t));
 
   RestoreGraphicsAPIState();
 }
 
-void GPU_HW_D3D12::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
+void GPU_HW_D3D12::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color)
 {
   if (IsUsingSoftwareRendererForReadbacks())
     FillSoftwareRendererVRAM(x, y, width, height, color);
@@ -1301,13 +1301,13 @@ void GPU_HW_D3D12::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   }
 
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
-  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), &uniforms, 0);
+  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, g_d3d12_context->GetNullSRVDescriptor());
-  cmdlist->SetPipelineState(m_vram_fill_pipelines[static_cast<u8>(IsVRAMFillOversized(x, y, width, height))]
-                                                 [static_cast<u8>(IsInterlacedRenderingEnabled())]
+  cmdlist->SetPipelineState(m_vram_fill_pipelines[static_cast<uint8_t>(IsVRAMFillOversized(x, y, width, height))]
+                                                 [static_cast<uint8_t>(IsInterlacedRenderingEnabled())]
                                                    .Get());
 
-  const Common::Rectangle<u32> bounds(GetVRAMTransferBounds(x, y, width, height));
+  const Common::Rectangle<uint32_t> bounds(GetVRAMTransferBounds(x, y, width, height));
   D3D12::SetViewportAndScissor(cmdlist, bounds.left * m_resolution_scale, bounds.top * m_resolution_scale,
                                bounds.GetWidth() * m_resolution_scale, bounds.GetHeight() * m_resolution_scale);
 
@@ -1316,12 +1316,12 @@ void GPU_HW_D3D12::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   RestoreGraphicsAPIState();
 }
 
-void GPU_HW_D3D12::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, bool set_mask, bool check_mask)
+void GPU_HW_D3D12::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask)
 {
   if (IsUsingSoftwareRendererForReadbacks())
     UpdateSoftwareRendererVRAM(x, y, width, height, data, set_mask, check_mask);
 
-  const Common::Rectangle<u32> bounds = GetVRAMTransferBounds(x, y, width, height);
+  const Common::Rectangle<uint32_t> bounds = GetVRAMTransferBounds(x, y, width, height);
   GPU_HW::UpdateVRAM(bounds.left, bounds.top, bounds.GetWidth(), bounds.GetHeight(), data, set_mask, check_mask);
 
   if (!check_mask)
@@ -1334,8 +1334,8 @@ void GPU_HW_D3D12::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* d
     }
   }
 
-  const u32 data_size = width * height * sizeof(u16);
-  const u32 alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT; // ???
+  const uint32_t data_size = width * height * sizeof(uint16_t);
+  const uint32_t alignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT; // ???
   if (!m_texture_stream_buffer.ReserveMemory(data_size, alignment))
   {
     g_d3d12_context->ExecuteCommandList(false);
@@ -1344,7 +1344,7 @@ void GPU_HW_D3D12::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* d
       return;
   }
 
-  const u32 start_index = m_texture_stream_buffer.GetCurrentOffset() / sizeof(u16);
+  const uint32_t start_index = m_texture_stream_buffer.GetCurrentOffset() / sizeof(uint16_t);
   std::memcpy(m_texture_stream_buffer.GetCurrentHostPointer(), data, data_size);
   m_texture_stream_buffer.CommitMemory(data_size);
 
@@ -1352,12 +1352,12 @@ void GPU_HW_D3D12::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* d
 
   ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
-  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), &uniforms, 0);
+  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_texture_stream_buffer_srv);
-  cmdlist->SetPipelineState(m_vram_write_pipelines[static_cast<u8>(check_mask)].Get());
+  cmdlist->SetPipelineState(m_vram_write_pipelines[static_cast<uint8_t>(check_mask)].Get());
 
   // the viewport should already be set to the full vram, so just adjust the scissor
-  const Common::Rectangle<u32> scaled_bounds = bounds * m_resolution_scale;
+  const Common::Rectangle<uint32_t> scaled_bounds = bounds * m_resolution_scale;
   D3D12::SetScissor(cmdlist, scaled_bounds.left, scaled_bounds.top, scaled_bounds.GetWidth(),
                     scaled_bounds.GetHeight());
 
@@ -1366,27 +1366,27 @@ void GPU_HW_D3D12::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* d
   RestoreGraphicsAPIState();
 }
 
-void GPU_HW_D3D12::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height)
+void GPU_HW_D3D12::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height)
 {
   if (IsUsingSoftwareRendererForReadbacks())
     CopySoftwareRendererVRAM(src_x, src_y, dst_x, dst_y, width, height);
 
   if (UseVRAMCopyShader(src_x, src_y, dst_x, dst_y, width, height) || IsUsingMultisampling())
   {
-    const Common::Rectangle<u32> src_bounds = GetVRAMTransferBounds(src_x, src_y, width, height);
-    const Common::Rectangle<u32> dst_bounds = GetVRAMTransferBounds(dst_x, dst_y, width, height);
+    const Common::Rectangle<uint32_t> src_bounds = GetVRAMTransferBounds(src_x, src_y, width, height);
+    const Common::Rectangle<uint32_t> dst_bounds = GetVRAMTransferBounds(dst_x, dst_y, width, height);
     if (m_vram_dirty_rect.Intersects(src_bounds))
       UpdateVRAMReadTexture();
     IncludeVRAMDirtyRectangle(dst_bounds);
 
     const VRAMCopyUBOData uniforms(GetVRAMCopyUBOData(src_x, src_y, dst_x, dst_y, width, height));
-    const Common::Rectangle<u32> dst_bounds_scaled(dst_bounds * m_resolution_scale);
+    const Common::Rectangle<uint32_t> dst_bounds_scaled(dst_bounds * m_resolution_scale);
 
     ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
     cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
-    cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), &uniforms, 0);
+    cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
     cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_read_texture.GetSRVDescriptor());
-    cmdlist->SetPipelineState(m_vram_copy_pipelines[static_cast<u8>(m_GPUSTAT.check_mask_before_draw)].Get());
+    cmdlist->SetPipelineState(m_vram_copy_pipelines[static_cast<uint8_t>(m_GPUSTAT.check_mask_before_draw)].Get());
     D3D12::SetViewportAndScissor(cmdlist, dst_bounds_scaled.left, dst_bounds_scaled.top, dst_bounds_scaled.GetWidth(),
                                  dst_bounds_scaled.GetHeight());
     cmdlist->DrawInstanced(3, 1, 0, 0);
@@ -1399,7 +1399,7 @@ void GPU_HW_D3D12::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 widt
     return;
   }
 
-  if (m_vram_dirty_rect.Intersects(Common::Rectangle<u32>::FromExtents(src_x, src_y, width, height)))
+  if (m_vram_dirty_rect.Intersects(Common::Rectangle<uint32_t>::FromExtents(src_x, src_y, width, height)))
     UpdateVRAMReadTexture();
 
   GPU_HW::CopyVRAM(src_x, src_y, dst_x, dst_y, width, height);

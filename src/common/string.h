@@ -21,15 +21,15 @@ public:
     char* pBuffer;
 
     // Length of the string located in pBuffer (in characters)
-    u32 StringLength;
+    uint32_t StringLength;
 
     // Size of the buffer pointed to by pBuffer
-    u32 BufferSize;
+    uint32_t BufferSize;
 
     // Reference count of this data object. If set to -1,
     // it is considered noncopyable and any copies of the string
     // will always create their own copy.
-    s32 ReferenceCount;
+    int32_t ReferenceCount;
 
     // Whether the memory pointed to by pBuffer is writable.
     bool ReadOnly;
@@ -45,7 +45,7 @@ public:
   String(const char* Text);
 
   // Creates a string contained the specified text (with length).
-  String(const char* Text, u32 Count);
+  String(const char* Text, uint32_t Count);
 
   // Creates a string using the same buffer as another string (copy-on-write).
   String(const String& copyString);
@@ -73,7 +73,7 @@ public:
   void EnsureOwnWritableCopy();
 
   // Ensures that we have our own copy of the buffer, and spaceRequired bytes free in the buffer.
-  void EnsureRemainingSpace(u32 spaceRequired);
+  void EnsureRemainingSpace(uint32_t spaceRequired);
 
   // clears the contents of the string
   void Clear();
@@ -81,7 +81,7 @@ public:
   // append a string to this string
   void AppendString(const String& appendStr);
   void AppendString(const char* appendText);
-  void AppendString(const char* appendString, u32 Count);
+  void AppendString(const char* appendString, uint32_t Count);
   void AppendString(const std::string& appendString);
   void AppendString(const std::string_view& appendString);
 
@@ -100,21 +100,21 @@ public:
   bool EndsWith(const String& compareString, bool caseSensitive = true) const;
 
   // Cuts characters off the string to reduce it to len bytes long.
-  void Resize(u32 newSize, char fillerCharacter = ' ');
+  void Resize(uint32_t newSize, char fillerCharacter = ' ');
 
   // updates the internal length counter when the string is externally modified
   void UpdateSize();
 
   // gets the size of the string
-  u32 GetLength() const { return m_pStringData->StringLength; }
+  uint32_t GetLength() const { return m_pStringData->StringLength; }
   bool IsEmpty() const { return (m_pStringData->StringLength == 0); }
 
   // gets the maximum number of bytes we can write to the string, currently
-  u32 GetBufferSize() const { return m_pStringData->BufferSize; }
+  uint32_t GetBufferSize() const { return m_pStringData->BufferSize; }
 
   // replaces all instances of string s with string r in this string
   // returns the number of changes
-  u32 Replace(const char* searchString, const char* replaceString);
+  uint32_t Replace(const char* searchString, const char* replaceString);
 
   // gets a constant pointer to the string
   const char* GetCharArray() const { return m_pStringData->pBuffer; }
@@ -170,7 +170,7 @@ public:
 
 protected:
   // Internal append function.
-  void InternalAppend(const char* pString, u32 Length);
+  void InternalAppend(const char* pString, uint32_t Length);
 
   // Pointer to string data.
   StringData* m_pStringData;
@@ -180,7 +180,7 @@ protected:
 };
 
 // stack-allocated string
-template<u32 L>
+template<uint32_t L>
 class StackString : public String
 {
 public:
@@ -192,7 +192,7 @@ public:
     Assign(Text);
   }
 
-  StackString(const char* Text, u32 Count) : String(&m_sStringData)
+  StackString(const char* Text, uint32_t Count) : String(&m_sStringData)
   {
     InitStackStringData();
     AppendString(Text, Count);
@@ -215,7 +215,7 @@ public:
   StackString(const std::string_view& sv) : String(&m_sStringData)
   {
     InitStackStringData();
-    AppendString(sv.data(), static_cast<u32>(sv.size()));
+    AppendString(sv.data(), static_cast<uint32_t>(sv.size()));
   }
 
   // Override the fromstring method

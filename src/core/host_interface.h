@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-enum class LogLevel : u8;
+enum class LogLevel : uint8_t;
 
 class LibretroAudioStream;
 class ByteStream;
@@ -49,9 +49,9 @@ public:
   struct DiskControlInfo
   {
     bool has_sub_images;
-    u32 initial_image_index;
-    u32 image_index;
-    u32 image_count;
+    uint32_t initial_image_index;
+    uint32_t image_index;
+    uint32_t image_count;
     std::string sub_images_parent_path;
     std::vector<std::string> image_paths;
     std::vector<std::string> image_labels;
@@ -66,7 +66,7 @@ public:
   /// Access to host audio stream.
   ALWAYS_INLINE LibretroAudioStream* GetAudioStream() const { return m_audio_stream.get(); }
 
-  ALWAYS_INLINE u32 GetResolutionScale() const
+  ALWAYS_INLINE uint32_t GetResolutionScale() const
   {
     return (g_settings.gpu_downsample_mode == GPUDownsampleMode::Box) ? 1u : g_settings.gpu_resolution_scale;
   }
@@ -103,10 +103,10 @@ public:
   void GetGameInfo(const char* path, CDImage* image, std::string* code, std::string* title);
 
   /// Returns the default path to a memory card.
-  std::string GetSharedMemoryCardPath(u32 slot) const;
+  std::string GetSharedMemoryCardPath(uint32_t slot) const;
 
   /// Returns the default path to a memory card for a specific game.
-  std::string GetGameMemoryCardPath(const char* game_code, u32 slot) const;
+  std::string GetGameMemoryCardPath(const char* game_code, uint32_t slot) const;
 
   /// Returns the path to the shader cache directory.
   std::string GetShaderCacheBasePath() const;
@@ -133,11 +133,11 @@ public:
   std::string GetBIOSDirectory();
 
   /// Loads the BIOS image for the specified region.
-  std::optional<std::vector<u8>> GetBIOSImage(ConsoleRegion region);
+  std::optional<std::vector<uint8_t>> GetBIOSImage(ConsoleRegion region);
 
   /// Searches for a BIOS image for the specified region in the specified directory. If no match is found, the first
   /// BIOS image within 512KB and 4MB will be used.
-  std::optional<std::vector<u8>> FindBIOSImageInDirectory(ConsoleRegion region, const char* directory);
+  std::optional<std::vector<uint8_t>> FindBIOSImageInDirectory(ConsoleRegion region, const char* directory);
 
   void OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
                             const std::string& game_title);
@@ -149,7 +149,7 @@ public:
   void retro_set_environment();
   void retro_get_system_av_info(struct retro_system_av_info* info);
   bool retro_load_game(const struct retro_game_info* game);
-  void retro_set_controller_port_device(u32 port, u32 device);
+  void retro_set_controller_port_device(uint32_t port, uint32_t device);
   void retro_run_frame();
   unsigned retro_get_region();
   size_t retro_serialize_size();
@@ -163,7 +163,7 @@ public:
   // Display + settings hook-ups (used to be virtual, now plain).
   void AcquireHostDisplay();
   void ReleaseHostDisplay();
-  void OnControllerTypeChanged(u32 slot);
+  void OnControllerTypeChanged(uint32_t slot);
 
   /// Checks and fixes up any incompatible settings.
   void FixIncompatibleSettings(bool display_osd_messages);
@@ -190,13 +190,13 @@ private:
   void LoadSettings();
   void UpdateSettings();
   void UpdateControllers();
-  void UpdateControllersDigitalController(u32 index);
-  void UpdateControllersAnalogController(u32 index);
-  void UpdateControllersAnalogJoystick(u32 index);
-  void UpdateControllersNeGcon(u32 index);
-  void UpdateControllersNeGconRumble(u32 index);
-  void UpdateControllersNamcoGunCon(u32 index);
-  void UpdateControllersPlayStationMouse(u32 index);
+  void UpdateControllersDigitalController(uint32_t index);
+  void UpdateControllersAnalogController(uint32_t index);
+  void UpdateControllersAnalogJoystick(uint32_t index);
+  void UpdateControllersNeGcon(uint32_t index);
+  void UpdateControllersNeGconRumble(uint32_t index);
+  void UpdateControllersNamcoGunCon(uint32_t index);
+  void UpdateControllersPlayStationMouse(uint32_t index);
   void GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale);
   void UpdateGeometry();
   void UpdateLogging();
@@ -239,7 +239,7 @@ private:
   // new fps; an audio resampler driven by the stale ratio drifts.
   float m_last_throttle_frequency = 60.0f;
 
-  std::array<u32, NUM_CONTROLLER_AND_CARD_PORTS> retropad_device = {RETRO_DEVICE_JOYPAD};
+  std::array<uint32_t, NUM_CONTROLLER_AND_CARD_PORTS> retropad_device = {RETRO_DEVICE_JOYPAD};
 
   bool controller_dirty = false;
 

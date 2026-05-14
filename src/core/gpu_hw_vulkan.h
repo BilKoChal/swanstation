@@ -36,16 +36,16 @@ public:
                               bool threaded_presentation) override;
   void DestroyRenderDevice() override;
 
-  void ResizeRenderWindow(s32 new_window_width, s32 new_window_height) override;
+  void ResizeRenderWindow(int32_t new_window_width, int32_t new_window_height) override;
 
   bool ChangeRenderWindow(const WindowInfo& new_wi) override;
 
-  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, u32 layers, u32 levels, u32 samples,
-                                                    HostDisplayPixelFormat format, const void* data, u32 data_stride,
+  std::unique_ptr<HostDisplayTexture> CreateTexture(uint32_t width, uint32_t height, uint32_t layers, uint32_t levels, uint32_t samples,
+                                                    HostDisplayPixelFormat format, const void* data, uint32_t data_stride,
                                                     bool dynamic = false) override;
   bool SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const override;
-  bool BeginSetDisplayPixels(HostDisplayPixelFormat format, u32 width, u32 height, void** out_buffer,
-                             u32* out_pitch) override;
+  bool BeginSetDisplayPixels(HostDisplayPixelFormat format, uint32_t width, uint32_t height, void** out_buffer,
+                             uint32_t* out_pitch) override;
   void EndSetDisplayPixels() override;
 
   bool Render() override;
@@ -54,11 +54,11 @@ protected:
   bool CreateResources() override;
   void DestroyResources() override;
   void RenderSoftwareCursor() override;
-  void RenderSoftwareCursor(s32 left, s32 top, s32 width, s32 height, HostDisplayTexture* texture_handle);
+  void RenderSoftwareCursor(int32_t left, int32_t top, int32_t width, int32_t height, HostDisplayTexture* texture_handle);
 
-  void RenderDisplay(s32 left, s32 top, s32 width, s32 height, void* texture_handle, u32 texture_width,
-                     s32 texture_height, s32 texture_view_x, s32 texture_view_y, s32 texture_view_width,
-                     s32 texture_view_height);
+  void RenderDisplay(int32_t left, int32_t top, int32_t width, int32_t height, void* texture_handle, uint32_t texture_width,
+                     int32_t texture_height, int32_t texture_view_x, int32_t texture_view_y, int32_t texture_view_width,
+                     int32_t texture_view_height);
 
 private:
   static constexpr VkFormat FRAMEBUFFER_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
@@ -71,7 +71,7 @@ private:
     float src_rect_height;
   };
 
-  bool CheckFramebufferSize(u32 width, u32 height);
+  bool CheckFramebufferSize(uint32_t width, uint32_t height);
 
   VkDescriptorSetLayout m_descriptor_set_layout = VK_NULL_HANDLE;
   VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
@@ -111,26 +111,26 @@ public:
 protected:
   void ClearDisplay() override;
   void UpdateDisplay() override;
-  void ReadVRAM(u32 x, u32 y, u32 width, u32 height) override;
-  void FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color) override;
-  void UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, bool set_mask, bool check_mask) override;
-  void CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height) override;
+  void ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
+  void FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) override;
+  void UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask) override;
+  void CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height) override;
   void UpdateVRAMReadTexture() override;
   void UpdateDepthBufferFromMaskBit() override;
   void ClearDepthBuffer() override;
   void SetScissorFromDrawingArea() override;
-  void MapBatchVertexPointer(u32 required_vertices) override;
-  void UnmapBatchVertexPointer(u32 used_vertices) override;
-  void UploadUniformBuffer(const void* data, u32 data_size) override;
-  void DrawBatchVertices(BatchRenderMode render_mode, u32 base_vertex, u32 num_vertices) override;
+  void MapBatchVertexPointer(uint32_t required_vertices) override;
+  void UnmapBatchVertexPointer(uint32_t used_vertices) override;
+  void UploadUniformBuffer(const void* data, uint32_t data_size) override;
+  void DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices) override;
 
 private:
-  static constexpr u32 MAX_PUSH_CONSTANTS_SIZE = 64, TEXTURE_REPLACEMENT_BUFFER_SIZE = 64 * 1024 * 1024;
+  static constexpr uint32_t MAX_PUSH_CONSTANTS_SIZE = 64, TEXTURE_REPLACEMENT_BUFFER_SIZE = 64 * 1024 * 1024;
   void SetCapabilities();
   void DestroyResources();
 
   ALWAYS_INLINE bool InRenderPass() const { return (m_current_render_pass != VK_NULL_HANDLE); }
-  void BeginRenderPass(VkRenderPass render_pass, VkFramebuffer framebuffer, u32 x, u32 y, u32 width, u32 height,
+  void BeginRenderPass(VkRenderPass render_pass, VkFramebuffer framebuffer, uint32_t x, uint32_t y, uint32_t width, uint32_t height,
                        const VkClearValue* clear_value = nullptr);
   void BeginVRAMRenderPass();
   void EndRenderPass();
@@ -166,8 +166,8 @@ private:
   // for texture_mode 3 / 7 remain VK_NULL_HANDLE for the lifetime
   // of the GPU backend; SafeDestroy* handles VK_NULL_HANDLE
   // gracefully so DestroyPipelines doesn't trip on them.
-  VkShaderModule GetBatchFragmentShader(u8 render_mode, u8 texture_mode, bool dithering, bool interlacing);
-  VkPipeline GetBatchPipeline(u8 depth_test, u8 render_mode, u8 texture_mode, u8 transparency_mode, bool dithering,
+  VkShaderModule GetBatchFragmentShader(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
+  VkPipeline GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode, bool dithering,
                               bool interlacing);
 
   // Background-thread worker for 'Lazy' mode: walks the full PSO
@@ -181,11 +181,11 @@ private:
 
   bool CreateTextureReplacementStreamBuffer();
 
-  bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, u32 dst_x, u32 dst_y, u32 width, u32 height);
+  bool BlitVRAMReplacementTexture(const TextureReplacementTexture* tex, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height);
 
-  void DownsampleFramebuffer(Vulkan::Texture& source, u32 left, u32 top, u32 width, u32 height);
-  void DownsampleFramebufferBoxFilter(Vulkan::Texture& source, u32 left, u32 top, u32 width, u32 height);
-  void DownsampleFramebufferAdaptive(Vulkan::Texture& source, u32 left, u32 top, u32 width, u32 height);
+  void DownsampleFramebuffer(Vulkan::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height);
+  void DownsampleFramebufferBoxFilter(Vulkan::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height);
+  void DownsampleFramebufferAdaptive(Vulkan::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height);
 
   VkRenderPass m_current_render_pass = VK_NULL_HANDLE;
 
@@ -231,7 +231,7 @@ private:
   Vulkan::StreamBuffer m_uniform_stream_buffer;
   Vulkan::StreamBuffer m_texture_stream_buffer;
 
-  u32 m_current_uniform_buffer_offset = 0;
+  uint32_t m_current_uniform_buffer_offset = 0;
   VkBufferView m_texture_stream_buffer_view = VK_NULL_HANDLE;
 
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]

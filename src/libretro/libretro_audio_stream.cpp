@@ -2,7 +2,7 @@
 #include "core/host_interface.h"
 #include <algorithm>
 
-void LibretroAudioStream::BeginWrite(SampleType** buffer_ptr, u32* num_frames)
+void LibretroAudioStream::BeginWrite(SampleType** buffer_ptr, uint32_t* num_frames)
 {
   // Single-threaded by design (see header); no synchronisation needed.
   //
@@ -17,7 +17,7 @@ void LibretroAudioStream::BeginWrite(SampleType** buffer_ptr, u32* num_frames)
   *num_frames = std::min(BUFFER_SIZE, m_buffer.GetContiguousSpace() / CHANNELS);
 }
 
-void LibretroAudioStream::EndWrite(u32 num_frames)
+void LibretroAudioStream::EndWrite(uint32_t num_frames)
 {
   m_buffer.AdvanceTail(num_frames * CHANNELS);
 
@@ -46,7 +46,7 @@ void LibretroAudioStream::EndWrite(u32 num_frames)
   // UploadToFrontend; see comment there.
   while (true)
   {
-    const u32 num_samples = m_buffer.GetContiguousSize();
+    const uint32_t num_samples = m_buffer.GetContiguousSize();
     if (num_samples == 0)
       break;
 
@@ -66,7 +66,7 @@ void LibretroAudioStream::UploadToFrontend()
   // extra callback.
   //
   // Previously this routine bounce-copied every sample through a
-  // 32 KiB (65 KiB after the s16 promotion) std::array on the stack
+  // 32 KiB (65 KiB after the int16_t promotion) std::array on the stack
   // and made exactly one callback. The intermediate copy is
   // unnecessary - the libretro frontend reads samples synchronously
   // from the buffer we pass it, and the FIFO storage stays valid until
@@ -79,7 +79,7 @@ void LibretroAudioStream::UploadToFrontend()
   // don't forward anything to the frontend.
   while (true)
   {
-    const u32 num_samples = m_buffer.GetContiguousSize();
+    const uint32_t num_samples = m_buffer.GetContiguousSize();
     if (num_samples == 0)
       break;
 

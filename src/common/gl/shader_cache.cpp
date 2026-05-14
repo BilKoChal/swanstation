@@ -13,18 +13,18 @@ namespace GL {
 #pragma pack(push, 1)
 struct CacheIndexEntry
 {
-  u64 vertex_source_hash_low;
-  u64 vertex_source_hash_high;
-  u32 vertex_source_length;
-  u64 geometry_source_hash_low;
-  u64 geometry_source_hash_high;
-  u32 geometry_source_length;
-  u64 fragment_source_hash_low;
-  u64 fragment_source_hash_high;
-  u32 fragment_source_length;
-  u32 file_offset;
-  u32 blob_size;
-  u32 blob_format;
+  uint64_t vertex_source_hash_low;
+  uint64_t vertex_source_hash_high;
+  uint32_t vertex_source_length;
+  uint64_t geometry_source_hash_low;
+  uint64_t geometry_source_hash_high;
+  uint32_t geometry_source_length;
+  uint64_t fragment_source_hash_low;
+  uint64_t fragment_source_hash_high;
+  uint32_t fragment_source_length;
+  uint32_t file_offset;
+  uint32_t blob_size;
+  uint32_t blob_format;
 };
 #pragma pack(pop)
 
@@ -55,7 +55,7 @@ bool ShaderCache::CacheIndexKey::operator!=(const CacheIndexKey& key) const
     fragment_source_hash_high != key.fragment_source_hash_high || fragment_source_length != key.fragment_source_length);
 }
 
-void ShaderCache::Open(bool is_gles, std::string_view base_path, u32 version)
+void ShaderCache::Open(bool is_gles, std::string_view base_path, uint32_t version)
 {
   m_base_path = base_path;
   m_version = version;
@@ -106,7 +106,7 @@ bool ShaderCache::CreateNew(const std::string& index_filename, const std::string
     return false;
   }
 
-  const u32 index_version = FILE_VERSION;
+  const uint32_t index_version = FILE_VERSION;
   if (rfwrite(&index_version, sizeof(index_version), 1, m_index_file) != 1 ||
       rfwrite(&m_version, sizeof(m_version), 1, m_index_file) != 1)
   {
@@ -136,8 +136,8 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   if (!m_index_file)
     return false;
 
-  u32 file_version = 0;
-  u32 data_version = 0;
+  uint32_t file_version = 0;
+  uint32_t data_version = 0;
   if (rfread(&file_version, sizeof(file_version), 1, m_index_file) != 1 || file_version != FILE_VERSION ||
       rfread(&data_version, sizeof(data_version), 1, m_index_file) != 1 || data_version != m_version)
   {
@@ -157,7 +157,7 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   }
 
   rfseek(m_blob_file, 0, SEEK_END);
-  const u32 blob_file_size = static_cast<u32>(rftell(m_blob_file));
+  const uint32_t blob_file_size = static_cast<uint32_t>(rftell(m_blob_file));
 
   for (;;)
   {
@@ -216,10 +216,10 @@ ShaderCache::CacheIndexKey ShaderCache::GetCacheKey(const std::string_view& vert
   {
     struct
     {
-      u64 low;
-      u64 high;
+      uint64_t low;
+      uint64_t high;
     };
-    u8 bytes[16];
+    uint8_t bytes[16];
   };
 
   ShaderHash vertex_hash = {};
@@ -229,27 +229,27 @@ ShaderCache::CacheIndexKey ShaderCache::GetCacheKey(const std::string_view& vert
   MD5Digest digest;
   if (!vertex_shader.empty())
   {
-    digest.Update(vertex_shader.data(), static_cast<u32>(vertex_shader.length()));
+    digest.Update(vertex_shader.data(), static_cast<uint32_t>(vertex_shader.length()));
     digest.Final(vertex_hash.bytes);
   }
 
   if (!geometry_shader.empty())
   {
     digest.Reset();
-    digest.Update(geometry_shader.data(), static_cast<u32>(geometry_shader.length()));
+    digest.Update(geometry_shader.data(), static_cast<uint32_t>(geometry_shader.length()));
     digest.Final(geometry_hash.bytes);
   }
 
   if (!fragment_shader.empty())
   {
     digest.Reset();
-    digest.Update(fragment_shader.data(), static_cast<u32>(fragment_shader.length()));
+    digest.Update(fragment_shader.data(), static_cast<uint32_t>(fragment_shader.length()));
     digest.Final(fragment_hash.bytes);
   }
 
-  return CacheIndexKey{vertex_hash.low,   vertex_hash.high,   static_cast<u32>(vertex_shader.length()),
-                       geometry_hash.low, geometry_hash.high, static_cast<u32>(geometry_shader.length()),
-                       fragment_hash.low, fragment_hash.high, static_cast<u32>(fragment_shader.length())};
+  return CacheIndexKey{vertex_hash.low,   vertex_hash.high,   static_cast<uint32_t>(vertex_shader.length()),
+                       geometry_hash.low, geometry_hash.high, static_cast<uint32_t>(geometry_shader.length()),
+                       fragment_hash.low, fragment_hash.high, static_cast<uint32_t>(fragment_shader.length())};
 }
 
 std::string ShaderCache::GetIndexFileName() const
@@ -274,7 +274,7 @@ std::optional<Program> ShaderCache::GetProgram(const std::string_view vertex_sha
   if (iter == m_index.end())
     return CompileAndAddProgram(key, vertex_shader, geometry_shader, fragment_shader, callback);
 
-  std::vector<u8> data(iter->second.blob_size);
+  std::vector<uint8_t> data(iter->second.blob_size);
   if (rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
       rfread(data.data(), 1, iter->second.blob_size, m_blob_file) != iter->second.blob_size)
   {
@@ -283,7 +283,7 @@ std::optional<Program> ShaderCache::GetProgram(const std::string_view vertex_sha
   }
 
   Program prog;
-  if (prog.CreateFromBinary(data.data(), static_cast<u32>(data.size()), iter->second.blob_format))
+  if (prog.CreateFromBinary(data.data(), static_cast<uint32_t>(data.size()), iter->second.blob_format))
     return std::optional<Program>(std::move(prog));
 
   Log_WarningPrintf(
@@ -325,8 +325,8 @@ std::optional<Program> ShaderCache::CompileAndAddProgram(const CacheIndexKey& ke
   if (!prog)
     return std::nullopt;
 
-  std::vector<u8> prog_data;
-  u32 prog_format = 0;
+  std::vector<uint8_t> prog_data;
+  uint32_t prog_format = 0;
   if (!prog->GetBinary(&prog_data, &prog_format))
     return std::nullopt;
 
@@ -334,8 +334,8 @@ std::optional<Program> ShaderCache::CompileAndAddProgram(const CacheIndexKey& ke
     return prog;
 
   CacheIndexData data;
-  data.file_offset = static_cast<u32>(rftell(m_blob_file));
-  data.blob_size = static_cast<u32>(prog_data.size());
+  data.file_offset = static_cast<uint32_t>(rftell(m_blob_file));
+  data.blob_size = static_cast<uint32_t>(prog_data.size());
   data.blob_format = prog_format;
 
   CacheIndexEntry entry = {};

@@ -17,11 +17,11 @@ namespace Util {
 bool IsDepthFormat(VkFormat format);
 bool IsCompressedFormat(VkFormat format);
 VkFormat GetLinearFormat(VkFormat format);
-u32 GetTexelSize(VkFormat format);
-u32 GetBlockSize(VkFormat format);
+uint32_t GetTexelSize(VkFormat format);
+uint32_t GetBlockSize(VkFormat format);
 
 // Clamps a VkRect2D to the specified dimensions.
-VkRect2D ClampRect2D(const VkRect2D& rect, u32 width, u32 height);
+VkRect2D ClampRect2D(const VkRect2D& rect, uint32_t width, uint32_t height);
 
 // Map {SRC,DST}_COLOR to {SRC,DST}_ALPHA
 VkBlendFactor GetAlphaBlendFactor(VkBlendFactor factor);

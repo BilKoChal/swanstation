@@ -127,7 +127,7 @@ bool MemoryArena::Create(size_t size, bool writable, bool executable)
 
 #if defined(_WIN32)
   const DWORD protect = (writable ? (executable ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE) : PAGE_READONLY);
-  m_file_handle = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, protect, static_cast<u32>(size >> 16 >> 16), static_cast<u32>(size),
+  m_file_handle = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, protect, static_cast<uint32_t>(size >> 16 >> 16), static_cast<uint32_t>(size),
                                      file_mapping_name.c_str());
   if (!m_file_handle)
   {
@@ -250,7 +250,7 @@ void* MemoryArena::CreateViewPtr(size_t offset, size_t size, bool writable, bool
 #if defined(_WIN32)
   const DWORD desired_access = FILE_MAP_READ | (writable ? FILE_MAP_WRITE : 0) | (executable ? FILE_MAP_EXECUTE : 0);
   base_pointer =
-    MapViewOfFileEx(m_file_handle, desired_access, static_cast<u32>(offset >> 16 >> 16), static_cast<u32>(offset), size, fixed_address);
+    MapViewOfFileEx(m_file_handle, desired_access, static_cast<uint32_t>(offset >> 16 >> 16), static_cast<uint32_t>(offset), size, fixed_address);
   if (!base_pointer)
     return nullptr;
 #elif defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)

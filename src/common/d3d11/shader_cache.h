@@ -22,7 +22,7 @@ public:
   ShaderCache();
   ~ShaderCache();
 
-  void Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_level, u32 version, bool debug);
+  void Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_level, uint32_t version, bool debug);
 
   // Returns whether Open() has already been called successfully on
   // this instance. Used by the persistent (lazy-compile) GPU backend
@@ -37,13 +37,13 @@ public:
   ComPtr<ID3D11PixelShader> GetPixelShader(ID3D11Device* device, std::string_view shader_code);
 
 private:
-  static constexpr u32 FILE_VERSION = 2;
+  static constexpr uint32_t FILE_VERSION = 2;
 
   struct CacheIndexKey
   {
-    u64 source_hash_low;
-    u64 source_hash_high;
-    u32 source_length;
+    uint64_t source_hash_low;
+    uint64_t source_hash_high;
+    uint32_t source_length;
     ShaderCompiler::Type shader_type;
 
     bool operator==(const CacheIndexKey& key) const;
@@ -62,8 +62,8 @@ private:
 
   struct CacheIndexData
   {
-    u32 file_offset;
-    u32 blob_size;
+    uint32_t file_offset;
+    uint32_t blob_size;
   };
 
   using CacheIndex = std::unordered_map<CacheIndexKey, CacheIndexData, CacheIndexEntryHasher>;
@@ -84,7 +84,7 @@ private:
   CacheIndex m_index;
 
   D3D_FEATURE_LEVEL m_feature_level = D3D_FEATURE_LEVEL_11_0;
-  u32 m_version = 0;
+  uint32_t m_version = 0;
   bool m_debug = false;
 };
 

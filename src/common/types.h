@@ -61,29 +61,20 @@ char (&__countof_ArraySizeHelper(T (&array)[N]))[N];
 #pragma warning(disable : 4355) // warning C4355: 'this' : used in base member initializer list
 #endif
 
-using s8 = int8_t;
-using u8 = uint8_t;
-using s16 = int16_t;
-using u16 = uint16_t;
-using s32 = int32_t;
-using u32 = uint32_t;
-using s64 = int64_t;
-using u64 = uint64_t;
-
 // BCD helpers
-ALWAYS_INLINE constexpr u8 BinaryToBCD(u8 value)
+ALWAYS_INLINE constexpr uint8_t BinaryToBCD(uint8_t value)
 {
   return ((value / 10) << 4) + (value % 10);
 }
-ALWAYS_INLINE constexpr u8 PackedBCDToBinary(u8 value)
+ALWAYS_INLINE constexpr uint8_t PackedBCDToBinary(uint8_t value)
 {
   return ((value >> 4) * 10) + (value % 16);
 }
-ALWAYS_INLINE constexpr bool IsValidBCDDigit(u8 digit)
+ALWAYS_INLINE constexpr bool IsValidBCDDigit(uint8_t digit)
 {
   return (digit <= 9);
 }
-ALWAYS_INLINE constexpr bool IsValidPackedBCD(u8 value)
+ALWAYS_INLINE constexpr bool IsValidPackedBCD(uint8_t value)
 {
   return IsValidBCDDigit(value & 0x0F) && IsValidBCDDigit(value >> 4);
 }
