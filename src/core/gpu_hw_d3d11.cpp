@@ -297,8 +297,6 @@ void LibretroD3D11HostDisplay::DestroyResources()
   m_display_rasterizer_state.Reset();
 }
 
-void LibretroD3D11HostDisplay::RenderSoftwareCursor() {}
-
 void LibretroD3D11HostDisplay::RenderSoftwareCursor(int32_t left, int32_t top, int32_t width, int32_t height,
                                             HostDisplayTexture* texture_handle)
 {

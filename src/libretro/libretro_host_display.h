@@ -22,7 +22,6 @@ public:
   void ResizeRenderWindow(int32_t new_window_width, int32_t new_window_height) override;
   bool CreateResources() override;
   void DestroyResources() override;
-  void RenderSoftwareCursor() override;
 
   std::unique_ptr<HostDisplayTexture> CreateTexture(uint32_t width, uint32_t height, uint32_t layers, uint32_t levels, uint32_t samples,
                                                     HostDisplayPixelFormat format, const void* data, uint32_t data_stride,

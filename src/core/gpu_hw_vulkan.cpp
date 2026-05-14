@@ -435,8 +435,6 @@ void LibretroVulkanHostDisplay::DestroyResources()
   Vulkan::ShaderCompiler::DeinitializeGlslang();
 }
 
-void LibretroVulkanHostDisplay::RenderSoftwareCursor() {}
-
 void LibretroVulkanHostDisplay::RenderSoftwareCursor(int32_t left, int32_t top, int32_t width, int32_t height, HostDisplayTexture* texture)
 {
   VkCommandBuffer cmdbuffer = g_vulkan_context->GetCurrentCommandBuffer();

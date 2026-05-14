@@ -26,21 +26,3 @@ ALWAYS_INLINE unsigned CountLeadingZeros(T value)
          static_cast<unsigned>((sizeof(value) * 8u) - 1u);
 #endif
 }
-
-/// Returns the number of zero bits before the first set bit, going LSB->MSB.
-template<typename T>
-ALWAYS_INLINE unsigned CountTrailingZeros(T value)
-{
-#ifdef _WIN32
-  unsigned long index;
-  if constexpr (sizeof(value) >= sizeof(uint64_t))
-    _BitScanForward64(&index, static_cast<uint64_t>(static_cast<typename std::make_unsigned<T>::type>(value)));
-  else
-    _BitScanForward(&index, static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value)));
-  return index;
-#else
-  if constexpr (sizeof(value) >= sizeof(uint64_t))
-    return static_cast<unsigned>(__builtin_ctzl(static_cast<uint64_t>(static_cast<typename std::make_unsigned<T>::type>(value))));
-  return static_cast<unsigned>(__builtin_ctz(static_cast<uint32_t>(static_cast<typename std::make_unsigned<T>::type>(value))));
-#endif
-}
