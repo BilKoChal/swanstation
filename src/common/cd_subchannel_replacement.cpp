@@ -94,21 +94,6 @@ bool CDSubChannelReplacement::LoadSBIFromImagePath(const char* image_path)
   return LoadSBI(FileSystem::ReplaceExtension(image_path, "sbi").c_str());
 }
 
-void CDSubChannelReplacement::AddReplacementSubChannelQ(uint32_t lba, const CDImage::SubChannelQ& subq)
-{
-  auto iter = m_replacement_subq.find(lba);
-  if (iter != m_replacement_subq.end())
-    iter->second.data = subq.data;
-  else
-    m_replacement_subq.emplace(lba, subq);
-}
-
-bool CDSubChannelReplacement::GetReplacementSubChannelQ(uint8_t minute_bcd, uint8_t second_bcd, uint8_t frame_bcd,
-                                                        CDImage::SubChannelQ* subq) const
-{
-  return GetReplacementSubChannelQ(MSFToLBA(minute_bcd, second_bcd, frame_bcd), subq);
-}
-
 bool CDSubChannelReplacement::GetReplacementSubChannelQ(uint32_t lba, CDImage::SubChannelQ* subq) const
 {
   const auto iter = m_replacement_subq.find(lba);

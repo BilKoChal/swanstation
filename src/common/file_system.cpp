@@ -37,11 +37,6 @@
 #include <file/file_path.h>
 #include <streams/file_stream.h>
 
-extern "C" int rferror(RFILE* stream)
-{
-   return filestream_error(stream);
-}
-
 extern "C" int rfeof(RFILE* stream)
 {
    return filestream_eof(stream);

@@ -9,7 +9,6 @@ enum class HandlerResult
 };
 
 using Callback = HandlerResult (*)(void* exception_pc, void* fault_address, bool is_write);
-using Handle = void*;
 
 uint32_t GetHandlerCodeSize();
 

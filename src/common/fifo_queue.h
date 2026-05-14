@@ -14,11 +14,8 @@ template<typename T, uint32_t CAPACITY>
 class FIFOQueue
 {
 public:
-  const T* GetDataPointer() const { return m_ptr; }
-  T* GetDataPointer() { return m_ptr; }
   const T* GetReadPointer() const { return &m_ptr[m_head]; }
   T* GetReadPointer() { return &m_ptr[m_head]; }
-  constexpr uint32_t GetCapacity() const { return CAPACITY; }
   T* GetWritePointer() { return &m_ptr[m_tail]; }
   uint32_t GetSize() const { return m_size; }
   uint32_t GetSpace() const { return CAPACITY - m_size; }

@@ -50,7 +50,6 @@ private:
     uint32_t fragment_source_length;
 
     bool operator==(const CacheIndexKey& key) const;
-    bool operator!=(const CacheIndexKey& key) const;
   };
 
   struct CacheIndexEntryHasher

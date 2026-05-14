@@ -24,34 +24,6 @@ struct BitField
     return *this;
   }
 
-  ALWAYS_INLINE constexpr DataType operator++()
-  {
-    DataType value = GetValue() + 1;
-    SetValue(value);
-    return GetValue();
-  }
-
-  ALWAYS_INLINE constexpr DataType operator++(int)
-  {
-    DataType value = GetValue();
-    SetValue(value + 1);
-    return value;
-  }
-
-  ALWAYS_INLINE constexpr DataType operator--()
-  {
-    DataType value = GetValue() - 1;
-    SetValue(value);
-    return GetValue();
-  }
-
-  ALWAYS_INLINE constexpr DataType operator--(int)
-  {
-    DataType value = GetValue();
-    SetValue(value - 1);
-    return value;
-  }
-
   ALWAYS_INLINE constexpr BitField& operator+=(DataType rhs)
   {
     SetValue(GetValue() + rhs);
@@ -61,12 +33,6 @@ struct BitField
   ALWAYS_INLINE constexpr BitField& operator-=(DataType rhs)
   {
     SetValue(GetValue() - rhs);
-    return *this;
-  }
-
-  ALWAYS_INLINE constexpr BitField& operator*=(DataType rhs)
-  {
-    SetValue(GetValue() * rhs);
     return *this;
   }
 
@@ -97,12 +63,6 @@ struct BitField
   ALWAYS_INLINE constexpr BitField& operator<<=(DataType rhs)
   {
     SetValue(GetValue() << rhs);
-    return *this;
-  }
-
-  ALWAYS_INLINE constexpr BitField& operator>>=(DataType rhs)
-  {
-    SetValue(GetValue() >> rhs);
     return *this;
   }
 

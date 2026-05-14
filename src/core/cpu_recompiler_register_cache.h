@@ -220,12 +220,8 @@ public:
   void SetCalleeSavedHostRegs(std::initializer_list<HostReg> regs);
   void SetCPUPtrHostReg(HostReg reg);
 
-  /// Returns true if the register is permitted to be used in the register cache.
-  bool IsUsableHostReg(HostReg reg) const;
   bool IsHostRegInUse(HostReg reg) const;
   bool HasFreeHostRegister() const;
-  uint32_t GetUsedHostRegisters() const;
-  uint32_t GetFreeHostRegisters() const;
 
   /// Allocates a new host register. If there are no free registers, the guest register which was accessed the longest
   /// time ago will be evicted.

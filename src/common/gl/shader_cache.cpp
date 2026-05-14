@@ -45,16 +45,6 @@ bool ShaderCache::CacheIndexKey::operator==(const CacheIndexKey& key) const
     fragment_source_hash_high == key.fragment_source_hash_high && fragment_source_length == key.fragment_source_length);
 }
 
-bool ShaderCache::CacheIndexKey::operator!=(const CacheIndexKey& key) const
-{
-  return (
-    vertex_source_hash_low != key.vertex_source_hash_low || vertex_source_hash_high != key.vertex_source_hash_high ||
-    vertex_source_length != key.vertex_source_length || geometry_source_hash_low != key.geometry_source_hash_low ||
-    geometry_source_hash_high != key.geometry_source_hash_high ||
-    geometry_source_length != key.geometry_source_length || fragment_source_hash_low != key.fragment_source_hash_low ||
-    fragment_source_hash_high != key.fragment_source_hash_high || fragment_source_length != key.fragment_source_length);
-}
-
 void ShaderCache::Open(bool is_gles, std::string_view base_path, uint32_t version)
 {
   m_base_path = base_path;

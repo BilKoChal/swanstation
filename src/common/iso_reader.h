@@ -123,7 +123,6 @@ public:
   ISOReader();
   ~ISOReader();
 
-  ALWAYS_INLINE const CDImage* GetImage() const { return m_image; }
   ALWAYS_INLINE const ISOPrimaryVolumeDescriptor& GetPVD() const { return m_pvd; }
 
   bool Open(CDImage* image, uint32_t track_number);

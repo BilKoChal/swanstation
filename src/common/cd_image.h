@@ -236,9 +236,6 @@ public:
   // Seek to data LBA.
   bool Seek(LBA lba);
 
-  // Seek to disc position (MSF).
-  bool Seek(const Position& pos);
-
   // Seek to track and position.
   bool Seek(uint32_t track_number, const Position& pos_in_track);
 

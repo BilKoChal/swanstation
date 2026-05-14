@@ -56,12 +56,3 @@ std::string LibretroSettingsInterface::GetStringValue(const char* section, const
 {
   return GetVariable<std::string>(section, key, default_value);
 }
-
-std::vector<std::string> LibretroSettingsInterface::GetStringList(const char* section, const char* key)
-{
-  std::string value = GetVariable<std::string>(section, key, "");
-  if (value.empty())
-    return {};
-
-  return std::vector<std::string>({std::move(value)});
-}

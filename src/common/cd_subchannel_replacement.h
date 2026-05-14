@@ -15,12 +15,6 @@ public:
   bool LoadSBI(const char* path);
   bool LoadSBIFromImagePath(const char* image_path);
 
-  /// Adds a sector to the replacement map.
-  void AddReplacementSubChannelQ(uint32_t lba, const CDImage::SubChannelQ& subq);
-
-  /// Returns the replacement subchannel data for the specified position (in BCD).
-  bool GetReplacementSubChannelQ(uint8_t minute_bcd, uint8_t second_bcd, uint8_t frame_bcd, CDImage::SubChannelQ* subq) const;
-
   /// Returns the replacement subchannel data for the specified sector.
   bool GetReplacementSubChannelQ(uint32_t lba, CDImage::SubChannelQ* subq) const;
 

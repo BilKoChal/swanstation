@@ -49,12 +49,6 @@ bool ShaderCache::CacheIndexKey::operator==(const CacheIndexKey& key) const
           source_length == key.source_length && type == key.type);
 }
 
-bool ShaderCache::CacheIndexKey::operator!=(const CacheIndexKey& key) const
-{
-  return (source_hash_low != key.source_hash_low || source_hash_high != key.source_hash_high ||
-          source_length != key.source_length || type != key.type);
-}
-
 void ShaderCache::Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_level, bool debug)
 {
   m_base_path = base_path;

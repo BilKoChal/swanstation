@@ -138,20 +138,6 @@ public:
     return true;
   }
 
-  bool SeekRelative(int64_t Offset) override
-  {
-    if (m_errorState)
-      return false;
-
-    if (_fseeki64(m_pFile, Offset, SEEK_CUR) != 0)
-    {
-      m_errorState = true;
-      return true;
-    }
-
-    return true;
-  }
-
   uint64_t GetPosition() const override { return _ftelli64(m_pFile); }
 
   uint64_t GetSize() const override
@@ -170,20 +156,6 @@ public:
       return false;
 
     if (fseeko(m_pFile, static_cast<off_t>(Offset), SEEK_SET) != 0)
-    {
-      m_errorState = true;
-      return false;
-    }
-
-    return true;
-  }
-
-  bool SeekRelative(int64_t Offset) override
-  {
-    if (m_errorState)
-      return false;
-
-    if (fseeko(m_pFile, static_cast<off_t>(Offset), SEEK_CUR) != 0)
     {
       m_errorState = true;
       return false;
@@ -386,16 +358,6 @@ bool MemoryByteStream::SeekAbsolute(uint64_t Offset)
   return true;
 }
 
-bool MemoryByteStream::SeekRelative(int64_t Offset)
-{
-  int32_t Offset32 = (int32_t)Offset;
-  if ((Offset32 < 0 && -Offset32 > (int32_t)m_iPosition) || (uint32_t)((int32_t)m_iPosition + Offset32) > m_iSize)
-    return false;
-
-  m_iPosition += Offset32;
-  return true;
-}
-
 uint64_t MemoryByteStream::GetSize() const
 {
   return (uint64_t)m_iSize;
@@ -487,16 +449,6 @@ bool ReadOnlyMemoryByteStream::SeekAbsolute(uint64_t Offset)
     return false;
 
   m_iPosition = Offset32;
-  return true;
-}
-
-bool ReadOnlyMemoryByteStream::SeekRelative(int64_t Offset)
-{
-  int32_t Offset32 = (int32_t)Offset;
-  if ((Offset32 < 0 && -Offset32 > (int32_t)m_iPosition) || (uint32_t)((int32_t)m_iPosition + Offset32) > m_iSize)
-    return false;
-
-  m_iPosition += Offset32;
   return true;
 }
 
@@ -648,16 +600,6 @@ bool GrowableMemoryByteStream::SeekAbsolute(uint64_t Offset)
     return false;
 
   m_iPosition = Offset32;
-  return true;
-}
-
-bool GrowableMemoryByteStream::SeekRelative(int64_t Offset)
-{
-  int32_t Offset32 = (int32_t)Offset;
-  if ((Offset32 < 0 && -Offset32 > (int32_t)m_iPosition) || (uint32_t)((int32_t)m_iPosition + Offset32) > m_iSize)
-    return false;
-
-  m_iPosition += Offset32;
   return true;
 }
 

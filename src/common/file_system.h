@@ -82,7 +82,6 @@ extern "C" {
 
 char *rfgets(char *buffer, int maxCount, RFILE* stream);
 int rfeof(RFILE* stream);
-int rferror(RFILE* stream);
 RFILE* rfopen(const char *path, const char *mode);
 int rfclose(RFILE* stream);
 int64_t rftell(RFILE* stream);

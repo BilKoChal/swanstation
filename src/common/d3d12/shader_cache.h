@@ -65,7 +65,6 @@ private:
     EntryType type;
 
     bool operator==(const CacheIndexKey& key) const;
-    bool operator!=(const CacheIndexKey& key) const;
   };
 
   struct CacheIndexEntryHasher

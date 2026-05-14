@@ -135,11 +135,6 @@ bool CDImage::Seek(uint32_t track_number, const Position& pos_in_track)
   return Seek(track.start_lba + pos_lba);
 }
 
-bool CDImage::Seek(const Position& pos)
-{
-  return Seek(pos.ToLBA());
-}
-
 bool CDImage::Seek(uint32_t track_number, LBA lba)
 {
   if (track_number < 1 || track_number > m_tracks.size())

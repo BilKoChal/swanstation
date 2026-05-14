@@ -45,7 +45,6 @@ private:
     ShaderCompiler::Type shader_type;
 
     bool operator==(const CacheIndexKey& key) const;
-    bool operator!=(const CacheIndexKey& key) const;
   };
 
   struct CacheIndexEntryHasher

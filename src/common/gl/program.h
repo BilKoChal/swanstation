@@ -25,7 +25,6 @@ public:
   void SetBinaryRetrievableHint();
 
   void BindAttribute(GLuint index, const char* name);
-  void BindDefaultAttributes();
 
   void BindFragData(GLuint index = 0, const char* name = "o_col0");
   void BindFragDataIndexed(GLuint color_number = 0, const char* name = "o_col0");
@@ -43,49 +42,10 @@ public:
   void Destroy();
 
   int RegisterUniform(const char* name);
-  void Uniform1ui(int index, uint32_t x) const;
-  void Uniform2ui(int index, uint32_t x, uint32_t y) const;
-  void Uniform3ui(int index, uint32_t x, uint32_t y, uint32_t z) const;
-  void Uniform4ui(int index, uint32_t x, uint32_t y, uint32_t z, uint32_t w) const;
   void Uniform1i(int index, int32_t x) const;
-  void Uniform2i(int index, int32_t x, int32_t y) const;
-  void Uniform3i(int index, int32_t x, int32_t y, int32_t z) const;
-  void Uniform4i(int index, int32_t x, int32_t y, int32_t z, int32_t w) const;
-  void Uniform1f(int index, float x) const;
-  void Uniform2f(int index, float x, float y) const;
-  void Uniform3f(int index, float x, float y, float z) const;
   void Uniform4f(int index, float x, float y, float z, float w) const;
-  void Uniform2uiv(int index, const uint32_t* v) const;
-  void Uniform3uiv(int index, const uint32_t* v) const;
-  void Uniform4uiv(int index, const uint32_t* v) const;
-  void Uniform2iv(int index, const int32_t* v) const;
-  void Uniform3iv(int index, const int32_t* v) const;
-  void Uniform4iv(int index, const int32_t* v) const;
-  void Uniform2fv(int index, const float* v) const;
-  void Uniform3fv(int index, const float* v) const;
-  void Uniform4fv(int index, const float* v) const;
 
-  void Uniform1ui(const char* name, uint32_t x) const;
-  void Uniform2ui(const char* name, uint32_t x, uint32_t y) const;
-  void Uniform3ui(const char* name, uint32_t x, uint32_t y, uint32_t z) const;
-  void Uniform4ui(const char* name, uint32_t x, uint32_t y, uint32_t z, uint32_t w) const;
   void Uniform1i(const char* name, int32_t x) const;
-  void Uniform2i(const char* name, int32_t x, int32_t y) const;
-  void Uniform3i(const char* name, int32_t x, int32_t y, int32_t z) const;
-  void Uniform4i(const char* name, int32_t x, int32_t y, int32_t z, int32_t w) const;
-  void Uniform1f(const char* name, float x) const;
-  void Uniform2f(const char* name, float x, float y) const;
-  void Uniform3f(const char* name, float x, float y, float z) const;
-  void Uniform4f(const char* name, float x, float y, float z, float w) const;
-  void Uniform2uiv(const char* name, const uint32_t* v) const;
-  void Uniform3uiv(const char* name, const uint32_t* v) const;
-  void Uniform4uiv(const char* name, const uint32_t* v) const;
-  void Uniform2iv(const char* name, const int32_t* v) const;
-  void Uniform3iv(const char* name, const int32_t* v) const;
-  void Uniform4iv(const char* name, const int32_t* v) const;
-  void Uniform2fv(const char* name, const float* v) const;
-  void Uniform3fv(const char* name, const float* v) const;
-  void Uniform4fv(const char* name, const float* v) const;
 
   void BindUniformBlock(const char* name, uint32_t index);
 

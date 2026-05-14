@@ -39,7 +39,6 @@ public:
   // seeks to the specified position in the stream
   // if seek failed, returns false.
   virtual bool SeekAbsolute(uint64_t Offset) = 0;
-  virtual bool SeekRelative(int64_t Offset) = 0;
 
   // gets the current offset in the stream
   virtual uint64_t GetPosition() const = 0;
@@ -83,7 +82,6 @@ public:
   uint32_t Write(const void* pSource, uint32_t ByteCount) override;
   bool Write2(const void* pSource, uint32_t ByteCount, uint32_t* pNumberOfBytesWritten) override;
   bool SeekAbsolute(uint64_t Offset) override;
-  bool SeekRelative(int64_t Offset) override;
   uint64_t GetSize() const override;
   uint64_t GetPosition() const override;
   bool Flush() override;
@@ -109,7 +107,6 @@ public:
   uint32_t Write(const void* pSource, uint32_t ByteCount) override;
   bool Write2(const void* pSource, uint32_t ByteCount, uint32_t* pNumberOfBytesWritten) override;
   bool SeekAbsolute(uint64_t Offset) override;
-  bool SeekRelative(int64_t Offset) override;
   uint64_t GetSize() const override;
   uint64_t GetPosition() const override;
   bool Flush() override;
@@ -138,7 +135,6 @@ public:
   uint32_t Write(const void* pSource, uint32_t ByteCount) override;
   bool Write2(const void* pSource, uint32_t ByteCount, uint32_t* pNumberOfBytesWritten) override;
   bool SeekAbsolute(uint64_t Offset) override;
-  bool SeekRelative(int64_t Offset) override;
   uint64_t GetSize() const override;
   uint64_t GetPosition() const override;
   bool Flush() override;

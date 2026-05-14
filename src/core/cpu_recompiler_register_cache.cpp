@@ -126,11 +126,6 @@ void RegisterCache::SetCPUPtrHostReg(HostReg reg)
   m_cpu_ptr_host_register = reg;
 }
 
-bool RegisterCache::IsUsableHostReg(HostReg reg) const
-{
-  return (m_state.host_reg_state[reg] & HostRegState::Usable) != HostRegState::None;
-}
-
 bool RegisterCache::IsHostRegInUse(HostReg reg) const
 {
   return (m_state.host_reg_state[reg] & HostRegState::InUse) != HostRegState::None;
@@ -145,30 +140,6 @@ bool RegisterCache::HasFreeHostRegister() const
   }
 
   return false;
-}
-
-uint32_t RegisterCache::GetUsedHostRegisters() const
-{
-  uint32_t count = 0;
-  for (const HostRegState state : m_state.host_reg_state)
-  {
-    if ((state & (HostRegState::Usable | HostRegState::InUse)) == (HostRegState::Usable | HostRegState::InUse))
-      count++;
-  }
-
-  return count;
-}
-
-uint32_t RegisterCache::GetFreeHostRegisters() const
-{
-  uint32_t count = 0;
-  for (const HostRegState state : m_state.host_reg_state)
-  {
-    if ((state & (HostRegState::Usable | HostRegState::InUse)) == (HostRegState::Usable))
-      count++;
-  }
-
-  return count;
 }
 
 HostReg RegisterCache::AllocateHostReg(HostRegState state /* = HostRegState::InUse */)
