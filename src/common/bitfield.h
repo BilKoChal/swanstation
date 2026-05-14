@@ -114,8 +114,15 @@ struct BitField
     }
     else if constexpr (std::is_signed_v<DataType>)
     {
+      // Sign-extend the BitCount-wide field to a full DataType. Shift left
+      // to put bit (BitCount-1) at the sign-bit position of DataType, then
+      // arithmetic-shift right to replicate the sign bit. The left shift
+      // is performed in the unsigned domain to avoid C++<20 UB on signed
+      // left shifts of values whose product would not fit in DataType
+      // (well-defined since C++20).
+      using UnsignedT = std::make_unsigned_t<DataType>;
       constexpr int shift = 8 * sizeof(DataType) - BitCount;
-      return (static_cast<DataType>(data >> BitIndex) << shift) >> shift;
+      return static_cast<DataType>(static_cast<UnsignedT>(data >> BitIndex) << shift) >> shift;
     }
     else
     {
