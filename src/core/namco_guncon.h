@@ -26,7 +26,7 @@ public:
   void Reset() override;
   bool DoState(StateWrapper& sw, bool apply_input_state) override;
   void LoadSettings(const char* section) override;
-  bool GetSoftwareCursor(const Common::RGBA8Image** image, float* image_scale, bool* relative_mode) override;
+  bool GetSoftwareCursor(const Common::RGBA8Image** image, float* image_scale) override;
 
   void SetButtonState(int32_t button_code, bool pressed) override;
 

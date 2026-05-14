@@ -48,7 +48,7 @@ float Controller::GetVibrationMotorStrength(uint32_t motor)
 
 void Controller::LoadSettings(const char* section) {}
 
-bool Controller::GetSoftwareCursor(const Common::RGBA8Image** image, float* image_scale, bool* relative_mode)
+bool Controller::GetSoftwareCursor(const Common::RGBA8Image** image, float* image_scale)
 {
   return false;
 }

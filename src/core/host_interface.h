@@ -167,9 +167,6 @@ public:
   /// Checks for settings changes, std::move() the old settings away for comparing beforehand.
   void CheckForSettingsChanges(const Settings& old_settings);
 
-  /// Enables "relative" mouse mode, locking the cursor position and returning relative coordinates.
-  void SetMouseMode(bool relative, bool hide_cursor);
-
 private:
   /// Switches the GPU renderer by saving state, recreating the display window, and restoring state (if needed).
   void RecreateSystem();

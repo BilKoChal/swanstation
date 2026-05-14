@@ -1010,8 +1010,6 @@ void HostInterface::ReleaseHostDisplay()
 
 void HostInterface::OnControllerTypeChanged(uint32_t slot) {}
 
-void HostInterface::SetMouseMode(bool relative, bool hide_cursor) {}
-
 bool HostInterface::UpdateCoreOptionsDisplay(bool controller)
 {
   LibretroSettingsInterface si;

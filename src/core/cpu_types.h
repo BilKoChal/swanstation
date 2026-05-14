@@ -105,9 +105,6 @@ enum class InstructionOp : uint8_t
   swc2 = 58,
   swc3 = 59,
 };
-constexpr uint8_t INSTRUCTION_COP_BITS = 0x10;
-constexpr uint8_t INSTRUCTION_COP_MASK = 0x3C;
-constexpr uint8_t INSTRUCTION_COP_N_MASK = 0x03;
 
 enum class InstructionFunct : uint8_t
 {

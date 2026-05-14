@@ -3,7 +3,6 @@
 #include "common/image.h"
 #include "types.h"
 #include <string>
-#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -15,7 +14,6 @@ struct TextureReplacementHash
   std::string ToString() const;
   bool ParseString(const std::string_view& sv);
 
-  bool operator<(const TextureReplacementHash& rhs) const { return std::tie(low, high) < std::tie(rhs.low, rhs.high); }
   bool operator==(const TextureReplacementHash& rhs) const { return low == rhs.low && high == rhs.high; }
 };
 

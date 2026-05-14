@@ -481,27 +481,19 @@ void HostInterface::UpdateSoftwareCursor()
 {
   if (System::IsShutdown())
   {
-    SetMouseMode(false, false);
     m_display->ClearSoftwareCursor();
     return;
   }
 
   const Common::RGBA8Image* image = nullptr;
   float image_scale = 1.0f;
-  bool relative_mode = false;
-  bool hide_cursor = false;
 
   for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     Controller* controller = System::GetController(i);
-    if (controller && controller->GetSoftwareCursor(&image, &image_scale, &relative_mode))
-    {
-      hide_cursor = true;
+    if (controller && controller->GetSoftwareCursor(&image, &image_scale))
       break;
-    }
   }
-
-  SetMouseMode(relative_mode, hide_cursor);
 
   if (image && image->IsValid())
   {
