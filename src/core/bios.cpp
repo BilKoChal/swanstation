@@ -139,17 +139,6 @@ void PatchBIOS(uint8_t* image, uint32_t image_size, uint32_t address, uint32_t v
   std::memcpy(&image[offset], &new_value, sizeof(new_value));
 }
 
-bool PatchBIOSEnableTTY(uint8_t* image, uint32_t image_size, const Hash& hash)
-{
-  const ImageInfo* ii = GetImageInfoForHash(hash);
-  if (!ii || !ii->patch_compatible)
-    return false;
-
-  PatchBIOS(image, image_size, 0x1FC06F0C, 0x24010001);
-  PatchBIOS(image, image_size, 0x1FC06F14, 0xAF81A9C0);
-  return true;
-}
-
 bool PatchBIOSFastBoot(uint8_t* image, uint32_t image_size, const Hash& hash)
 {
   const ImageInfo* ii = GetImageInfoForHash(hash);

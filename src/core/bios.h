@@ -53,7 +53,6 @@ const ImageInfo* GetImageInfo(const Image& image);
 
 void PatchBIOS(uint8_t* image, uint32_t image_size, uint32_t address, uint32_t value, uint32_t mask = UINT32_C(0xFFFFFFFF));
 
-bool PatchBIOSEnableTTY(uint8_t* image, uint32_t image_size, const Hash& hash);
 bool PatchBIOSFastBoot(uint8_t* image, uint32_t image_size, const Hash& hash);
 bool PatchBIOSForEXE(uint8_t* image, uint32_t image_size, uint32_t r_pc, uint32_t r_gp, uint32_t r_sp, uint32_t r_fp);
 

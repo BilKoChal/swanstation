@@ -93,21 +93,6 @@ void StagingBuffer::InvalidateCPUCache(VkDeviceSize offset, VkDeviceSize size)
   vkInvalidateMappedMemoryRanges(g_vulkan_context->GetDevice(), 1, &range);
 }
 
-void StagingBuffer::Read(VkDeviceSize offset, void* data, size_t size, bool invalidate_caches)
-{
-  if (invalidate_caches)
-    InvalidateCPUCache(offset, size);
-
-  memcpy(data, m_map_pointer + (offset - m_map_offset), size);
-}
-
-void StagingBuffer::Write(VkDeviceSize offset, const void* data, size_t size, bool invalidate_caches)
-{
-  memcpy(m_map_pointer + (offset - m_map_offset), data, size);
-  if (invalidate_caches)
-    FlushCPUCache(offset, size);
-}
-
 bool StagingBuffer::AllocateBuffer(Type type, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer* out_buffer,
                                    VkDeviceMemory* out_memory, bool* out_coherent)
 {

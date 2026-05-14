@@ -184,25 +184,6 @@ void SafeFreeGlobalDescriptorSet(VkDescriptorSet& ds)
   }
 }
 
-void BufferMemoryBarrier(VkCommandBuffer command_buffer, VkBuffer buffer, VkAccessFlags src_access_mask,
-                         VkAccessFlags dst_access_mask, VkDeviceSize offset, VkDeviceSize size,
-                         VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask)
-{
-  VkBufferMemoryBarrier buffer_info = {
-    VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, // VkStructureType    sType
-    nullptr,                                 // const void*        pNext
-    src_access_mask,                         // VkAccessFlags      srcAccessMask
-    dst_access_mask,                         // VkAccessFlags      dstAccessMask
-    VK_QUEUE_FAMILY_IGNORED,                 // uint32_t           srcQueueFamilyIndex
-    VK_QUEUE_FAMILY_IGNORED,                 // uint32_t           dstQueueFamilyIndex
-    buffer,                                  // VkBuffer           buffer
-    offset,                                  // VkDeviceSize       offset
-    size                                     // VkDeviceSize       size
-  };
-
-  vkCmdPipelineBarrier(command_buffer, src_stage_mask, dst_stage_mask, 0, 0, nullptr, 1, &buffer_info, 0, nullptr);
-}
-
 static const char* VkResultToString(VkResult res)
 {
   switch (res)

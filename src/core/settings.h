@@ -96,7 +96,6 @@ struct Settings
 
   // TODO: Controllers, memory cards, etc.
 
-  bool bios_patch_tty_enable = false;
   bool bios_patch_fast_boot = false;
   bool enable_8mb_ram = false;
 
@@ -143,10 +142,6 @@ struct Settings
   static void CPUOverclockPercentToFraction(uint32_t percent, uint32_t* numerator, uint32_t* denominator);
 
   void UpdateOverclockActive();
-
-  static constexpr uint32_t DEFAULT_DMA_MAX_SLICE_TICKS = 1000, DEFAULT_DMA_HALT_TICKS = 100, DEFAULT_GPU_FIFO_SIZE = 16,
-                       DEFAULT_GPU_MAX_RUN_AHEAD = 128, DEFAULT_VRAM_WRITE_DUMP_WIDTH_THRESHOLD = 128,
-                       DEFAULT_VRAM_WRITE_DUMP_HEIGHT_THRESHOLD = 128;
 
   void Load(LibretroSettingsInterface& si);
 

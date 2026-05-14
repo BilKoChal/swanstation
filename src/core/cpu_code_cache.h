@@ -36,10 +36,6 @@ union CodeBlockKey
     bits = rhs.bits;
     return *this;
   }
-
-  ALWAYS_INLINE bool operator==(const CodeBlockKey& rhs) const { return bits == rhs.bits; }
-  ALWAYS_INLINE bool operator!=(const CodeBlockKey& rhs) const { return bits != rhs.bits; }
-  ALWAYS_INLINE bool operator<(const CodeBlockKey& rhs) const { return bits < rhs.bits; }
 };
 
 struct CodeBlockInstruction
@@ -53,10 +49,7 @@ struct CodeBlockInstruction
   bool is_branch_delay_slot : 1;
   bool is_load_instruction : 1;
   bool is_store_instruction : 1;
-  bool is_load_delay_slot : 1;
-  bool is_last_instruction : 1;
   bool has_load_delay : 1;
-  bool can_trap : 1;
 };
 
 struct CodeBlock

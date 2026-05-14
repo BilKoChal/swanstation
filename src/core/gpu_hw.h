@@ -214,7 +214,6 @@ protected:
 
   uint32_t GetBatchVertexSpace() const { return static_cast<uint32_t>(m_batch_end_vertex_ptr - m_batch_current_vertex_ptr); }
   uint32_t GetBatchVertexCount() const { return static_cast<uint32_t>(m_batch_current_vertex_ptr - m_batch_start_vertex_ptr); }
-  void EnsureVertexBufferSpace(uint32_t required_vertices);
   void EnsureVertexBufferSpaceForCurrentCommand();
   void ResetBatchVertexDepth();
 

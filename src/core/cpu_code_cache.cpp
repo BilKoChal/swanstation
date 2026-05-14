@@ -582,7 +582,6 @@ bool CompileBlock(CodeBlock* block, bool allow_flush)
 {
   uint32_t pc = block->GetPC();
   bool is_branch_delay_slot = false;
-  bool is_load_delay_slot = false;
 
   block->icache_line_count = 0;
   block->uncached_fetch_ticks = 0;
@@ -599,14 +598,12 @@ bool CompileBlock(CodeBlock* block, bool allow_flush)
 
     cbi.pc = pc;
     cbi.is_branch_delay_slot = is_branch_delay_slot;
-    cbi.is_load_delay_slot = is_load_delay_slot;
     cbi.is_branch_instruction = IsBranchInstruction(cbi.instruction);
     cbi.is_direct_branch_instruction = IsDirectBranchInstruction(cbi.instruction);
     cbi.is_unconditional_branch_instruction = IsUnconditionalBranchInstruction(cbi.instruction);
     cbi.is_load_instruction = IsMemoryLoadInstruction(cbi.instruction);
     cbi.is_store_instruction = IsMemoryStoreInstruction(cbi.instruction);
     cbi.has_load_delay = InstructionHasLoadDelay(cbi.instruction);
-    cbi.can_trap = CanInstructionTrap(cbi.instruction, InUserMode());
     cbi.is_direct_branch_instruction = IsDirectBranchInstruction(cbi.instruction);
 
     if (g_settings.cpu_recompiler_icache)
@@ -654,17 +651,12 @@ bool CompileBlock(CodeBlock* block, bool allow_flush)
     // if this is a branch, we grab the next instruction (delay slot), and then exit
     is_branch_delay_slot = cbi.is_branch_instruction;
 
-    // same for load delay
-    is_load_delay_slot = cbi.has_load_delay;
-
     // is this a non-branchy exit? (e.g. syscall)
     if (IsExitBlockInstruction(cbi.instruction))
       break;
   }
 
-  if (!block->instructions.empty())
-    block->instructions.back().is_last_instruction = true;
-  else
+  if (block->instructions.empty())
     return false;
 
 #ifdef WITH_RECOMPILER

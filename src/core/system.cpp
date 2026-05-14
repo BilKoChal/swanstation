@@ -684,10 +684,7 @@ bool Boot(const SystemBootParameters& params)
   UpdateMultitaps();
   Reset();
 
-  // Enable tty by patching bios.
   const BIOS::Hash bios_hash = BIOS::GetHash(Bus::g_bios, Bus::BIOS_SIZE);
-  if (g_settings.bios_patch_tty_enable)
-    BIOS::PatchBIOSEnableTTY(Bus::g_bios, Bus::BIOS_SIZE, bios_hash);
 
   // Load EXE late after BIOS.
   if (exe_boot && !LoadEXE(params.filename.c_str()))

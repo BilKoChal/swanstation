@@ -36,11 +36,6 @@ void SetScissor(VkCommandBuffer command_buffer, int x, int y, int width, int hei
 void SetViewportAndScissor(VkCommandBuffer command_buffer, int x, int y, int width, int height, float min_depth = 0.0f,
                            float max_depth = 1.0f);
 
-// Wrapper for creating an barrier on a buffer
-void BufferMemoryBarrier(VkCommandBuffer command_buffer, VkBuffer buffer, VkAccessFlags src_access_mask,
-                         VkAccessFlags dst_access_mask, VkDeviceSize offset, VkDeviceSize size,
-                         VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask);
-
 void LogVulkanResult(int level, const char* func_name, VkResult res, const char* msg, ...) printflike(4, 5);
 
 #define LOG_VULKAN_ERROR(res, ...) ::Vulkan::Util::LogVulkanResult(1, __func__, res, __VA_ARGS__)

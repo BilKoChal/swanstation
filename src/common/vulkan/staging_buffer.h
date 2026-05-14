@@ -29,7 +29,6 @@ public:
   StagingBuffer& operator=(const StagingBuffer&) = delete;
 
   ALWAYS_INLINE Type GetType() const { return m_type; }
-  ALWAYS_INLINE VkDeviceSize GetSize() const { return m_size; }
   ALWAYS_INLINE VkBuffer GetBuffer() const { return m_buffer; }
   ALWAYS_INLINE bool IsMapped() const { return m_map_pointer != nullptr; }
   ALWAYS_INLINE const char* GetMapPointer() const { return m_map_pointer; }
@@ -46,8 +45,6 @@ public:
   void InvalidateCPUCache(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
 
   // offset is from the start of the buffer, not from the map offset
-  void Read(VkDeviceSize offset, void* data, size_t size, bool invalidate_caches = true);
-  void Write(VkDeviceSize offset, const void* data, size_t size, bool invalidate_caches = true);
 
   // Creates the optimal format of image copy.
   bool Create(Type type, VkDeviceSize size, VkBufferUsageFlags usage);

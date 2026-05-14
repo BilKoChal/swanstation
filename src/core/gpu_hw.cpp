@@ -966,19 +966,6 @@ void GPU_HW::IncludeVRAMDirtyRectangle(const Common::Rectangle<uint32_t>& rect)
   }
 }
 
-void GPU_HW::EnsureVertexBufferSpace(uint32_t required_vertices)
-{
-  if (m_batch_current_vertex_ptr)
-  {
-    if (GetBatchVertexSpace() >= required_vertices)
-      return;
-
-    FlushRender();
-  }
-
-  MapBatchVertexPointer(required_vertices);
-}
-
 void GPU_HW::EnsureVertexBufferSpaceForCurrentCommand()
 {
   uint32_t required_vertices;
