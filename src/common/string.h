@@ -2,7 +2,6 @@
 #include "types.h"
 #include <cstdarg>
 #include <cstring>
-#include <limits>
 #include <string>
 #include <string_view>
 
@@ -79,29 +78,12 @@ public:
   // clears the contents of the string
   void Clear();
 
-  // clear the contents of the string, and free any memory currently being used
-  void Obliterate();
-
-  // swaps strings
-  void Swap(String& swapString);
-
-  // append a single character to this string
-  void AppendCharacter(char c);
-
   // append a string to this string
   void AppendString(const String& appendStr);
   void AppendString(const char* appendText);
   void AppendString(const char* appendString, u32 Count);
   void AppendString(const std::string& appendString);
   void AppendString(const std::string_view& appendString);
-
-  // append a substring of the specified string to this string
-  void AppendSubString(const String& appendStr, s32 Offset = 0, s32 Count = std::numeric_limits<s32>::max());
-  void AppendSubString(const char* appendText, s32 Offset = 0, s32 Count = std::numeric_limits<s32>::max());
-
-  // append formatted string to this string
-  void AppendFormattedString(const char* FormatString, ...) printflike(2, 3);
-  void AppendFormattedStringVA(const char* FormatString, std::va_list ArgPtr);
 
   // set to formatted string
   void Format(const char* FormatString, ...) printflike(2, 3);
@@ -110,14 +92,6 @@ public:
   // compare one string to another
   bool Compare(const String& otherString) const;
   bool Compare(const char* otherText) const;
-  bool CompareInsensitive(const String& otherString) const;
-  bool CompareInsensitive(const char* otherText) const;
-
-  // numerical compares
-  int NumericCompare(const String& otherString) const;
-  int NumericCompare(const char* otherText) const;
-  int NumericCompareInsensitive(const String& otherString) const;
-  int NumericCompareInsensitive(const char* otherText) const;
 
   // starts with / ends with
   bool StartsWith(const char* compareString, bool caseSensitive = true) const;
@@ -125,27 +99,11 @@ public:
   bool EndsWith(const char* compareString, bool caseSensitive = true) const;
   bool EndsWith(const String& compareString, bool caseSensitive = true) const;
 
-  // searches for a character inside a string
-  // rfind is the same except it starts at the end instead of the start
-  // returns -1 if it is not found, otherwise the offset in the string
-  s32 Find(char c, u32 Offset = 0) const;
-
-  // searches for a string inside a string
-  // rfind is the same except it starts at the end instead of the start
-  // returns -1 if it is not found, otherwise the offset in the string
-  s32 Find(const char* str, u32 Offset = 0) const;
-
-  // alters the length of the string to be at least len bytes long
-  void Reserve(u32 newReserve, bool Force = false);
-
   // Cuts characters off the string to reduce it to len bytes long.
-  void Resize(u32 newSize, char fillerCharacter = ' ', bool skrinkIfSmaller = false);
+  void Resize(u32 newSize, char fillerCharacter = ' ');
 
   // updates the internal length counter when the string is externally modified
   void UpdateSize();
-
-  // shrink the string to the minimum size possible
-  void Shrink(bool Force);
 
   // gets the size of the string
   u32 GetLength() const { return m_pStringData->StringLength; }
@@ -153,33 +111,10 @@ public:
 
   // gets the maximum number of bytes we can write to the string, currently
   u32 GetBufferSize() const { return m_pStringData->BufferSize; }
-  u32 GetWritableBufferSize()
-  {
-    EnsureOwnWritableCopy();
-    return m_pStringData->BufferSize;
-  }
-
-  // erase count characters at offset from this string. if count is less than zero, everything past offset is erased
-  void Erase(s32 Offset, s32 Count = std::numeric_limits<s32>::max());
-
-  // replaces all instances of character c with character r in this string
-  // returns the number of changes
-  u32 Replace(char searchCharacter, char replaceCharacter);
 
   // replaces all instances of string s with string r in this string
   // returns the number of changes
   u32 Replace(const char* searchString, const char* replaceString);
-
-  // convert string to lowercase
-  void ToLower();
-
-  // convert string to upper
-  void ToUpper();
-
-  // strip characters from start and end of the string
-  void LStrip(const char* szStripCharacters = " \t\r\n");
-  void RStrip(const char* szStripCharacters = " \t\r\n");
-  void Strip(const char* szStripCharacters = " \t\r\n");
 
   // gets a constant pointer to the string
   const char* GetCharArray() const { return m_pStringData->pBuffer; }
@@ -233,16 +168,6 @@ public:
     return *this;
   }
 
-  // comparative operators
-  bool operator==(const String& compString) const { return Compare(compString); }
-  bool operator==(const char* compString) const { return Compare(compString); }
-  bool operator!=(const String& compString) const { return !Compare(compString); }
-  bool operator!=(const char* compString) const { return !Compare(compString); }
-  bool operator<(const String& compString) const { return (NumericCompare(compString) < 0); }
-  bool operator<(const char* compString) const { return (NumericCompare(compString) < 0); }
-  bool operator>(const String& compString) const { return (NumericCompare(compString) > 0); }
-  bool operator>(const char* compString) const { return (NumericCompare(compString) > 0); }
-
 protected:
   // Internal append function.
   void InternalAppend(const char* pString, u32 Length);
@@ -253,16 +178,6 @@ protected:
   // Empty string data.
   static const StringData s_EmptyStringData;
 };
-
-// static string, stored in .rodata
-#define StaticString(Text)                                                                                             \
-  []() noexcept -> String {                                                                                            \
-    static constexpr u32 buffer_size = sizeof(Text);                                                                   \
-    static constexpr u32 length = buffer_size - 1;                                                                     \
-    static constexpr String::StringData data{const_cast<char*>(Text), length, buffer_size, static_cast<s32>(-1),       \
-                                             true};                                                                    \
-    return String(const_cast<String::StringData*>(&data));                                                             \
-  }()
 
 // stack-allocated string
 template<u32 L>
@@ -370,6 +285,3 @@ private:
 typedef StackString<64> TinyString;
 typedef StackString<256> SmallString;
 typedef StackString<512> PathString;
-
-// empty string global
-extern const String EmptyString;
