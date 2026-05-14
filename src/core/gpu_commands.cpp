@@ -304,7 +304,7 @@ bool GPU::HandleRenderPolygonCommand()
 
   // setup time
   static constexpr u16 s_setup_time[2][2][2] = {{{46, 226}, {334, 496}}, {{82, 262}, {370, 532}}};
-  const TickCount setup_ticks = static_cast<TickCount>(static_cast<u32>(s_setup_time[static_cast<u8>(rc.quad_polygon)][static_cast<u8>(rc.shading_enable)][static_cast<u8>(rc.texture_enable)]));
+  const TickCount setup_ticks = static_cast<TickCount>(s_setup_time[static_cast<u8>(rc.quad_polygon)][static_cast<u8>(rc.shading_enable)][static_cast<u8>(rc.texture_enable)]);
   AddCommandTicks(setup_ticks);
 
   // set draw state up
