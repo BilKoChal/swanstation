@@ -168,7 +168,3 @@ std::unique_ptr<PlayStationMouse> PlayStationMouse::Create()
   return std::make_unique<PlayStationMouse>();
 }
 
-uint32_t PlayStationMouse::StaticGetVibrationMotorCount()
-{
-  return 0;
-}

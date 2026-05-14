@@ -32,7 +32,6 @@ public:
   ~DigitalController() override;
 
   static std::unique_ptr<DigitalController> Create();
-  static uint32_t StaticGetVibrationMotorCount();
 
   ControllerType GetType() const override;
 

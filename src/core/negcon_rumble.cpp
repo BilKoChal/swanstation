@@ -181,11 +181,6 @@ std::optional<uint32_t> NeGconRumble::GetAnalogInputBytes() const
          m_axis_state[static_cast<size_t>(Axis::I)] << 8 | m_axis_state[static_cast<size_t>(Axis::Steering)];
 }
 
-uint32_t NeGconRumble::GetVibrationMotorCount() const
-{
-  return NUM_MOTORS;
-}
-
 float NeGconRumble::GetVibrationMotorStrength(uint32_t motor)
 {
   if (m_motor_state[motor] == 0)
@@ -637,11 +632,6 @@ bool NeGconRumble::Transfer(const uint8_t data_in, uint8_t* data_out)
 std::unique_ptr<NeGconRumble> NeGconRumble::Create(uint32_t index)
 {
   return std::make_unique<NeGconRumble>(index);
-}
-
-uint32_t NeGconRumble::StaticGetVibrationMotorCount()
-{
-  return NUM_MOTORS;
 }
 
 void NeGconRumble::LoadSettings(const char* section)

@@ -34,7 +34,6 @@ public:
   ~NeGcon() override;
 
   static std::unique_ptr<NeGcon> Create();
-  static uint32_t StaticGetVibrationMotorCount();
 
   ControllerType GetType() const override;
 

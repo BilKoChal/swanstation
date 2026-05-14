@@ -219,11 +219,6 @@ std::unique_ptr<NeGcon> NeGcon::Create()
   return std::make_unique<NeGcon>();
 }
 
-uint32_t NeGcon::StaticGetVibrationMotorCount()
-{
-  return 0;
-}
-
 void NeGcon::LoadSettings(const char* section)
 {
   Controller::LoadSettings(section);

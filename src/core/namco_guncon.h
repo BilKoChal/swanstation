@@ -20,7 +20,6 @@ public:
   ~NamcoGunCon() override;
 
   static std::unique_ptr<NamcoGunCon> Create();
-  static uint32_t StaticGetVibrationMotorCount();
 
   ControllerType GetType() const override;
 

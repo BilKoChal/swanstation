@@ -41,11 +41,6 @@ std::optional<uint32_t> Controller::GetAnalogInputBytes() const
   return std::nullopt;
 }
 
-uint32_t Controller::GetVibrationMotorCount() const
-{
-  return 0;
-}
-
 float Controller::GetVibrationMotorStrength(uint32_t motor)
 {
   return 0.0f;
@@ -86,36 +81,5 @@ std::unique_ptr<Controller> Controller::Create(ControllerType type, uint32_t ind
     case ControllerType::None:
     default:
       return {};
-  }
-}
-
-uint32_t Controller::GetVibrationMotorCount(ControllerType type)
-{
-  switch (type)
-  {
-    case ControllerType::DigitalController:
-      return DigitalController::StaticGetVibrationMotorCount();
-
-    case ControllerType::AnalogController:
-      return AnalogController::StaticGetVibrationMotorCount();
-
-    case ControllerType::AnalogJoystick:
-      return AnalogJoystick::StaticGetVibrationMotorCount();
-
-    case ControllerType::NamcoGunCon:
-      return NamcoGunCon::StaticGetVibrationMotorCount();
-
-    case ControllerType::PlayStationMouse:
-      return PlayStationMouse::StaticGetVibrationMotorCount();
-
-    case ControllerType::NeGcon:
-      return NeGcon::StaticGetVibrationMotorCount();
-
-    case ControllerType::NeGconRumble:
-      return NeGconRumble::StaticGetVibrationMotorCount();
-
-    case ControllerType::None:
-    default:
-      return 0;
   }
 }

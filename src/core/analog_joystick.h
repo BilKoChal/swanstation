@@ -42,7 +42,6 @@ public:
   ~AnalogJoystick() override;
 
   static std::unique_ptr<AnalogJoystick> Create(uint32_t index);
-  static uint32_t StaticGetVibrationMotorCount();
 
   ControllerType GetType() const override;
 

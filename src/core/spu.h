@@ -37,10 +37,6 @@ public:
   // Executes the SPU, generating any pending samples.
   void GeneratePendingSamples();
 
-  /// Access to SPU RAM.
-  const std::array<uint8_t, RAM_SIZE>& GetRAM() const { return m_ram; }
-  std::array<uint8_t, RAM_SIZE>& GetRAM() { return m_ram; }
-
   /// Change output stream - used for runahead.
   ALWAYS_INLINE void SetAudioStream(LibretroAudioStream* stream) { m_audio_stream = stream; }
 

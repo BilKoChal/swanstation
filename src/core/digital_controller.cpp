@@ -129,7 +129,3 @@ std::unique_ptr<DigitalController> DigitalController::Create()
   return std::make_unique<DigitalController>();
 }
 
-uint32_t DigitalController::StaticGetVibrationMotorCount()
-{
-  return 0;
-}

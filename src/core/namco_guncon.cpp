@@ -198,11 +198,6 @@ std::unique_ptr<NamcoGunCon> NamcoGunCon::Create()
   return std::make_unique<NamcoGunCon>();
 }
 
-uint32_t NamcoGunCon::StaticGetVibrationMotorCount()
-{
-  return 0;
-}
-
 void NamcoGunCon::LoadSettings(const char* section)
 {
   Controller::LoadSettings(section);

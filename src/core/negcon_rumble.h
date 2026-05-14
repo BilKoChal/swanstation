@@ -37,7 +37,6 @@ public:
   ~NeGconRumble() override;
 
   static std::unique_ptr<NeGconRumble> Create(uint32_t index);
-  static uint32_t StaticGetVibrationMotorCount();
 
   ControllerType GetType() const override;
 
@@ -55,7 +54,6 @@ public:
   void SetAxisState(Axis axis, uint8_t value);
   void SetButtonState(Button button, bool pressed);
 
-  uint32_t GetVibrationMotorCount() const override;
   float GetVibrationMotorStrength(uint32_t motor) override;
 
   void LoadSettings(const char* section) override;

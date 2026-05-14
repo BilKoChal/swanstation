@@ -39,8 +39,6 @@ public:
   virtual std::optional<uint32_t> GetAnalogInputBytes() const;
 
   /// Returns the number of vibration motors.
-  virtual uint32_t GetVibrationMotorCount() const;
-
   /// Queries the state of the specified vibration motor. Values are normalized from 0..1.
   virtual float GetVibrationMotorStrength(uint32_t motor);
 
@@ -52,7 +50,4 @@ public:
 
   /// Creates a new controller of the specified type.
   static std::unique_ptr<Controller> Create(ControllerType type, uint32_t index);
-
-  /// Returns the number of vibration motors.
-  static uint32_t GetVibrationMotorCount(ControllerType type);
 };

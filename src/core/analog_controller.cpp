@@ -167,11 +167,6 @@ std::optional<uint32_t> AnalogController::GetAnalogInputBytes() const
          m_axis_state[static_cast<size_t>(Axis::RightY)] << 8 | m_axis_state[static_cast<size_t>(Axis::RightX)];
 }
 
-uint32_t AnalogController::GetVibrationMotorCount() const
-{
-  return NUM_MOTORS;
-}
-
 float AnalogController::GetVibrationMotorStrength(uint32_t motor)
 {
   if (m_motor_state[motor] == 0)
@@ -645,11 +640,6 @@ bool AnalogController::Transfer(const uint8_t data_in, uint8_t* data_out)
 std::unique_ptr<AnalogController> AnalogController::Create(uint32_t index)
 {
   return std::make_unique<AnalogController>(index);
-}
-
-uint32_t AnalogController::StaticGetVibrationMotorCount()
-{
-  return NUM_MOTORS;
 }
 
 void AnalogController::LoadSettings(const char* section)

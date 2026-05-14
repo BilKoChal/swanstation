@@ -240,11 +240,6 @@ std::unique_ptr<AnalogJoystick> AnalogJoystick::Create(uint32_t index)
   return std::make_unique<AnalogJoystick>(index);
 }
 
-uint32_t AnalogJoystick::StaticGetVibrationMotorCount()
-{
-  return 0;
-}
-
 void AnalogJoystick::LoadSettings(const char* section)
 {
   Controller::LoadSettings(section);
