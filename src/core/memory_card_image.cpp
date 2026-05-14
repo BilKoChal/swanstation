@@ -66,13 +66,6 @@ bool SaveToFile(const DataArray& data, const char* filename)
   return true;
 }
 
-bool IsValid(const DataArray& data)
-{
-  // TODO: Check checksum?
-  const uint8_t* fptr = GetFramePtr<uint8_t>(data, 0, 0);
-  return fptr[0] == 'M' && fptr[1] == 'C';
-}
-
 void Format(DataArray* data)
 {
   // fill everything with FF
