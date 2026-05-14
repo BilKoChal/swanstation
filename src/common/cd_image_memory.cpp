@@ -2,7 +2,6 @@
 #include "cd_subchannel_replacement.h"
 #include "file_system.h"
 #include "log.h"
-#include <algorithm>
 #include <cerrno>
 Log_SetChannel(CDImageMemory);
 

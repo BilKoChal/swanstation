@@ -8,7 +8,6 @@
 #include "string_util.h"
 #include "miniz.h"
 #include <array>
-#include <cstdio>
 #include <vector>
 Log_SetChannel(CDImagePBP);
 

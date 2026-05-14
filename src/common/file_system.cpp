@@ -3,8 +3,6 @@
 #include "file_system.h"
 #include "byte_stream.h"
 #include "string_util.h"
-#include <algorithm>
-#include <cstdlib>
 #include <cstring>
 
 #ifdef __APPLE__

@@ -3,7 +3,6 @@
 #include "error.h"
 #include "file_system.h"
 #include "log.h"
-#include <algorithm>
 #include <cerrno>
 #include <map>
 Log_SetChannel(CDImageMds);

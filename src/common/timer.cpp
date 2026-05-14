@@ -1,7 +1,4 @@
 #include "timer.h"
-#include <cstdio>
-#include <cstdlib>
-
 #ifdef _WIN32
 #include "windows_headers.h"
 #else
