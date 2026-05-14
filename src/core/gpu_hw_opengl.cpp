@@ -16,8 +16,8 @@ Log_SetChannel(GPU_HW_OpenGL);
 class LibretroOpenGLHostDisplayTexture : public HostDisplayTexture
 {
 public:
-  LibretroOpenGLHostDisplayTexture(GL::Texture texture, HostDisplayPixelFormat format)
-    : m_texture(std::move(texture)), m_format(format)
+  LibretroOpenGLHostDisplayTexture(GL::Texture texture)
+    : m_texture(std::move(texture))
   {
   }
   ~LibretroOpenGLHostDisplayTexture() override = default;
@@ -25,16 +25,12 @@ public:
   void* GetHandle() const override { return reinterpret_cast<void*>(static_cast<uintptr_t>(m_texture.GetGLId())); }
   uint32_t GetWidth() const override { return m_texture.GetWidth(); }
   uint32_t GetHeight() const override { return m_texture.GetHeight(); }
-  uint32_t GetLayers() const override { return 1; }
-  uint32_t GetLevels() const override { return 1; }
   uint32_t GetSamples() const override { return m_texture.GetSamples(); }
-  HostDisplayPixelFormat GetFormat() const override { return m_format; }
 
   GLuint GetGLID() const { return m_texture.GetGLId(); }
 
 private:
   GL::Texture m_texture;
-  HostDisplayPixelFormat m_format;
 };
 
 LibretroOpenGLHostDisplay::LibretroOpenGLHostDisplay() = default;
@@ -81,7 +77,7 @@ std::unique_ptr<HostDisplayTexture> LibretroOpenGLHostDisplay::CreateTexture(uin
   if (!tex.Create(width, height, samples, gl_internal_format, gl_format, gl_type, data, data_stride))
     return {};
 
-  return std::make_unique<LibretroOpenGLHostDisplayTexture>(std::move(tex), format);
+  return std::make_unique<LibretroOpenGLHostDisplayTexture>(std::move(tex));
 }
 
 bool LibretroOpenGLHostDisplay::SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const

@@ -21,9 +21,8 @@ Log_SetChannel(GPU_HW_Vulkan);
 class LibretroVulkanHostDisplayTexture : public HostDisplayTexture
 {
 public:
-  LibretroVulkanHostDisplayTexture(Vulkan::Texture texture, Vulkan::StagingTexture staging_texture,
-                                   HostDisplayPixelFormat format)
-    : m_texture(std::move(texture)), m_staging_texture(std::move(staging_texture)), m_format(format)
+  LibretroVulkanHostDisplayTexture(Vulkan::Texture texture, Vulkan::StagingTexture staging_texture)
+    : m_texture(std::move(texture)), m_staging_texture(std::move(staging_texture))
   {
   }
   ~LibretroVulkanHostDisplayTexture() override = default;
@@ -31,10 +30,7 @@ public:
   void* GetHandle() const override { return const_cast<Vulkan::Texture*>(&m_texture); }
   uint32_t GetWidth() const override { return m_texture.GetWidth(); }
   uint32_t GetHeight() const override { return m_texture.GetHeight(); }
-  uint32_t GetLayers() const override { return m_texture.GetLayers(); }
-  uint32_t GetLevels() const override { return m_texture.GetLevels(); }
   uint32_t GetSamples() const override { return m_texture.GetSamples(); }
-  HostDisplayPixelFormat GetFormat() const override { return m_format; }
 
   const Vulkan::Texture& GetTexture() const { return m_texture; }
   Vulkan::Texture& GetTexture() { return m_texture; }
@@ -43,7 +39,6 @@ public:
 private:
   Vulkan::Texture m_texture;
   Vulkan::StagingTexture m_staging_texture;
-  HostDisplayPixelFormat m_format;
 };
 
 LibretroVulkanHostDisplay::LibretroVulkanHostDisplay() = default;
@@ -119,7 +114,7 @@ std::unique_ptr<HostDisplayTexture> LibretroVulkanHostDisplay::CreateTexture(uin
   if (!dynamic)
     staging_texture.Destroy(true);
 
-  return std::make_unique<LibretroVulkanHostDisplayTexture>(std::move(texture), std::move(staging_texture), format);
+  return std::make_unique<LibretroVulkanHostDisplayTexture>(std::move(texture), std::move(staging_texture));
 }
 
 bool LibretroVulkanHostDisplay::SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const

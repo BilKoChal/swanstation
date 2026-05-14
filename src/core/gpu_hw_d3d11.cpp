@@ -20,8 +20,8 @@ Log_SetChannel(GPU_HW_D3D11);
 class LibretroD3D11HostDisplayTexture : public HostDisplayTexture
 {
 public:
-  LibretroD3D11HostDisplayTexture(D3D11::Texture texture, HostDisplayPixelFormat format, bool dynamic)
-    : m_texture(std::move(texture)), m_format(format), m_dynamic(dynamic)
+  LibretroD3D11HostDisplayTexture(D3D11::Texture texture)
+    : m_texture(std::move(texture))
   {
   }
   ~LibretroD3D11HostDisplayTexture() override = default;
@@ -29,10 +29,7 @@ public:
   void* GetHandle() const override { return m_texture.GetD3DSRV(); }
   uint32_t GetWidth() const override { return m_texture.GetWidth(); }
   uint32_t GetHeight() const override { return m_texture.GetHeight(); }
-  uint32_t GetLayers() const override { return 1; }
-  uint32_t GetLevels() const override { return m_texture.GetLevels(); }
   uint32_t GetSamples() const override { return m_texture.GetSamples(); }
-  HostDisplayPixelFormat GetFormat() const override { return m_format; }
 
   ALWAYS_INLINE ID3D11Texture2D* GetD3DTexture() const { return m_texture.GetD3DTexture(); }
   ALWAYS_INLINE ID3D11ShaderResourceView* GetD3DSRV() const { return m_texture.GetD3DSRV(); }
@@ -40,8 +37,6 @@ public:
 
 private:
   D3D11::Texture m_texture;
-  HostDisplayPixelFormat m_format;
-  bool m_dynamic;
 };
 
 LibretroD3D11HostDisplay::LibretroD3D11HostDisplay() = default;
@@ -84,7 +79,7 @@ std::unique_ptr<HostDisplayTexture> LibretroD3D11HostDisplay::CreateTexture(uint
     return {};
   }
 
-  return std::make_unique<LibretroD3D11HostDisplayTexture>(std::move(tex), format, dynamic);
+  return std::make_unique<LibretroD3D11HostDisplayTexture>(std::move(tex));
 }
 
 bool LibretroD3D11HostDisplay::SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const

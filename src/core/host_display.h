@@ -27,10 +27,7 @@ public:
   virtual void* GetHandle() const = 0;
   virtual uint32_t GetWidth() const = 0;
   virtual uint32_t GetHeight() const = 0;
-  virtual uint32_t GetLayers() const = 0;
-  virtual uint32_t GetLevels() const = 0;
   virtual uint32_t GetSamples() const = 0;
-  virtual HostDisplayPixelFormat GetFormat() const = 0;
 };
 
 // Interface to the frontend's renderer.
