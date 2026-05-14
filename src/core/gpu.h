@@ -54,8 +54,6 @@ public:
   GPU();
   virtual ~GPU();
 
-  virtual GPURenderer GetRendererType() const = 0;
-
   virtual bool Initialize(HostDisplay* host_display);
   virtual void Reset(bool clear_vram);
   virtual bool DoState(StateWrapper& sw, HostDisplayTexture** save_to_texture, bool update_display);

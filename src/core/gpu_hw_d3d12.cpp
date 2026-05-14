@@ -28,11 +28,6 @@ GPU_HW_D3D12::~GPU_HW_D3D12()
   DestroyResources();
 }
 
-GPURenderer GPU_HW_D3D12::GetRendererType() const
-{
-  return GPURenderer::HardwareD3D12;
-}
-
 bool GPU_HW_D3D12::Initialize(HostDisplay* host_display)
 {
   if (host_display->GetRenderAPI() != HostDisplay::RenderAPI::D3D12)

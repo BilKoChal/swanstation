@@ -650,11 +650,6 @@ GPU_HW_Vulkan::~GPU_HW_Vulkan()
   DestroyResources();
 }
 
-GPURenderer GPU_HW_Vulkan::GetRendererType() const
-{
-  return GPURenderer::HardwareVulkan;
-}
-
 bool GPU_HW_Vulkan::Initialize(HostDisplay* host_display)
 {
   if (host_display->GetRenderAPI() != HostDisplay::RenderAPI::Vulkan)

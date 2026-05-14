@@ -23,8 +23,6 @@ public:
   GPU_HW_D3D12();
   ~GPU_HW_D3D12() override;
 
-  GPURenderer GetRendererType() const override;
-
   bool Initialize(HostDisplay* host_display) override;
   void Reset(bool clear_vram) override;
 

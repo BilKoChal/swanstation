@@ -37,11 +37,6 @@ GPU_SW::~GPU_SW()
     m_host_display->ClearDisplayTexture();
 }
 
-GPURenderer GPU_SW::GetRendererType() const
-{
-  return GPURenderer::Software;
-}
-
 bool GPU_SW::Initialize(HostDisplay* host_display)
 {
   if (!GPU::Initialize(host_display) || !m_backend.Initialize(false))
