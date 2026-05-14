@@ -500,7 +500,11 @@ static ALWAYS_INLINE_RELEASE float TruncateVertexPosition(float p)
 {
   const s32 int_part = static_cast<s32>(p);
   const float int_part_f = static_cast<float>(int_part);
-  return static_cast<float>(static_cast<s16>(int_part << 5) >> 5) + (p - int_part_f);
+  // Sign-extend the low 11 bits via shift idiom. Do the left shift in
+  // unsigned space to avoid C++<20 UB on negative int_part (the GPU
+  // truncates positions to an 11-bit signed range, so int_part is
+  // routinely negative).
+  return static_cast<float>(static_cast<s16>(static_cast<u32>(int_part) << 5) >> 5) + (p - int_part_f);
 }
 
 static ALWAYS_INLINE_RELEASE bool IsWithinTolerance(float precise_x, float precise_y, int int_x, int int_y)
