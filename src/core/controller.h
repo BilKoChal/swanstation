@@ -4,9 +4,6 @@
 #include "types.h"
 #include <memory>
 #include <optional>
-#include <string>
-#include <string_view>
-#include <vector>
 
 class StateWrapper;
 class HostInterface;
@@ -14,16 +11,6 @@ class HostInterface;
 class Controller
 {
 public:
-  enum class AxisType : uint8_t
-  {
-    Full,
-    Half
-  };
-
-  using ButtonList = std::vector<std::pair<std::string, int32_t>>;
-  using AxisList = std::vector<std::tuple<std::string, int32_t, AxisType>>;
-  using SettingList = std::vector<SettingInfo>;
-
   Controller();
   virtual ~Controller();
 
