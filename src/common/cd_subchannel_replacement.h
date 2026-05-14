@@ -2,7 +2,6 @@
 #include "cd_image.h"
 #include "types.h"
 #include <array>
-#include <cstdio>
 #include <unordered_map>
 
 class CDSubChannelReplacement

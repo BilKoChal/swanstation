@@ -1,6 +1,5 @@
 #pragma once
 #include "types.h"
-#include <algorithm>
 #include <cstdarg>
 #include <cstring>
 #include <limits>
