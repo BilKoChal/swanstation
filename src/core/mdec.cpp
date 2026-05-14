@@ -712,7 +712,13 @@ bool MDEC::DecodeRLE_New(s16* blk, const u8* qt)
 
     // Store the DCT blocks with an additional 4 bits of precision.
     const s32 val = (static_cast<s32>(static_cast<u32>(n) << 22) >> 22);
-    const s32 coeff = (m_current_q_scale == 0) ? (val << 5) : (((val * qt[0]) << 4) + (val ? ((val < 0) ? 8 : -8) : 0));
+    // val is a sign-extended 10-bit coefficient (range [-512, 511]); val * qt
+    // can be negative. Shift in unsigned space to avoid C++<20 UB on negative
+    // signed left shifts (well-defined since C++20).
+    const s32 coeff = (m_current_q_scale == 0)
+                        ? static_cast<s32>(static_cast<u32>(val) << 5)
+                        : (static_cast<s32>(static_cast<u32>(val * qt[0]) << 4) +
+                           (val ? ((val < 0) ? 8 : -8) : 0));
     blk[zigzag[0]] = static_cast<s16>(std::clamp(coeff, -0x4000, 0x3FFF));
   }
 
@@ -726,7 +732,11 @@ bool MDEC::DecodeRLE_New(s16* blk, const u8* qt)
     {
       const s32 val = (static_cast<s32>(static_cast<u32>(n) << 22) >> 22);
       const s32 scq = static_cast<s32>(m_current_q_scale * qt[m_current_coefficient]);
-      const s32 coeff = (scq == 0) ? (val << 5) : ((((val * scq) >> 3) << 4) + (val ? ((val < 0) ? 8 : -8) : 0));
+      // See note above on val << 5 / ... << 4 UB-avoidance.
+      const s32 coeff = (scq == 0)
+                          ? static_cast<s32>(static_cast<u32>(val) << 5)
+                          : (static_cast<s32>(static_cast<u32>((val * scq) >> 3) << 4) +
+                             (val ? ((val < 0) ? 8 : -8) : 0));
       blk[zigzag[m_current_coefficient]] = static_cast<s16>(std::clamp(coeff, -0x4000, 0x3FFF));
     }
 
