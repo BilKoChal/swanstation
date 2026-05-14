@@ -25,8 +25,6 @@ public:
   CDImage::LBA GetLastReadSector() const { return m_buffers[m_buffer_front.load()].lba; }
   const SectorBuffer& GetSectorBuffer() const { return m_buffers[m_buffer_front.load()].data; }
   const CDImage::SubChannelQ& GetSectorSubQ() const { return m_buffers[m_buffer_front.load()].subq; }
-  uint32_t GetBufferedSectorCount() const { return m_buffer_count.load(); }
-  bool HasBufferedSectors() const { return (m_buffer_count.load() > 0); }
   uint32_t GetReadaheadCount() const { return static_cast<uint32_t>(m_buffers.size()); }
 
   bool HasMedia() const { return static_cast<bool>(m_media); }
@@ -43,7 +41,6 @@ public:
   void QueueReadSector(CDImage::LBA lba);
 
   bool WaitForReadToComplete();
-  void WaitForIdle();
 
   /// Bypasses the sector cache and reads directly from the image.
   bool ReadSectorUncached(CDImage::LBA lba, CDImage::SubChannelQ* subq, SectorBuffer* data);

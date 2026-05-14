@@ -15,7 +15,6 @@ struct Hash
   uint8_t bytes[16];
 
   ALWAYS_INLINE bool operator==(const Hash& bh) const { return (std::memcmp(bytes, bh.bytes, sizeof(bytes)) == 0); }
-  ALWAYS_INLINE bool operator!=(const Hash& bh) const { return (std::memcmp(bytes, bh.bytes, sizeof(bytes)) != 0); }
 };
 
 struct ImageInfo

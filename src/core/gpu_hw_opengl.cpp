@@ -846,11 +846,6 @@ void GPU_HW_OpenGL::UnmapBatchVertexPointer(uint32_t used_vertices)
   m_batch_current_vertex_ptr = nullptr;
 }
 
-std::tuple<int32_t, int32_t> GPU_HW_OpenGL::ConvertToFramebufferCoordinates(int32_t x, int32_t y)
-{
-  return std::make_tuple(x, static_cast<int32_t>(VRAM_HEIGHT) - y);
-}
-
 void GPU_HW_OpenGL::SetCapabilities()
 {
   GLint max_texture_size = VRAM_WIDTH;

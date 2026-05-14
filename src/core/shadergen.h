@@ -14,9 +14,7 @@ public:
 
   std::string GenerateScreenQuadVertexShader();
   std::string GenerateUVQuadVertexShader();
-  std::string GenerateFillFragmentShader();
   std::string GenerateCopyFragmentShader();
-  std::string GenerateSampleFragmentShader();
 
 protected:
   ALWAYS_INLINE bool IsVulkan() const { return (m_render_api == HostDisplay::RenderAPI::Vulkan); }

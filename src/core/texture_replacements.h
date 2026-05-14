@@ -17,7 +17,6 @@ struct TextureReplacementHash
 
   bool operator<(const TextureReplacementHash& rhs) const { return std::tie(low, high) < std::tie(rhs.low, rhs.high); }
   bool operator==(const TextureReplacementHash& rhs) const { return low == rhs.low && high == rhs.high; }
-  bool operator!=(const TextureReplacementHash& rhs) const { return low != rhs.low || high != rhs.high; }
 };
 
 namespace std {
@@ -46,22 +45,15 @@ public:
   TextureReplacements();
   ~TextureReplacements();
 
-  const std::string GetGameID() const { return m_game_id; }
   void SetGameID(std::string game_id);
 
   void Reload();
 
   const TextureReplacementTexture* GetVRAMWriteReplacement(uint32_t width, uint32_t height, const void* pixels);
-  void DumpVRAMWrite(uint32_t width, uint32_t height, const void* pixels);
 
   void Shutdown();
 
 private:
-  struct ReplacementHashMapHash
-  {
-    size_t operator()(const TextureReplacementHash& hash);
-  };
-
   using VRAMWriteReplacementMap = std::unordered_map<TextureReplacementHash, std::string>;
   using TextureCache = std::unordered_map<std::string, TextureReplacementTexture>;
 
@@ -71,7 +63,6 @@ private:
   std::string GetSourceDirectory() const;
 
   TextureReplacementHash GetVRAMWriteHash(uint32_t width, uint32_t height, const void* pixels) const;
-  std::string GetVRAMWriteDumpFilename(uint32_t width, uint32_t height, const void* pixels) const;
 
   void FindTextures(const std::string& dir);
 

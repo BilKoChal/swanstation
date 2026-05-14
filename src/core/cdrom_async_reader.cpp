@@ -157,15 +157,6 @@ bool CDROMAsyncReader::WaitForReadToComplete()
   return m_buffers[front].result;
 }
 
-void CDROMAsyncReader::WaitForIdle()
-{
-  if (!IsUsingThread())
-    return;
-
-  std::unique_lock<std::mutex> lock(m_mutex);
-  m_notify_read_complete_cv.wait(lock, [this]() { return (!m_is_reading.load() && !m_next_position_set.load()); });
-}
-
 void CDROMAsyncReader::EmptyBuffers()
 {
   m_buffer_front.store(0);

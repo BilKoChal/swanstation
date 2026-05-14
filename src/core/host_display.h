@@ -179,9 +179,6 @@ protected:
                          float* out_height, float* out_left_padding, float* out_top_padding, float* out_scale,
                          float* out_x_scale, bool apply_aspect_ratio = true) const;
 
-  std::tuple<int32_t, int32_t, int32_t, int32_t> CalculateSoftwareCursorDrawRect() const;
-  std::tuple<int32_t, int32_t, int32_t, int32_t> CalculateSoftwareCursorDrawRect(int32_t cursor_x, int32_t cursor_y) const;
-
   WindowInfo m_window_info;
 
   int32_t m_mouse_position_x = 0;

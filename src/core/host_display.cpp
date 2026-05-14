@@ -149,25 +149,6 @@ std::tuple<int32_t, int32_t, int32_t, int32_t> HostDisplay::CalculateDrawRect(in
                          static_cast<int32_t>(width), static_cast<int32_t>(height));
 }
 
-std::tuple<int32_t, int32_t, int32_t, int32_t> HostDisplay::CalculateSoftwareCursorDrawRect() const
-{
-  return CalculateSoftwareCursorDrawRect(m_mouse_position_x, m_mouse_position_y);
-}
-
-std::tuple<int32_t, int32_t, int32_t, int32_t> HostDisplay::CalculateSoftwareCursorDrawRect(int32_t cursor_x, int32_t cursor_y) const
-{
-  const float scale = 1.0f;
-  const uint32_t cursor_extents_x = static_cast<uint32_t>(static_cast<float>(m_cursor_texture->GetWidth()) * scale * 0.5f);
-  const uint32_t cursor_extents_y = static_cast<uint32_t>(static_cast<float>(m_cursor_texture->GetHeight()) * scale * 0.5f);
-
-  const int32_t out_left = cursor_x - cursor_extents_x;
-  const int32_t out_top = cursor_y - cursor_extents_y;
-  const int32_t out_width = cursor_extents_x * 2u;
-  const int32_t out_height = cursor_extents_y * 2u;
-
-  return std::tie(out_left, out_top, out_width, out_height);
-}
-
 std::tuple<float, float> HostDisplay::ConvertWindowCoordinatesToDisplayCoordinates(int32_t window_x, int32_t window_y,
                                                                                    int32_t window_width, int32_t window_height,
                                                                                    int32_t top_margin) const

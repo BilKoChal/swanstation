@@ -131,8 +131,6 @@ private:
 
   ALWAYS_INLINE bool IsGLES() const { return (m_render_api == HostDisplay::RenderAPI::OpenGLES); }
 
-  std::tuple<int32_t, int32_t> ConvertToFramebufferCoordinates(int32_t x, int32_t y);
-
   void SetCapabilities();
   bool CreateFramebuffer();
   void ClearFramebuffer();

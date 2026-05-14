@@ -97,30 +97,6 @@ TextureReplacementHash TextureReplacements::GetVRAMWriteHash(uint32_t width, uin
   return {hash.low64, hash.high64};
 }
 
-std::string TextureReplacements::GetVRAMWriteDumpFilename(uint32_t width, uint32_t height, const void* pixels) const
-{
-  if (m_game_id.empty())
-    return {};
-
-  const TextureReplacementHash hash = GetVRAMWriteHash(width, height, pixels);
-  std::string cache_folder = g_host_interface_storage.GetShaderCacheBasePath();
-  std::string filename = g_host_interface->GetUserDirectoryRelativePath("%s" "dump" FS_OSPATH_SEPARATOR_STR "textures" FS_OSPATH_SEPARATOR_STR "%s" 
-  FS_OSPATH_SEPARATOR_STR "vram-write-%s.png", cache_folder.c_str(), m_game_id.c_str(), hash.ToString().c_str());
-
-  if (!filename.empty() && path_is_valid(filename.c_str()))
-    return {};
-
-  const std::string dump_directory =
-    g_host_interface->GetUserDirectoryRelativePath("%s" FS_OSPATH_SEPARATOR_STR "textures" FS_OSPATH_SEPARATOR_STR "%s", cache_folder.c_str(), m_game_id.c_str());
-  if (   !path_is_directory(dump_directory.c_str())
-      && !path_mkdir(dump_directory.c_str()))
-  {
-    return {};
-  }
-
-  return filename;
-}
-
 void TextureReplacements::Reload()
 {
   m_vram_write_replacements.clear();

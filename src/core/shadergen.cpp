@@ -592,23 +592,6 @@ std::string ShaderGen::GenerateUVQuadVertexShader()
   return ss.str();
 }
 
-std::string ShaderGen::GenerateFillFragmentShader()
-{
-  std::stringstream ss;
-  WriteHeader(ss);
-  DeclareUniformBuffer(ss, {"float4 u_fill_color"}, true);
-  DeclareFragmentEntryPoint(ss, 0, 1, {}, false, 1, true);
-
-  ss << R"(
-{
-  o_col0 = u_fill_color;
-  o_depth = u_fill_color.a;
-}
-)";
-
-  return ss.str();
-}
-
 std::string ShaderGen::GenerateCopyFragmentShader()
 {
   std::stringstream ss;
@@ -621,22 +604,6 @@ std::string ShaderGen::GenerateCopyFragmentShader()
 {
   float2 coords = u_src_rect.xy + v_tex0 * u_src_rect.zw;
   o_col0 = SAMPLE_TEXTURE(samp0, coords);
-}
-)";
-
-  return ss.str();
-}
-
-std::string ShaderGen::GenerateSampleFragmentShader()
-{
-  std::stringstream ss;
-  WriteHeader(ss);
-  DeclareTexture(ss, "samp0", 0);
-  DeclareFragmentEntryPoint(ss, 0, 1, {}, false, 1);
-
-  ss << R"(
-{
-  o_col0 = SAMPLE_TEXTURE(samp0, v_tex0);
 }
 )";
 

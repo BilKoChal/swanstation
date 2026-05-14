@@ -14,8 +14,6 @@ public:
   void Reset(bool clear_vram) override;
 
   ALWAYS_INLINE_RELEASE uint16_t GetPixel(const uint32_t x, const uint32_t y) const { return m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE const uint16_t* GetPixelPtr(const uint32_t x, const uint32_t y) const { return &m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE uint16_t* GetPixelPtr(const uint32_t x, const uint32_t y) { return &m_vram[VRAM_WIDTH * y + x]; }
   ALWAYS_INLINE_RELEASE void SetPixel(const uint32_t x, const uint32_t y, const uint16_t value) { m_vram[VRAM_WIDTH * y + x] = value; }
 
   // this is actually (31 * 255) >> 4) == 494, but to simplify addressing we use the next power of two (512)
