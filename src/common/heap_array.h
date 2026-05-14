@@ -1,7 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cassert>
-#include <type_traits>
+#include <cstddef>
 
 template<typename T, std::size_t SIZE>
 class HeapArray

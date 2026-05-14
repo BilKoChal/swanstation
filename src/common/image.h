@@ -5,8 +5,6 @@
 #include <optional>
 #include <vector>
 
-class ByteStream;
-
 namespace Common {
 template<typename PixelType>
 class Image
