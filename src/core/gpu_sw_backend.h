@@ -36,11 +36,6 @@ protected:
       bits = (static_cast<uint16_t>(r_)) | (static_cast<uint16_t>(g_) << 5) | (static_cast<uint16_t>(b_) << 10) | (static_cast<uint16_t>(c_) << 15);
     }
 
-    void ClampAndSet(uint8_t r_, uint8_t g_, uint8_t b_, bool c_ = false)
-    {
-      Set(std::min<uint8_t>(r_, 0x1F), std::min<uint8_t>(g_, 0x1F), std::min<uint8_t>(b_, 0x1F), c_);
-    }
-
     void SetRGB24(uint32_t rgb24, bool c_ = false)
     {
       bits = static_cast<uint16_t>(((rgb24 >> 3) & 0x1F) | (((rgb24 >> 11) & 0x1F) << 5) | (((rgb24 >> 19) & 0x1F) << 10)) |
@@ -51,24 +46,6 @@ protected:
     {
       bits = (static_cast<uint16_t>(r8 >> 3)) | (static_cast<uint16_t>(g8 >> 3) << 5) | (static_cast<uint16_t>(b8 >> 3) << 10) |
              (static_cast<uint16_t>(c_) << 15);
-    }
-
-    void SetRGB24Dithered(uint32_t x, uint32_t y, uint8_t r8, uint8_t g8, uint8_t b8, bool c_ = false)
-    {
-      const int32_t offset = DITHER_MATRIX[y & 3][x & 3];
-      r8 = static_cast<uint8_t>(std::clamp<int32_t>(static_cast<int32_t>(r8) + offset, 0, 255));
-      g8 = static_cast<uint8_t>(std::clamp<int32_t>(static_cast<int32_t>(g8) + offset, 0, 255));
-      b8 = static_cast<uint8_t>(std::clamp<int32_t>(static_cast<int32_t>(b8) + offset, 0, 255));
-      SetRGB24(r8, g8, b8, c_);
-    }
-
-    uint32_t ToRGB24() const
-    {
-      const uint32_t r_ = static_cast<uint32_t>(r.GetValue());
-      const uint32_t g_ = static_cast<uint32_t>(g.GetValue());
-      const uint32_t b_ = static_cast<uint32_t>(b.GetValue());
-
-      return ((r_ << 3) | (r_ & 7)) | (((g_ << 3) | (g_ & 7)) << 8) | (((b_ << 3) | (b_ & 7)) << 16);
     }
   };
 

@@ -26,15 +26,6 @@ std::optional<int> File::GetTagInt(const char* tag_name) const
   return std::atoi(it->second.c_str());
 }
 
-std::optional<float> File::GetTagFloat(const char* tag_name) const
-{
-  TagMap::const_iterator it = m_tags.find(tag_name);
-  if (it == m_tags.end())
-    return std::nullopt;
-
-  return static_cast<float>(std::atof(it->second.c_str()));
-}
-
 std::string File::GetTagString(const char* tag_name, const char* default_value) const
 {
   std::optional<std::string> value(GetTagString(tag_name));
@@ -47,11 +38,6 @@ std::string File::GetTagString(const char* tag_name, const char* default_value) 
 int File::GetTagInt(const char* tag_name, int default_value) const
 {
   return GetTagInt(tag_name).value_or(default_value);
-}
-
-float File::GetTagFloat(const char* tag_name, float default_value) const
-{
-  return GetTagFloat(tag_name).value_or(default_value);
 }
 
 bool File::Load(const char* path)
