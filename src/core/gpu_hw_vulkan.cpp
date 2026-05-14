@@ -1475,13 +1475,6 @@ bool GPU_HW_Vulkan::CompilePipelines()
                                         2 + batch_shader_progress_units + batch_pipeline_progress_units + 1 + 2 +
                                           (2 * 2) + 2 + 1 + 1 + (2 * 3) + 1);
 
-  // The batch vertex and fragment shader-module arrays now live as
-  // members so the lazy PSO builder can reach them at draw time.
-  // Use local references for readability in the rest of this
-  // function (matching the previous structure).
-  auto& batch_vertex_shaders = m_batch_vertex_shaders;
-  auto& batch_fragment_shaders = m_batch_fragment_shaders;
-
   for (u8 textured = 0; textured < 2; textured++)
   {
     const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
@@ -1494,7 +1487,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
       return false;
     }
 
-    batch_vertex_shaders[textured].store(shader, std::memory_order_release);
+    m_batch_vertex_shaders[textured].store(shader, std::memory_order_release);
     progress.Increment();
   }
 
