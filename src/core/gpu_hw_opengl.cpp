@@ -847,7 +847,7 @@ void GPU_HW_OpenGL::UnmapBatchVertexPointer(u32 used_vertices)
 
 std::tuple<s32, s32> GPU_HW_OpenGL::ConvertToFramebufferCoordinates(s32 x, s32 y)
 {
-  return std::make_tuple(x, static_cast<s32>(static_cast<s32>(VRAM_HEIGHT) - y));
+  return std::make_tuple(x, static_cast<s32>(VRAM_HEIGHT) - y);
 }
 
 void GPU_HW_OpenGL::SetCapabilities()
