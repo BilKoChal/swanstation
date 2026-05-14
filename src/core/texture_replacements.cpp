@@ -178,9 +178,6 @@ void TextureReplacements::FindTextures(const std::string& dir)
 
   for (FILESYSTEM_FIND_DATA& fd : files)
   {
-    if (fd.Attributes & FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY)
-      continue;
-
     TextureReplacementHash hash;
     ReplacmentType type;
     if (!ParseReplacementFilename(fd.FileName, &hash, &type))

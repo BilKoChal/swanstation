@@ -15,25 +15,6 @@ void CheatList::ResetSharedScratchRegisters()
   cht_register.fill(0);
 }
 
-static bool IsValidScanAddress(PhysicalMemoryAddress address)
-{
-  if ((address & CPU::DCACHE_LOCATION_MASK) == CPU::DCACHE_LOCATION &&
-      (address & CPU::DCACHE_OFFSET_MASK) < CPU::DCACHE_SIZE)
-  {
-    return true;
-  }
-
-  address &= CPU::PHYSICAL_MEMORY_ADDRESS_MASK;
-
-  if (address < Bus::RAM_MIRROR_END)
-    return true;
-
-  if (address >= Bus::BIOS_BASE && address < (Bus::BIOS_BASE + Bus::BIOS_SIZE))
-    return true;
-
-  return false;
-}
-
 template<typename T>
 static T DoMemoryRead(VirtualMemoryAddress address)
 {

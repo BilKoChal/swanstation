@@ -20,17 +20,15 @@ class ByteStream;
 #define FS_OSPATH_SEPARATOR_STR "/"
 #endif
 
-inline constexpr uint32_t FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY = 1, FILESYSTEM_FILE_ATTRIBUTE_READ_ONLY = 2,
-                     FILESYSTEM_FILE_ATTRIBUTE_COMPRESSED = 4;
+inline constexpr uint32_t FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY = 1;
 
 inline constexpr uint32_t FILESYSTEM_FIND_RECURSIVE = (1 << 0), FILESYSTEM_FIND_RELATIVE_PATHS = (1 << 1),
-                     FILESYSTEM_FIND_HIDDEN_FILES = (1 << 2), FILESYSTEM_FIND_FOLDERS = (1 << 3),
-                     FILESYSTEM_FIND_FILES = (1 << 4), FILESYSTEM_FIND_KEEP_ARRAY = (1 << 5);
+                     FILESYSTEM_FIND_HIDDEN_FILES = (1 << 2),
+                     FILESYSTEM_FIND_FILES = (1 << 4);
 
 struct FILESYSTEM_FIND_DATA
 {
   std::string FileName;
-  uint32_t Attributes;
   uint64_t Size;
 };
 

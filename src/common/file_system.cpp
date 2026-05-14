@@ -407,7 +407,6 @@ static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPat
       continue;
 
     FILESYSTEM_FIND_DATA outData;
-    outData.Attributes = 0;
 
     if (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
@@ -423,13 +422,8 @@ static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPat
           nFiles += RecursiveFindFiles(OriginPath, Path, utf8_filename, Pattern, Flags, pResults);
       }
 
-      if (!(Flags & FILESYSTEM_FIND_FOLDERS))
-      {
-	free(utf8_filename);
-        continue;
-      }
-
-      outData.Attributes |= FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY;
+      free(utf8_filename);
+      continue;
     }
     else
     {
@@ -439,9 +433,6 @@ static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPat
         continue;
       }
     }
-
-    if (wfd.dwFileAttributes & FILE_ATTRIBUTE_READONLY)
-      outData.Attributes |= FILESYSTEM_FILE_ATTRIBUTE_READ_ONLY;
 
     // match the filename
     if (hasWildCards)
@@ -550,7 +541,6 @@ static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPat
       full_path.Format("%s/%s", OriginPath, pDirEnt->d_name);
 
     FILESYSTEM_FIND_DATA outData;
-    outData.Attributes = 0;
 
     int32_t sdir_size = path_get_size(full_path);
 
@@ -573,10 +563,7 @@ static uint32_t RecursiveFindFiles(const char* OriginPath, const char* ParentPat
         }
       }
 
-      if (!(Flags & FILESYSTEM_FIND_FOLDERS))
-        continue;
-
-      outData.Attributes |= FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY;
+      continue;
     }
     else
     {
@@ -630,8 +617,7 @@ bool FindFiles(const char* Path, const char* Pattern, uint32_t Flags, FindResult
     return false;
 
   // clear result array
-  if (!(Flags & FILESYSTEM_FIND_KEEP_ARRAY))
-    pResults->clear();
+  pResults->clear();
 
   // enter the recursive function
   return (RecursiveFindFiles(Path, nullptr, nullptr, Pattern, Flags, pResults) > 0);
