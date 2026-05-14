@@ -240,12 +240,6 @@ public:
   /// Frees a host register, making it usable in future allocations.
   void FreeHostReg(HostReg reg);
 
-  /// Ensures a host register is free, removing any value cached.
-  void EnsureHostRegFree(HostReg reg);
-
-  /// Preallocates caller saved registers, enabling later use without stack pushes.
-  void ReserveCallerSavedRegisters();
-
   /// Push/pop volatile host registers. Returns the number of registers pushed/popped.
   uint32_t PushCallerSavedRegisters() const;
   uint32_t PopCallerSavedRegisters() const;
@@ -274,28 +268,6 @@ public:
   //////////////////////////////////////////////////////////////////////////
   // Guest Register Caching
   //////////////////////////////////////////////////////////////////////////
-
-  /// Returns true if the specified guest register is cached.
-  bool IsGuestRegisterCached(Reg guest_reg) const
-  {
-    const Value& cache_value = m_state.guest_reg_state[static_cast<uint8_t>(guest_reg)];
-    return cache_value.IsConstant() || cache_value.IsInHostRegister();
-  }
-
-  /// Returns true if the specified guest register is cached and in a host register.
-  bool IsGuestRegisterInHostRegister(Reg guest_reg) const
-  {
-    const Value& cache_value = m_state.guest_reg_state[static_cast<uint8_t>(guest_reg)];
-    return cache_value.IsInHostRegister();
-  }
-
-  /// Returns the host register if the guest register is cached.
-  std::optional<HostReg> GetHostRegisterForGuestRegister(Reg guest_reg) const
-  {
-    if (!m_state.guest_reg_state[static_cast<uint8_t>(guest_reg)].IsInHostRegister())
-      return std::nullopt;
-    return m_state.guest_reg_state[static_cast<uint8_t>(guest_reg)].GetHostRegister();
-  }
 
   /// Returns true if there is a load delay which will be stored at the end of the instruction.
   bool HasLoadDelay() const { return m_state.load_delay_register != Reg::count; }

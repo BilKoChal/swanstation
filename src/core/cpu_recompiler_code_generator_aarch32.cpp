@@ -458,14 +458,6 @@ void CodeGenerator::EmitDiv(HostReg to_reg_quotient, HostReg to_reg_remainder, H
   }
 }
 
-void CodeGenerator::EmitInc(HostReg to_reg, RegSize size)
-{
-}
-
-void CodeGenerator::EmitDec(HostReg to_reg, RegSize size)
-{
-}
-
 void CodeGenerator::EmitShl(HostReg to_reg, HostReg from_reg, RegSize size, const Value& amount_value,
                             bool assume_amount_masked)
 {

@@ -51,8 +51,6 @@ public:
   void EmitMul(HostReg to_reg_hi, HostReg to_reg_lo, const Value& lhs, const Value& rhs, bool signed_multiply);
   void EmitDiv(HostReg to_reg_quotient, HostReg to_reg_remainder, HostReg num, HostReg denom, RegSize size,
                bool signed_divide);
-  void EmitInc(HostReg to_reg, RegSize size);
-  void EmitDec(HostReg to_reg, RegSize size);
   void EmitShl(HostReg to_reg, HostReg from_reg, RegSize size, const Value& amount_value,
                bool assume_amount_masked = true);
   void EmitShr(HostReg to_reg, HostReg from_reg, RegSize size, const Value& amount_value,

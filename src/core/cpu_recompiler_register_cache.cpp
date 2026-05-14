@@ -195,18 +195,6 @@ void RegisterCache::FreeHostReg(HostReg reg)
   m_state.host_reg_state[reg] &= ~HostRegState::InUse;
 }
 
-void RegisterCache::EnsureHostRegFree(HostReg reg)
-{
-  if (!IsHostRegInUse(reg))
-    return;
-
-  for (uint8_t i = 0; i < static_cast<uint8_t>(Reg::count); i++)
-  {
-    if (m_state.guest_reg_state[i].IsInHostRegister() && m_state.guest_reg_state[i].GetHostRegister() == reg)
-      FlushGuestRegister(static_cast<Reg>(i), true, true);
-  }
-}
-
 Value RegisterCache::GetCPUPtr()
 {
   return Value::FromHostReg(this, m_cpu_ptr_host_register, HostPointerSize);
@@ -220,20 +208,6 @@ Value RegisterCache::AllocateScratch(RegSize size, HostReg reg /* = HostReg_Inva
     AllocateHostReg(reg);
 
   return Value::FromScratch(this, reg, size);
-}
-
-void RegisterCache::ReserveCallerSavedRegisters()
-{
-  for (uint32_t reg = 0; reg < HostReg_Count; reg++)
-  {
-    if ((m_state.host_reg_state[reg] & (HostRegState::CalleeSaved | HostRegState::CalleeSavedAllocated)) ==
-        HostRegState::CalleeSaved)
-    {
-      m_code_generator.EmitPushHostReg(static_cast<HostReg>(reg), GetActiveCalleeSavedRegisterCount());
-      m_state.callee_saved_order[m_state.callee_saved_order_count++] = static_cast<HostReg>(reg);
-      m_state.host_reg_state[reg] |= HostRegState::CalleeSavedAllocated;
-    }
-  }
 }
 
 uint32_t RegisterCache::PushCallerSavedRegisters() const

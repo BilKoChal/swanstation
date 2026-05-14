@@ -770,42 +770,6 @@ void CodeGenerator::EmitDiv(HostReg to_reg_quotient, HostReg to_reg_remainder, H
     m_emit->pop(m_emit->rax);
 }
 
-void CodeGenerator::EmitInc(HostReg to_reg, RegSize size)
-{
-  switch (size)
-  {
-    case RegSize_8:
-      m_emit->inc(GetHostReg8(to_reg));
-      break;
-    case RegSize_16:
-      m_emit->inc(GetHostReg16(to_reg));
-      break;
-    case RegSize_32:
-      m_emit->inc(GetHostReg32(to_reg));
-      break;
-    default:
-      break;
-  }
-}
-
-void CodeGenerator::EmitDec(HostReg to_reg, RegSize size)
-{
-  switch (size)
-  {
-    case RegSize_8:
-      m_emit->dec(GetHostReg8(to_reg));
-      break;
-    case RegSize_16:
-      m_emit->dec(GetHostReg16(to_reg));
-      break;
-    case RegSize_32:
-      m_emit->dec(GetHostReg32(to_reg));
-      break;
-    default:
-      break;
-  }
-}
-
 void CodeGenerator::EmitShl(HostReg to_reg, HostReg from_reg, RegSize size, const Value& amount_value,
                             bool assume_amount_masked /* = true */)
 {
