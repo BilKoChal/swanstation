@@ -889,7 +889,7 @@ void UnlinkBlock(CodeBlock* block)
   for (CodeBlock::LinkInfo& li : block->link_predecessors)
   {
     auto iter = std::find_if(li.block->link_successors.begin(), li.block->link_successors.end(),
-                             [block](const CodeBlock::LinkInfo& li) { return li.block == block; });
+                             [block](const CodeBlock::LinkInfo& succ) { return succ.block == block; });
 
 #ifdef WITH_RECOMPILER
     // Restore blocks linked to this block back to the resolver
@@ -904,7 +904,7 @@ void UnlinkBlock(CodeBlock* block)
   for (CodeBlock::LinkInfo& li : block->link_successors)
   {
     auto iter = std::find_if(li.block->link_predecessors.begin(), li.block->link_predecessors.end(),
-                             [block](const CodeBlock::LinkInfo& li) { return li.block == block; });
+                             [block](const CodeBlock::LinkInfo& pred) { return pred.block == block; });
 
 #ifdef WITH_RECOMPILER
     // Restore blocks we're linking to back to the resolver, since the successor won't be linked to us to backpatch if
