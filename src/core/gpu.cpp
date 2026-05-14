@@ -56,12 +56,6 @@ void GPU::UpdateSettings()
   UpdateCRTCDisplayParameters();
 }
 
-bool GPU::IsHardwareRenderer()
-{
-  const GPURenderer renderer = GetRendererType();
-  return (renderer != GPURenderer::Software);
-}
-
 void GPU::CPUClockChanged()
 {
   UpdateCRTCConfig();
@@ -456,15 +450,6 @@ void GPU::AddCommandTicks(TickCount ticks)
 void GPU::SynchronizeCRTC()
 {
   m_crtc_tick_event->InvokeEarly();
-}
-
-float GPU::ComputeHorizontalFrequency() const
-{
-  const CRTCState& cs = m_crtc_state;
-  TickCount fractional_ticks = 0;
-  return static_cast<float>(
-    static_cast<double>(SystemTicksToCRTCTicks(System::g_ticks_per_second, &fractional_ticks)) /
-    static_cast<double>(cs.horizontal_total));
 }
 
 float GPU::ComputeVerticalFrequency() const

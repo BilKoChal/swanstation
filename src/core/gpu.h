@@ -64,7 +64,6 @@ public:
   virtual void ResetGraphicsAPIState();
   virtual void RestoreGraphicsAPIState();
 
-  bool IsHardwareRenderer();
   void CPUClockChanged();
 
   // MMIO access
@@ -115,7 +114,6 @@ public:
   /// Recompile shaders/recreate framebuffers when needed.
   virtual void UpdateSettings();
 
-  float ComputeHorizontalFrequency() const;
   float ComputeVerticalFrequency() const;
   float GetDisplayAspectRatio() const;
 
