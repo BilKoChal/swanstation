@@ -41,11 +41,6 @@ ALWAYS_INLINE uint32_t GetICacheTagForAddress(VirtualMemoryAddress address)
 {
   return (address & ICACHE_TAG_ADDRESS_MASK);
 }
-ALWAYS_INLINE uint32_t GetICacheFillTagForAddress(VirtualMemoryAddress address)
-{
-  static const uint32_t invalid_bits[4] = {0, 1, 3, 7};
-  return GetICacheTagForAddress(address) | invalid_bits[(address >> 2) & 0x03u];
-}
 ALWAYS_INLINE uint32_t GetICacheTagMaskForAddress(VirtualMemoryAddress address)
 {
   static const uint32_t mask[4] = {ICACHE_TAG_ADDRESS_MASK | 1, ICACHE_TAG_ADDRESS_MASK | 2, ICACHE_TAG_ADDRESS_MASK | 4,
@@ -91,12 +86,6 @@ ALWAYS_INLINE Segment GetSegmentForAddress(VirtualMemoryAddress address)
 ALWAYS_INLINE PhysicalMemoryAddress VirtualAddressToPhysical(VirtualMemoryAddress address)
 {
   return (address & PHYSICAL_MEMORY_ADDRESS_MASK);
-}
-
-ALWAYS_INLINE VirtualMemoryAddress PhysicalAddressToVirtual(PhysicalMemoryAddress address, Segment segment)
-{
-  static constexpr std::array<VirtualMemoryAddress, 4> bases = {{0x00000000, 0x80000000, 0xA0000000, 0xE0000000}};
-  return bases[static_cast<uint32_t>(segment)] | address;
 }
 
 // defined in bus.cpp - memory access functions which return false if an exception was thrown.

@@ -332,14 +332,6 @@ struct GPUBackendDrawPolygonCommand : public GPUBackendDrawCommand
       };
       uint16_t texcoord;
     };
-
-    ALWAYS_INLINE void Set(int32_t x_, int32_t y_, uint32_t color_, uint16_t texcoord_)
-    {
-      x = x_;
-      y = y_;
-      color = color_;
-      texcoord = texcoord_;
-    }
   };
 
   Vertex vertices[0];

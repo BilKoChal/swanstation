@@ -38,7 +38,7 @@ public:
     GPUREADtoCPU = 3
   };
 
-  static constexpr uint32_t MAX_FIFO_SIZE = 4096, DOT_TIMER_INDEX = 0, HBLANK_TIMER_INDEX = 1, MAX_RESOLUTION_SCALE = 32;
+  static constexpr uint32_t MAX_FIFO_SIZE = 4096, DOT_TIMER_INDEX = 0, HBLANK_TIMER_INDEX = 1;
 
   static constexpr uint16_t NTSC_TICKS_PER_LINE = 3413, NTSC_HSYNC_TICKS = 200, NTSC_TOTAL_LINES = 263,
                        PAL_TICKS_PER_LINE = 3406,
