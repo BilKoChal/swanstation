@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -42,11 +43,6 @@ template<typename T, size_t N>
 char (&__countof_ArraySizeHelper(T (&array)[N]))[N];
 #define countof(array) (sizeof(__countof_ArraySizeHelper(array)))
 #endif
-#endif
-
-// offsetof macro
-#ifndef offsetof
-#define offsetof(st, m) ((size_t)((char*)&((st*)(0))->m - (char*)0))
 #endif
 
 #ifdef __GNUC__
