@@ -518,6 +518,19 @@ void MDEC::CopyOutBlock()
       }
       else
       {
+        // 'a' is the value of the data_output_bit15 status flag pre-shifted
+        // to bit 15 of a uint16_t (so it's either 0x0000 or 0x8000). It
+        // should be OR-combined into color15a/b directly to land in bit 15
+        // of the 15bpp pixel. The previous '(a << 15)' shifted it a second
+        // time, by 15 more bits, which on a uint16_t lvalue truncates the
+        // mask bit to zero. That silently lost the PS1's per-pixel
+        // semi-transparency / draw-mask flag for every 15bpp MDEC pixel
+        // written through the Old path, breaking games that rely on the
+        // mask bit being preserved through the MDEC->VRAM path - most
+        // visibly Oddworld: Abe's Oddysee / Exoddus, whose backgrounds
+        // composite with character sprites via the mask bit and present
+        // as garbled high-contrast noise / mis-blended sprites when it
+        // gets cleared (issue #127).
         const uint16_t a = static_cast<uint16_t>(m_status.data_output_bit15.GetValue()) << 15;
         for (uint32_t i = 0; i < static_cast<uint32_t>(m_block_rgb.size());)
         {
@@ -525,13 +538,13 @@ void MDEC::CopyOutBlock()
           uint16_t r = static_cast<uint16_t>((color >> 3) & 0x1Fu);
           uint16_t g = static_cast<uint16_t>((color >> 11) & 0x1Fu);
           uint16_t b = static_cast<uint16_t>((color >> 19) & 0x1Fu);
-          const uint16_t color15a = r | (g << 5) | (b << 10) | (a << 15);
+          const uint16_t color15a = static_cast<uint16_t>(r | (g << 5) | (b << 10)) | a;
 
           color = m_block_rgb[i++];
           r = static_cast<uint16_t>((color >> 3) & 0x1Fu);
           g = static_cast<uint16_t>((color >> 11) & 0x1Fu);
           b = static_cast<uint16_t>((color >> 19) & 0x1Fu);
-          const uint16_t color15b = r | (g << 5) | (b << 10) | (a << 15);
+          const uint16_t color15b = static_cast<uint16_t>(r | (g << 5) | (b << 10)) | a;
 
           m_data_out_fifo.Push(static_cast<uint32_t>(color15a) | (static_cast<uint32_t>(color15b) << 16));
         }
