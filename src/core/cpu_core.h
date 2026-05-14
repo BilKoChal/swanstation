@@ -150,10 +150,6 @@ ALWAYS_INLINE bool InUserMode()
 {
   return g_state.cop0_regs.sr.KUc;
 }
-ALWAYS_INLINE bool InKernelMode()
-{
-  return !g_state.cop0_regs.sr.KUc;
-}
 
 // Memory reads variants which do not raise exceptions.
 // These methods do not support writing to MMIO addresses with side effects, and are

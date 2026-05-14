@@ -104,23 +104,4 @@ ALWAYS_INLINE TickCount GetDMARAMTickCount(uint32_t word_count)
   return static_cast<TickCount>(word_count + ((word_count + 15) / 16));
 }
 
-enum class MemoryRegion
-{
-  RAM,
-  RAMMirror1,
-  RAMMirror2,
-  RAMMirror3,
-  EXP1,
-  Scratchpad,
-  BIOS,
-  Count
-};
-
-std::optional<MemoryRegion> GetMemoryRegionForAddress(PhysicalMemoryAddress address);
-PhysicalMemoryAddress GetMemoryRegionStart(MemoryRegion region);
-PhysicalMemoryAddress GetMemoryRegionEnd(MemoryRegion region);
-uint8_t* GetMemoryRegionPointer(MemoryRegion region);
-std::optional<PhysicalMemoryAddress> SearchMemory(PhysicalMemoryAddress start_address, const uint8_t* pattern,
-                                                  const uint8_t* mask, uint32_t pattern_length);
-
 } // namespace Bus

@@ -28,7 +28,6 @@ public:
   bool HasError() const { return m_error; }
   bool IsReading() const { return (m_mode == Mode::Read); }
   bool IsWriting() const { return (m_mode == Mode::Write); }
-  Mode GetMode() const { return m_mode; }
   void SetMode(Mode mode) { m_mode = mode; }
   uint32_t GetVersion() const { return m_version; }
 

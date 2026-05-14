@@ -32,9 +32,6 @@ public:
   void Reset();
   bool DoState(StateWrapper& sw);
 
-  // Should mirror CPU state.
-  ALWAYS_INLINE bool GetIRQLineState() const { return (m_interrupt_status_register != 0); }
-
   // Interupts are edge-triggered, so if it is masked when TriggerInterrupt() is called, it will be lost.
   void InterruptRequest(IRQ irq);
 

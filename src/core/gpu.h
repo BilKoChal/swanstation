@@ -155,11 +155,6 @@ protected:
     return std::make_tuple(static_cast<uint8_t>(texcoord), static_cast<uint8_t>(texcoord >> 8));
   }
 
-  static constexpr std::tuple<uint8_t, uint8_t, uint8_t> UnpackColorRGB24(uint32_t rgb24)
-  {
-    return std::make_tuple(static_cast<uint8_t>(rgb24), static_cast<uint8_t>(rgb24 >> 8), static_cast<uint8_t>(rgb24 >> 16));
-  }
-
   void SoftReset();
 
   // Sets dots per scanline
