@@ -23,9 +23,6 @@ public:
 
   ALWAYS_INLINE bool IsValid() const { return (m_image != VK_NULL_HANDLE); }
 
-  /// An image is considered owned/managed if we control the memory.
-  ALWAYS_INLINE bool IsOwned() const { return (m_device_memory != VK_NULL_HANDLE); }
-
   ALWAYS_INLINE uint32_t GetWidth() const { return m_width; }
   ALWAYS_INLINE uint32_t GetHeight() const { return m_height; }
   ALWAYS_INLINE uint32_t GetLevels() const { return m_levels; }
@@ -35,7 +32,6 @@ public:
   ALWAYS_INLINE VkFormat GetFormat() const { return m_format; }
   ALWAYS_INLINE VkSampleCountFlagBits GetSamples() const { return m_samples; }
   ALWAYS_INLINE VkImageLayout GetLayout() const { return m_layout; }
-  ALWAYS_INLINE VkImageViewType GetViewType() const { return m_view_type; }
   ALWAYS_INLINE VkImage GetImage() const { return m_image; }
   ALWAYS_INLINE VkImageView GetView() const { return m_view; }
 

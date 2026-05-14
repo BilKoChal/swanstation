@@ -58,7 +58,6 @@ public:
 
   void SetShaderStage(VkShaderStageFlagBits stage, VkShaderModule module, const char* entry_point);
   void SetVertexShader(VkShaderModule module) { SetShaderStage(VK_SHADER_STAGE_VERTEX_BIT, module, "main"); }
-  void SetGeometryShader(VkShaderModule module) { SetShaderStage(VK_SHADER_STAGE_GEOMETRY_BIT, module, "main"); }
   void SetFragmentShader(VkShaderModule module) { SetShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, module, "main"); }
 
   void AddVertexBuffer(uint32_t binding, uint32_t stride, VkVertexInputRate input_rate = VK_VERTEX_INPUT_RATE_VERTEX);
@@ -67,17 +66,12 @@ public:
   void SetPrimitiveTopology(VkPrimitiveTopology topology, bool enable_primitive_restart = false);
 
   void SetRasterizationState(VkPolygonMode polygon_mode, VkCullModeFlags cull_mode, VkFrontFace front_face);
-  void SetLineWidth(float width);
   void SetMultisamples(uint32_t multisamples, bool per_sample_shading);
   void SetNoCullRasterizationState();
 
   void SetDepthState(bool depth_test, bool depth_write, VkCompareOp compare_op);
   void SetNoDepthTestState();
 
-  void AddBlendAttachment(bool blend_enable, VkBlendFactor src_factor, VkBlendFactor dst_factor, VkBlendOp op,
-                          VkBlendFactor alpha_src_factor, VkBlendFactor alpha_dst_factor, VkBlendOp alpha_op,
-                          VkColorComponentFlags write_mask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
   void SetBlendAttachment(uint32_t attachment, bool blend_enable, VkBlendFactor src_factor, VkBlendFactor dst_factor,
                           VkBlendOp op, VkBlendFactor alpha_src_factor, VkBlendFactor alpha_dst_factor,
                           VkBlendOp alpha_op,
@@ -155,9 +149,6 @@ public:
 
   void Update(VkDevice device, bool clear = true);
 
-  void AddImageDescriptorWrite(VkDescriptorSet set, uint32_t binding, VkImageView view,
-                               VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  void AddSamplerDescriptorWrite(VkDescriptorSet set, uint32_t binding, VkSampler sampler);
   void AddCombinedImageSamplerDescriptorWrite(VkDescriptorSet set, uint32_t binding, VkImageView view, VkSampler sampler,
                                               VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   void AddBufferDescriptorWrite(VkDescriptorSet set, uint32_t binding, VkDescriptorType dtype, VkBuffer buffer, uint32_t offset,

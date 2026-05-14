@@ -44,17 +44,12 @@ public:
   void DisableDebugUtils();
 
   // Global state accessors
-  ALWAYS_INLINE VkInstance GetVulkanInstance() const { return m_instance; }
   ALWAYS_INLINE VkPhysicalDevice GetPhysicalDevice() const { return m_physical_device; }
   ALWAYS_INLINE VkDevice GetDevice() const { return m_device; }
   ALWAYS_INLINE VkQueue GetGraphicsQueue() const { return m_graphics_queue; }
   ALWAYS_INLINE uint32_t GetGraphicsQueueFamilyIndex() const { return m_graphics_queue_family_index; }
   ALWAYS_INLINE VkQueue GetPresentQueue() const { return m_present_queue; }
   ALWAYS_INLINE uint32_t GetPresentQueueFamilyIndex() const { return m_present_queue_family_index; }
-  ALWAYS_INLINE const VkQueueFamilyProperties& GetGraphicsQueueProperties() const
-  {
-    return m_graphics_queue_properties;
-  }
   ALWAYS_INLINE const VkPhysicalDeviceMemoryProperties& GetDeviceMemoryProperties() const
   {
     return m_device_memory_properties;
@@ -62,10 +57,6 @@ public:
   ALWAYS_INLINE const VkPhysicalDeviceProperties& GetDeviceProperties() const { return m_device_properties; }
   ALWAYS_INLINE const VkPhysicalDeviceFeatures& GetDeviceFeatures() const { return m_device_features; }
   ALWAYS_INLINE const VkPhysicalDeviceLimits& GetDeviceLimits() const { return m_device_properties.limits; }
-
-  // Support bits
-  ALWAYS_INLINE bool SupportsGeometryShaders() const { return m_device_features.geometryShader == VK_TRUE; }
-  ALWAYS_INLINE bool SupportsDualSourceBlend() const { return m_device_features.dualSrcBlend == VK_TRUE; }
 
   // Helpers for getting constants
   ALWAYS_INLINE VkDeviceSize GetUniformBufferAlignment() const
@@ -100,12 +91,7 @@ public:
 
   // These command buffers are allocated per-frame. They are valid until the command buffer
   // is submitted, after that you should call these functions again.
-  ALWAYS_INLINE VkDescriptorPool GetGlobalDescriptorPool() const { return m_global_descriptor_pool; }
   ALWAYS_INLINE VkCommandBuffer GetCurrentCommandBuffer() const { return m_current_command_buffer; }
-  ALWAYS_INLINE VkDescriptorPool GetCurrentDescriptorPool() const
-  {
-    return m_frame_resources[m_current_frame].descriptor_pool;
-  }
 
   /// Allocates a descriptor set from the pool reserved for the current frame.
   VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout set_layout);
@@ -115,10 +101,6 @@ public:
 
   /// Frees a descriptor set allocated from the global pool.
   void FreeGlobalDescriptorSet(VkDescriptorSet set);
-
-  // Gets the fence that will be signaled when the currently executing command buffer is
-  // queued and executed. Do not wait for this fence before the buffer is executed.
-  ALWAYS_INLINE VkFence GetCurrentCommandBufferFence() const { return m_frame_resources[m_current_frame].fence; }
 
   // Fence "counters" are used to track which commands have been completed by the GPU.
   // If the last completed fence counter is greater or equal to N, it means that the work
@@ -140,12 +122,10 @@ public:
   // Schedule a vulkan resource for destruction later on. This will occur when the command buffer
   // is next re-used, and the GPU has finished working with the specified resource.
   void DeferBufferDestruction(VkBuffer object);
-  void DeferBufferViewDestruction(VkBufferView object);
   void DeferDeviceMemoryDestruction(VkDeviceMemory object);
   void DeferFramebufferDestruction(VkFramebuffer object);
   void DeferImageDestruction(VkImage object);
   void DeferImageViewDestruction(VkImageView object);
-  void DeferPipelineDestruction(VkPipeline pipeline);
 
   // Wait for a fence to be completed.
   // Also invokes callbacks for completion.
@@ -213,7 +193,6 @@ private:
 
   VkDebugUtilsMessengerEXT m_debug_messenger_callback = VK_NULL_HANDLE;
 
-  VkQueueFamilyProperties m_graphics_queue_properties = {};
   VkPhysicalDeviceFeatures m_device_features = {};
   VkPhysicalDeviceProperties m_device_properties = {};
   VkPhysicalDeviceMemoryProperties m_device_memory_properties = {};

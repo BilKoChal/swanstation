@@ -231,11 +231,6 @@ void GraphicsPipelineBuilder::SetRasterizationState(VkPolygonMode polygon_mode, 
   m_ci.pRasterizationState = &m_rasterization_state;
 }
 
-void GraphicsPipelineBuilder::SetLineWidth(float width)
-{
-  m_rasterization_state.lineWidth = width;
-}
-
 void GraphicsPipelineBuilder::SetMultisamples(uint32_t multisamples, bool per_sample_shading)
 {
   m_multisample_state.rasterizationSamples = static_cast<VkSampleCountFlagBits>(multisamples);
@@ -268,25 +263,6 @@ void GraphicsPipelineBuilder::SetBlendConstants(float r, float g, float b, float
   m_blend_state.blendConstants[1] = g;
   m_blend_state.blendConstants[2] = b;
   m_blend_state.blendConstants[3] = a;
-  m_ci.pColorBlendState = &m_blend_state;
-}
-
-void GraphicsPipelineBuilder::AddBlendAttachment(
-  bool blend_enable, VkBlendFactor src_factor, VkBlendFactor dst_factor, VkBlendOp op,
-  VkBlendFactor alpha_src_factor, VkBlendFactor alpha_dst_factor, VkBlendOp alpha_op, VkColorComponentFlags write_mask /* = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT */)
-{
-  VkPipelineColorBlendAttachmentState& bs = m_blend_attachments[m_blend_state.attachmentCount];
-  bs.blendEnable = blend_enable;
-  bs.srcColorBlendFactor = src_factor;
-  bs.dstColorBlendFactor = dst_factor;
-  bs.colorBlendOp = op;
-  bs.srcAlphaBlendFactor = alpha_src_factor;
-  bs.dstAlphaBlendFactor = alpha_dst_factor;
-  bs.alphaBlendOp = alpha_op;
-  bs.colorWriteMask = write_mask;
-
-  m_blend_state.attachmentCount++;
-  m_blend_state.pAttachments = m_blend_attachments.data();
   m_ci.pColorBlendState = &m_blend_state;
 }
 
@@ -461,40 +437,6 @@ void DescriptorSetUpdateBuilder::Update(VkDevice device, bool clear /*= true*/)
 
   if (clear)
     Clear();
-}
-
-void DescriptorSetUpdateBuilder::AddImageDescriptorWrite(
-  VkDescriptorSet set, uint32_t binding, VkImageView view,
-  VkImageLayout layout /*= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL*/)
-{
-  VkDescriptorImageInfo& ii = m_infos[m_num_infos++].image;
-  ii.imageView = view;
-  ii.imageLayout = layout;
-  ii.sampler = VK_NULL_HANDLE;
-
-  VkWriteDescriptorSet& dw = m_writes[m_num_writes++];
-  dw.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  dw.dstSet = set;
-  dw.dstBinding = binding;
-  dw.descriptorCount = 1;
-  dw.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-  dw.pImageInfo = &ii;
-}
-
-void DescriptorSetUpdateBuilder::AddSamplerDescriptorWrite(VkDescriptorSet set, uint32_t binding, VkSampler sampler)
-{
-  VkDescriptorImageInfo& ii = m_infos[m_num_infos++].image;
-  ii.imageView = VK_NULL_HANDLE;
-  ii.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  ii.sampler = sampler;
-
-  VkWriteDescriptorSet& dw = m_writes[m_num_writes++];
-  dw.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  dw.dstSet = set;
-  dw.dstBinding = binding;
-  dw.descriptorCount = 1;
-  dw.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-  dw.pImageInfo = &ii;
 }
 
 void DescriptorSetUpdateBuilder::AddCombinedImageSamplerDescriptorWrite(

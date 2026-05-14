@@ -34,32 +34,13 @@ public:
   ALWAYS_INLINE bool IsMapped() const { return m_map_pointer != nullptr; }
   ALWAYS_INLINE const char* GetMapPointer() const { return m_map_pointer; }
   ALWAYS_INLINE char* GetMapPointer() { return m_map_pointer; }
-  ALWAYS_INLINE VkDeviceSize GetMapOffset() const { return m_map_offset; }
-  ALWAYS_INLINE VkDeviceSize GetMapSize() const { return m_map_size; }
   ALWAYS_INLINE bool IsValid() const { return (m_buffer != VK_NULL_HANDLE); }
-  ALWAYS_INLINE bool IsCoherent() const { return m_coherent; }
 
   bool Map(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
   void Unmap();
 
   // Upload part 1: Prepare from device read from the CPU side
   void FlushCPUCache(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
-
-  // Upload part 2: Prepare for device read from the GPU side
-  // Implicit when submitting the command buffer, so rarely needed.
-  void InvalidateGPUCache(VkCommandBuffer command_buffer, VkAccessFlagBits dst_access_flags,
-                          VkPipelineStageFlagBits dst_pipeline_stage, VkDeviceSize offset = 0,
-                          VkDeviceSize size = VK_WHOLE_SIZE);
-
-  // Readback part 0: Prepare for GPU usage (if necessary)
-  void PrepareForGPUWrite(VkCommandBuffer command_buffer, VkAccessFlagBits dst_access_flags,
-                          VkPipelineStageFlagBits dst_pipeline_stage, VkDeviceSize offset = 0,
-                          VkDeviceSize size = VK_WHOLE_SIZE);
-
-  // Readback part 1: Prepare for host readback from the GPU side
-  void FlushGPUCache(VkCommandBuffer command_buffer, VkAccessFlagBits src_access_flags,
-                     VkPipelineStageFlagBits src_pipeline_stage, VkDeviceSize offset = 0,
-                     VkDeviceSize size = VK_WHOLE_SIZE);
 
   // Readback part 2: Prepare for host readback from the CPU side
   void InvalidateCPUCache(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);

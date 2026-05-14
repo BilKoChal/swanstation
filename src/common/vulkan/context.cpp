@@ -646,12 +646,6 @@ void Context::DeferBufferDestruction(VkBuffer object)
   resources.cleanup_resources.push_back([this, object]() { vkDestroyBuffer(m_device, object, nullptr); });
 }
 
-void Context::DeferBufferViewDestruction(VkBufferView object)
-{
-  FrameResources& resources = m_frame_resources[m_current_frame];
-  resources.cleanup_resources.push_back([this, object]() { vkDestroyBufferView(m_device, object, nullptr); });
-}
-
 void Context::DeferDeviceMemoryDestruction(VkDeviceMemory object)
 {
   FrameResources& resources = m_frame_resources[m_current_frame];
@@ -674,12 +668,6 @@ void Context::DeferImageViewDestruction(VkImageView object)
 {
   FrameResources& resources = m_frame_resources[m_current_frame];
   resources.cleanup_resources.push_back([this, object]() { vkDestroyImageView(m_device, object, nullptr); });
-}
-
-void Context::DeferPipelineDestruction(VkPipeline pipeline)
-{
-  FrameResources& resources = m_frame_resources[m_current_frame];
-  resources.cleanup_resources.push_back([this, pipeline]() { vkDestroyPipeline(m_device, pipeline, nullptr); });
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,

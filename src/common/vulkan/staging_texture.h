@@ -21,7 +21,6 @@ public:
   StagingTexture& operator=(const StagingTexture&) = delete;
 
   ALWAYS_INLINE bool IsValid() const { return m_staging_buffer.IsValid(); }
-  ALWAYS_INLINE bool IsMapped() const { return m_staging_buffer.IsMapped(); }
   ALWAYS_INLINE const char* GetMappedPointer() const { return m_staging_buffer.GetMapPointer(); }
   ALWAYS_INLINE char* GetMappedPointer() { return m_staging_buffer.GetMapPointer(); }
   ALWAYS_INLINE uint32_t GetMappedStride() const { return m_map_stride; }
@@ -54,13 +53,11 @@ public:
   // (length in bytes of each row). CopyFromTexture must be called first. The contents of any
   // texels outside of the rectangle used for CopyFromTexture is undefined.
   void ReadTexels(uint32_t src_x, uint32_t src_y, uint32_t width, uint32_t height, void* out_ptr, uint32_t out_stride);
-  void ReadTexel(uint32_t x, uint32_t y, void* out_ptr);
 
   // Copies the texels from in_ptr to the staging texture, which can be read by the GPU, with the
   // specified stride (length in bytes of each row). After updating the staging texture with all
   // changes, call CopyToTexture() to update the GPU copy.
   void WriteTexels(uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height, const void* in_ptr, uint32_t in_stride);
-  void WriteTexel(uint32_t x, uint32_t y, const void* in_ptr);
 
 private:
   void PrepareForAccess();

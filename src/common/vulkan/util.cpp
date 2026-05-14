@@ -28,42 +28,6 @@ bool IsDepthFormat(VkFormat format)
   }
 }
 
-bool IsCompressedFormat(VkFormat format)
-{
-  switch (format)
-  {
-    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
-    case VK_FORMAT_BC2_UNORM_BLOCK:
-    case VK_FORMAT_BC3_UNORM_BLOCK:
-    case VK_FORMAT_BC7_UNORM_BLOCK:
-      return true;
-
-    default:
-      return false;
-  }
-}
-
-VkFormat GetLinearFormat(VkFormat format)
-{
-  switch (format)
-  {
-    case VK_FORMAT_R8_SRGB:
-      return VK_FORMAT_R8_UNORM;
-    case VK_FORMAT_R8G8_SRGB:
-      return VK_FORMAT_R8G8_UNORM;
-    case VK_FORMAT_R8G8B8_SRGB:
-      return VK_FORMAT_R8G8B8_UNORM;
-    case VK_FORMAT_R8G8B8A8_SRGB:
-      return VK_FORMAT_R8G8B8A8_UNORM;
-    case VK_FORMAT_B8G8R8_SRGB:
-      return VK_FORMAT_B8G8R8_UNORM;
-    case VK_FORMAT_B8G8R8A8_SRGB:
-      return VK_FORMAT_B8G8R8A8_UNORM;
-    default:
-      return format;
-  }
-}
-
 uint32_t GetTexelSize(VkFormat format)
 {
   // Only contains pixel formats we use.
@@ -116,33 +80,6 @@ uint32_t GetBlockSize(VkFormat format)
   }
 }
 
-VkRect2D ClampRect2D(const VkRect2D& rect, uint32_t width, uint32_t height)
-{
-  VkRect2D out;
-  out.offset.x = std::clamp(rect.offset.x, 0, static_cast<int>(width - 1));
-  out.offset.y = std::clamp(rect.offset.y, 0, static_cast<int>(height - 1));
-  out.extent.width = std::min(rect.extent.width, width - static_cast<int>(rect.offset.x));
-  out.extent.height = std::min(rect.extent.height, height - static_cast<int>(rect.offset.y));
-  return out;
-}
-
-VkBlendFactor GetAlphaBlendFactor(VkBlendFactor factor)
-{
-  switch (factor)
-  {
-    case VK_BLEND_FACTOR_SRC_COLOR:
-      return VK_BLEND_FACTOR_SRC_ALPHA;
-    case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-      return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    case VK_BLEND_FACTOR_DST_COLOR:
-      return VK_BLEND_FACTOR_DST_ALPHA;
-    case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
-      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-    default:
-      return factor;
-  }
-}
-
 void SetViewport(VkCommandBuffer command_buffer, int x, int y, int width, int height, float min_depth /*= 0.0f*/,
                  float max_depth /*= 1.0f*/)
 {
@@ -181,15 +118,6 @@ void SafeDestroyFramebuffer(VkFramebuffer& fb)
   {
     vkDestroyFramebuffer(g_vulkan_context->GetDevice(), fb, nullptr);
     fb = VK_NULL_HANDLE;
-  }
-}
-
-void SafeDestroyShaderModule(VkShaderModule& sm)
-{
-  if (sm != VK_NULL_HANDLE)
-  {
-    vkDestroyShaderModule(g_vulkan_context->GetDevice(), sm, nullptr);
-    sm = VK_NULL_HANDLE;
   }
 }
 
@@ -244,15 +172,6 @@ void SafeDestroySampler(VkSampler& samp)
   {
     vkDestroySampler(g_vulkan_context->GetDevice(), samp, nullptr);
     samp = VK_NULL_HANDLE;
-  }
-}
-
-void SafeDestroySemaphore(VkSemaphore& sem)
-{
-  if (sem != VK_NULL_HANDLE)
-  {
-    vkDestroySemaphore(g_vulkan_context->GetDevice(), sem, nullptr);
-    sem = VK_NULL_HANDLE;
   }
 }
 

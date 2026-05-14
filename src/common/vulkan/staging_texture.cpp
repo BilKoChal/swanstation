@@ -212,14 +212,6 @@ void StagingTexture::ReadTexels(uint32_t src_x, uint32_t src_y, uint32_t width, 
   }
 }
 
-void StagingTexture::ReadTexel(uint32_t x, uint32_t y, void* out_ptr)
-{
-  PrepareForAccess();
-
-  const char* src_ptr = GetMappedPointer() + y * GetMappedStride() + x * m_texel_size;
-  std::memcpy(out_ptr, src_ptr, m_texel_size);
-}
-
 void StagingTexture::WriteTexels(uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height, const void* in_ptr, uint32_t in_stride)
 {
   PrepareForAccess();
@@ -244,14 +236,6 @@ void StagingTexture::WriteTexels(uint32_t dst_x, uint32_t dst_y, uint32_t width,
     current_ptr += m_map_stride;
     src_ptr += in_stride;
   }
-}
-
-void StagingTexture::WriteTexel(uint32_t x, uint32_t y, const void* in_ptr)
-{
-  PrepareForAccess();
-
-  char* dest_ptr = GetMappedPointer() + y * m_map_stride + x * m_texel_size;
-  std::memcpy(dest_ptr, in_ptr, m_texel_size);
 }
 
 void StagingTexture::PrepareForAccess()

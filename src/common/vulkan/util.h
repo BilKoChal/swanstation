@@ -15,27 +15,17 @@ namespace Vulkan {
 namespace Util {
 
 bool IsDepthFormat(VkFormat format);
-bool IsCompressedFormat(VkFormat format);
-VkFormat GetLinearFormat(VkFormat format);
 uint32_t GetTexelSize(VkFormat format);
 uint32_t GetBlockSize(VkFormat format);
 
-// Clamps a VkRect2D to the specified dimensions.
-VkRect2D ClampRect2D(const VkRect2D& rect, uint32_t width, uint32_t height);
-
-// Map {SRC,DST}_COLOR to {SRC,DST}_ALPHA
-VkBlendFactor GetAlphaBlendFactor(VkBlendFactor factor);
-
 // Safe destroy helpers
 void SafeDestroyFramebuffer(VkFramebuffer& fb);
-void SafeDestroyShaderModule(VkShaderModule& sm);
 void SafeDestroyPipeline(VkPipeline& p);
 void SafeDestroyPipelineLayout(VkPipelineLayout& pl);
 void SafeDestroyDescriptorSetLayout(VkDescriptorSetLayout& dsl);
 void SafeDestroyBufferView(VkBufferView& bv);
 void SafeDestroyImageView(VkImageView& iv);
 void SafeDestroySampler(VkSampler& samp);
-void SafeDestroySemaphore(VkSemaphore& sem);
 void SafeFreeGlobalDescriptorSet(VkDescriptorSet& ds);
 
 void SetViewport(VkCommandBuffer command_buffer, int x, int y, int width, int height, float min_depth = 0.0f,
