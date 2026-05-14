@@ -3,6 +3,7 @@
 #include "fifo_queue.h"
 #include "heap_array.h"
 #include "types.h"
+#include <array>
 #include <cstring>
 #include <deque>
 #include <string>
