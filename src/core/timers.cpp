@@ -3,6 +3,7 @@
 #include "gpu.h"
 #include "interrupt_controller.h"
 #include "system.h"
+#include <limits>
 
 Timers g_timers;
 

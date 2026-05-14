@@ -5,6 +5,7 @@
 #include "host_interface.h"
 #include "system.h"
 #include <array>
+#include <limits>
 
 PlayStationMouse::PlayStationMouse()
 {

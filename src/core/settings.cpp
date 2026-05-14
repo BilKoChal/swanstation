@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <limits>
 #include <numeric>
 
 Settings g_settings;

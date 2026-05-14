@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <type_traits>
 
 // Force inline helper
