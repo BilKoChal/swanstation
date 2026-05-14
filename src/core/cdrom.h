@@ -231,7 +231,7 @@ private:
   }
   ALWAYS_INLINE static constexpr s32 ApplyVolume(s16 sample, u8 volume)
   {
-    return s32(sample) * static_cast<s32>(static_cast<u32>(volume)) >> 7;
+    return s32(sample) * static_cast<s32>(volume) >> 7;
   }
 
   ALWAYS_INLINE static constexpr s16 SaturateVolume(s32 volume)

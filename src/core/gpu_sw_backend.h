@@ -58,9 +58,9 @@ protected:
     void SetRGB24Dithered(u32 x, u32 y, u8 r8, u8 g8, u8 b8, bool c_ = false)
     {
       const s32 offset = DITHER_MATRIX[y & 3][x & 3];
-      r8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(static_cast<u32>(r8)) + offset, 0, 255));
-      g8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(static_cast<u32>(g8)) + offset, 0, 255));
-      b8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(static_cast<u32>(b8)) + offset, 0, 255));
+      r8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(r8) + offset, 0, 255));
+      g8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(g8) + offset, 0, 255));
+      b8 = static_cast<u8>(std::clamp<s32>(static_cast<s32>(b8) + offset, 0, 255));
       SetRGB24(r8, g8, b8, c_);
     }
 

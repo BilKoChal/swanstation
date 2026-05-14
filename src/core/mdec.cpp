@@ -580,7 +580,7 @@ bool MDEC::DecodeRLE_Old(s16* blk, const u8* qt)
     m_current_coefficient = 0;
     m_current_q_scale = (n >> 10) & 0x3F;
     s32 val =
-      (static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) * static_cast<s32>(static_cast<u32>(qt[m_current_coefficient]));
+      (static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) * static_cast<s32>(qt[m_current_coefficient]);
 
     if (m_current_q_scale == 0)
       val = (static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) * 2;
@@ -601,7 +601,7 @@ bool MDEC::DecodeRLE_Old(s16* blk, const u8* qt)
     if (m_current_coefficient < 64)
     {
       s32 val = ((static_cast<s32>(static_cast<u32>(n & 0x3FF) << 22) >> 22) *
-                   static_cast<s32>(static_cast<u32>(qt[m_current_coefficient])) * static_cast<s32>(m_current_q_scale) +
+                   static_cast<s32>(qt[m_current_coefficient]) * static_cast<s32>(m_current_q_scale) +
                  4) /
                 8;
 

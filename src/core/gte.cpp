@@ -449,7 +449,7 @@ ALWAYS_INLINE static u32 UNRDivide(u32 lhs, u32 rhs)
 
   const u32 divisor = rhs | 0x8000;
   const s32 x       = static_cast<s32>(0x101 + static_cast<u32>(unr_table[((divisor & 0x7FFF) + 0x40) >> 7]));
-  const s32 d       = ((static_cast<s32>(static_cast<u32>(divisor)) * -x) + 0x80) >> 8;
+  const s32 d       = ((static_cast<s32>(divisor) * -x) + 0x80) >> 8;
   const u32 recip   = static_cast<u32>(((x * (0x20000 + d)) + 0x80) >> 8);
 
   const u32 result  = static_cast<u32>((static_cast<u64>(lhs) * static_cast<u64>(recip) + u64(0x8000)) >> 16);
@@ -660,7 +660,7 @@ static void RTPS(const s16 V[3], u8 shift, bool lm, bool last)
 
   // MAC0=(((H*20000h/SZ3)+1)/2)*IR1+OFX, SX2=MAC0/10000h ;ScrX FIFO -400h..+3FFh
   // MAC0=(((H*20000h/SZ3)+1)/2)*IR2+OFY, SY2=MAC0/10000h ;ScrY FIFO -400h..+3FFh
-  const s64 result = static_cast<s64>(static_cast<u64>(UNRDivide(REGS.H, REGS.SZ3)));
+  const s64 result = static_cast<s64>(UNRDivide(REGS.H, REGS.SZ3));
 
   s64 Sx;
   switch (s_aspect_ratio)
