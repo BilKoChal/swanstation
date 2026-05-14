@@ -135,10 +135,6 @@ public:
   /// Loads the BIOS image for the specified region.
   std::optional<std::vector<uint8_t>> GetBIOSImage(ConsoleRegion region);
 
-  /// Searches for a BIOS image for the specified region in the specified directory. If no match is found, the first
-  /// BIOS image within 512KB and 4MB will be used.
-  std::optional<std::vector<uint8_t>> FindBIOSImageInDirectory(ConsoleRegion region, const char* directory);
-
   void OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
                             const std::string& game_title);
 
@@ -171,16 +167,17 @@ public:
   /// Checks for settings changes, std::move() the old settings away for comparing beforehand.
   void CheckForSettingsChanges(const Settings& old_settings);
 
-  /// Switches the GPU renderer by saving state, recreating the display window, and restoring state (if needed).
-  void RecreateSystem();
-
   /// Enables "relative" mouse mode, locking the cursor position and returning relative coordinates.
   void SetMouseMode(bool relative, bool hide_cursor);
+
+private:
+  /// Switches the GPU renderer by saving state, recreating the display window, and restoring state (if needed).
+  void RecreateSystem();
 
   /// Updates software cursor state, based on controllers.
   void UpdateSoftwareCursor();
 
-private:
+  std::optional<std::vector<uint8_t>> FindBIOSImageInDirectory(ConsoleRegion region, const char* directory);
   bool HasCoreVariablesChanged();
   void InitInterfaces();
   void InitLogging();

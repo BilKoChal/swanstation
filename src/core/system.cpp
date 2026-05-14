@@ -74,7 +74,11 @@ static bool LoadEXE(const char* filename);
 static std::unique_ptr<CDImage> OpenCDImage(const char* path, Common::Error* error, bool force_preload,
                                             bool check_for_patches);
 static bool ReadExecutableFromImage(ISOReader& iso, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data);
+static bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data);
 static bool ShouldCheckForImagePatches();
+static std::string GetGameHashCodeForImage(CDImage* cdi);
+static std::string GetExecutableNameForImage(CDImage* cdi);
+static void UpdatePerGameMemoryCards();
 
 static bool DoLoadState(ByteStream* stream, bool force_software_renderer, bool update_display, bool is_memory_state);
 static bool DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display, bool is_memory_state);
@@ -236,7 +240,7 @@ std::string GetGameCodeForImage(CDImage* cdi, bool fallback_to_hash)
   return GetGameHashCodeForImage(cdi);
 }
 
-std::string GetGameHashCodeForImage(CDImage* cdi)
+static std::string GetGameHashCodeForImage(CDImage* cdi)
 {
   ISOReader iso;
   if (!iso.Open(cdi, 1))
@@ -347,7 +351,7 @@ static std::string GetExecutableNameForImage(ISOReader& iso, bool strip_subdirec
   return code;
 }
 
-std::string GetExecutableNameForImage(CDImage* cdi)
+static std::string GetExecutableNameForImage(CDImage* cdi)
 {
   ISOReader iso;
   if (!iso.Open(cdi, 1))
@@ -356,7 +360,7 @@ std::string GetExecutableNameForImage(CDImage* cdi)
   return GetExecutableNameForImage(iso, true);
 }
 
-bool ReadExecutableFromImage(ISOReader& iso, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data)
+static bool ReadExecutableFromImage(ISOReader& iso, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data)
 {
   bool result = false;
 
@@ -386,7 +390,7 @@ bool ReadExecutableFromImage(ISOReader& iso, std::string* out_executable_name, s
   return true;
 }
 
-bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data)
+static bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data)
 {
   ISOReader iso;
   if (!iso.Open(cdi, 1))
@@ -1499,7 +1503,7 @@ void UpdateMemoryCardTypes()
   }
 }
 
-void UpdatePerGameMemoryCards()
+static void UpdatePerGameMemoryCards()
 {
   for (uint32_t i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
@@ -1679,22 +1683,6 @@ uint32_t GetMediaSubImageIndex()
 {
   const CDImage* cdi = g_cdrom.GetMedia();
   return cdi ? cdi->GetCurrentSubImage() : 0;
-}
-
-uint32_t GetMediaSubImageIndexForTitle(const std::string_view& title)
-{
-  const CDImage* cdi = g_cdrom.GetMedia();
-  if (!cdi)
-    return 0;
-
-  const uint32_t count = cdi->GetSubImageCount();
-  for (uint32_t i = 0; i < count; i++)
-  {
-    if (title == cdi->GetSubImageMetadata(i, "title"))
-      return i;
-  }
-
-  return std::numeric_limits<uint32_t>::max();
 }
 
 std::string GetMediaSubImageTitle(uint32_t index)

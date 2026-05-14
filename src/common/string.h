@@ -2,7 +2,6 @@
 #include "types.h"
 #include <cstdarg>
 #include <cstring>
-#include <string>
 #include <string_view>
 
 //
@@ -44,9 +43,6 @@ public:
   // For strings that do not allocate any space on the heap, see StaticString.
   String(const char* Text);
 
-  // Creates a string contained the specified text (with length).
-  String(const char* Text, uint32_t Count);
-
   // Creates a string using the same buffer as another string (copy-on-write).
   String(const String& copyString);
 
@@ -56,17 +52,12 @@ public:
   // Construct a string from a data object, does not increment the reference count on the string data, use carefully.
   explicit String(StringData* pStringData) : m_pStringData(pStringData) {}
 
-  // Creates string from string_view.
-  String(const std::string_view& sv);
-
   // Destructor. Child classes may not have any destructors, as this is not virtual.
   ~String();
 
   // manual assignment
   void Assign(const String& copyString);
   void Assign(const char* copyText);
-  void Assign(const std::string& copyString);
-  void Assign(const std::string_view& copyString);
   void Assign(String&& moveString);
 
   // Ensures that the string has its own unique copy of the data.
@@ -82,22 +73,13 @@ public:
   void AppendString(const String& appendStr);
   void AppendString(const char* appendText);
   void AppendString(const char* appendString, uint32_t Count);
-  void AppendString(const std::string& appendString);
-  void AppendString(const std::string_view& appendString);
 
   // set to formatted string
   void Format(const char* FormatString, ...) printflike(2, 3);
   void FormatVA(const char* FormatString, std::va_list ArgPtr);
 
   // compare one string to another
-  bool Compare(const String& otherString) const;
   bool Compare(const char* otherText) const;
-
-  // starts with / ends with
-  bool StartsWith(const char* compareString, bool caseSensitive = true) const;
-  bool StartsWith(const String& compareString, bool caseSensitive = true) const;
-  bool EndsWith(const char* compareString, bool caseSensitive = true) const;
-  bool EndsWith(const String& compareString, bool caseSensitive = true) const;
 
   // Cuts characters off the string to reduce it to len bytes long.
   void Resize(uint32_t newSize, char fillerCharacter = ' ');
@@ -150,16 +132,6 @@ public:
     Assign(Text);
     return *this;
   }
-  String& operator=(const std::string& Text)
-  {
-    Assign(Text);
-    return *this;
-  }
-  String& operator=(const std::string_view& Text)
-  {
-    Assign(Text);
-    return *this;
-  }
 
   // Move operator.
   String& operator=(String&& moveString)
@@ -192,30 +164,11 @@ public:
     Assign(Text);
   }
 
-  StackString(const char* Text, uint32_t Count) : String(&m_sStringData)
-  {
-    InitStackStringData();
-    AppendString(Text, Count);
-  }
-
-  StackString(const String& copyString) : String(&m_sStringData)
-  {
-    // force a copy by passing it a string pointer, instead of a string object
-    InitStackStringData();
-    Assign(copyString.GetCharArray());
-  }
-
   StackString(const StackString& copyString) : String(&m_sStringData)
   {
     // force a copy by passing it a string pointer, instead of a string object
     InitStackStringData();
     Assign(copyString.GetCharArray());
-  }
-
-  StackString(const std::string_view& sv) : String(&m_sStringData)
-  {
-    InitStackStringData();
-    AppendString(sv.data(), static_cast<uint32_t>(sv.size()));
   }
 
   // Override the fromstring method
@@ -246,16 +199,6 @@ public:
 
   // Allocates own buffer and copies text.
   StackString& operator=(const char* Text)
-  {
-    Assign(Text);
-    return *this;
-  }
-  StackString& operator=(const std::string& Text)
-  {
-    Assign(Text);
-    return *this;
-  }
-  StackString& operator=(const std::string_view& Text)
   {
     Assign(Text);
     return *this;

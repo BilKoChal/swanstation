@@ -735,73 +735,9 @@ std::unique_ptr<ByteStream> ByteStream_OpenFileStream(const char* fileName, uint
   {
     if (openMode & BYTESTREAM_OPEN_STREAMED)
       modeString[modeStringLength++] = 'S';
-    else if (openMode & BYTESTREAM_OPEN_SEEKABLE)
-      modeString[modeStringLength++] = 'R';
   }
 
   modeString[modeStringLength] = 0;
-
-  if (openMode & BYTESTREAM_OPEN_CREATE_PATH)
-  {
-    uint32_t i;
-    uint32_t fileNameLength = static_cast<uint32_t>(std::strlen(fileName));
-    char* tempStr = (char*)alloca(fileNameLength + 1);
-
-    // check if it starts with a drive letter. if so, skip ahead
-    if (fileNameLength >= 2 && fileName[1] == ':')
-    {
-      if (fileNameLength <= 3)
-      {
-        // create a file called driveletter: or driveletter:\ ? you must be crazy
-        i = fileNameLength;
-      }
-      else
-      {
-        std::memcpy(tempStr, fileName, 3);
-        i = 3;
-      }
-    }
-    else
-    {
-      // start at beginning
-      i = 0;
-    }
-
-    // step through each path component, create folders as necessary
-    for (; i < fileNameLength; i++)
-    {
-      if (i > 0 && (fileName[i] == '\\' || fileName[i] == '/'))
-      {
-        // terminate the string
-        tempStr[i] = '\0';
-
-        // check if it exists
-	if (!path_is_valid(tempStr))
-        {
-          if (errno == ENOENT)
-          {
-            // try creating it
-	    if (!path_mkdir(tempStr)) // no point trying any further down the chain
-              break;
-          }
-          else // if (errno == ENOTDIR)
-          {
-            // well.. someone's trying to open a fucking weird path that is comprised of both directories and files...
-            // I aint sticking around here to find out what disaster awaits... let fopen deal with it
-            break;
-          }
-        }
-
-// append platform path seperator
-        tempStr[i] = '\\';
-      }
-      else
-      {
-        // append character to temp string
-        tempStr[i] = fileName[i];
-      }
-    }
-  }
 
   if (openMode & BYTESTREAM_OPEN_ATOMIC_UPDATE)
   {
@@ -933,48 +869,6 @@ std::unique_ptr<ByteStream> ByteStream_OpenFileStream(const char* fileName, uint
   }
 
   modeString[modeStringLength] = 0;
-
-  if (openMode & BYTESTREAM_OPEN_CREATE_PATH)
-  {
-    uint32_t i;
-    const uint32_t fileNameLength = static_cast<uint32_t>(std::strlen(fileName));
-    char* tempStr = (char*)alloca(fileNameLength + 1);
-
-    // step through each path component, create folders as necessary
-    for (i = 0; i < fileNameLength; i++)
-    {
-      if (i > 0 && (fileName[i] == '\\' || fileName[i] == '/') && fileName[i] != ':')
-      {
-        // terminate the string
-        tempStr[i] = '\0';
-
-        // check if it exists
-	if (!path_is_valid(tempStr))
-        {
-          if (errno == ENOENT)
-          {
-            // try creating it
-	    if (!path_mkdir(tempStr)) // no point trying any further down the chain
-              break;
-          }
-          else // if (errno == ENOTDIR)
-          {
-            // well.. someone's trying to open a fucking weird path that is comprised of both directories and
-            // files... I aint sticking around here to find out what disaster awaits... let fopen deal with it
-            break;
-          }
-        }
-
-// append platform path seperator
-        tempStr[i] = '/';
-      }
-      else
-      {
-        // append character to temp string
-        tempStr[i] = fileName[i];
-      }
-    }
-  }
 
   if (openMode & BYTESTREAM_OPEN_ATOMIC_UPDATE)
   {

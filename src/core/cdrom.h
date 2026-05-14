@@ -29,8 +29,6 @@ public:
   bool HasMedia() const { return m_reader.HasMedia(); }
   const std::string& GetMediaFileName() const { return m_reader.GetMediaFileName(); }
   const CDImage* GetMedia() const { return m_reader.GetMedia(); }
-  bool IsMediaPS1Disc() const;
-  bool DoesMediaRegionMatchConsole() const;
 
   void InsertMedia(std::unique_ptr<CDImage> media);
   std::unique_ptr<CDImage> RemoveMedia(bool for_disc_swap);
@@ -58,6 +56,9 @@ public:
   }
 
 private:
+  bool IsMediaPS1Disc() const;
+  bool DoesMediaRegionMatchConsole() const;
+
   static constexpr uint32_t RAW_SECTOR_OUTPUT_SIZE = CDImage::RAW_SECTOR_SIZE - CDImage::SECTOR_SYNC_SIZE,
                        DATA_SECTOR_OUTPUT_SIZE = CDImage::DATA_SECTOR_SIZE,
                        SECTOR_SYNC_SIZE = CDImage::SECTOR_SYNC_SIZE, SECTOR_HEADER_SIZE = CDImage::SECTOR_HEADER_SIZE,

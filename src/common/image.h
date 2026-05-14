@@ -50,19 +50,10 @@ public:
   ALWAYS_INLINE uint32_t GetByteStride() const { return (sizeof(PixelType) * m_width); }
   ALWAYS_INLINE const PixelType* GetPixels() const { return m_pixels.data(); }
   ALWAYS_INLINE PixelType* GetPixels() { return m_pixels.data(); }
-  ALWAYS_INLINE void SetPixel(uint32_t x, uint32_t y, PixelType pixel) { m_pixels[y * m_width + x] = pixel; }
-  ALWAYS_INLINE PixelType GetPixel(uint32_t x, uint32_t y) const { return m_pixels[y * m_width + x]; }
 
   void Clear(PixelType fill_value = static_cast<PixelType>(0))
   {
     std::fill(m_pixels.begin(), m_pixels.end(), fill_value);
-  }
-
-  void Invalidate()
-  {
-    m_width = 0;
-    m_height = 0;
-    m_pixels.clear();
   }
 
   void SetSize(uint32_t new_width, uint32_t new_height, PixelType fill_value = static_cast<PixelType>(0))

@@ -51,10 +51,6 @@ extern TickCount g_ticks_per_second;
 /// Returns the preferred console type for a disc.
 ConsoleRegion GetConsoleRegionForDiscRegion(DiscRegion region);
 
-std::string GetExecutableNameForImage(CDImage* cdi);
-bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<uint8_t>* out_executable_data);
-
-std::string GetGameHashCodeForImage(CDImage* cdi);
 std::string GetGameCodeForImage(CDImage* cdi, bool fallback_to_hash);
 DiscRegion GetRegionForCode(std::string_view code);
 DiscRegion GetRegionFromSystemArea(CDImage* cdi);
@@ -112,7 +108,6 @@ void UpdateControllers();
 void UpdateControllerSettings();
 void ResetControllers();
 void UpdateMemoryCardTypes();
-void UpdatePerGameMemoryCards();
 void UpdateMultitaps(void);
 
 bool HasMedia();
@@ -128,9 +123,6 @@ uint32_t GetMediaSubImageCount();
 
 /// Returns the current image from the media/disc playlist.
 uint32_t GetMediaSubImageIndex();
-
-/// Returns the index of the specified path in the playlist, or UINT32_MAX if it does not exist.
-uint32_t GetMediaSubImageIndexForTitle(const std::string_view& title);
 
 /// Returns the path to the specified playlist index.
 std::string GetMediaSubImageTitle(uint32_t index);

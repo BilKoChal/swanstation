@@ -41,7 +41,6 @@ struct Track
 
   ALWAYS_INLINE bool HasFlag(TrackFlag flag) const { return (flags & static_cast<uint32_t>(flag)) != 0; }
   ALWAYS_INLINE void SetFlag(TrackFlag flag) { flags |= static_cast<uint32_t>(flag); }
-  ALWAYS_INLINE void RemoveFlag(TrackFlag flag) { flags &= ~static_cast<uint32_t>(flag); }
 };
 
 class File

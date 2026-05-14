@@ -140,19 +140,9 @@ String::String(const char* Text) : m_pStringData(const_cast<String::StringData*>
   Assign(Text);
 }
 
-String::String(const char* Text, uint32_t Count) : m_pStringData(const_cast<String::StringData*>(&s_EmptyStringData))
-{
-  AppendString(Text, Count);
-}
-
 String::String(String&& moveString)
 {
   Assign(moveString);
-}
-
-String::String(const std::string_view& sv)
-{
-  AppendString(sv.data(), static_cast<uint32_t>(sv.size()));
 }
 
 String::~String()
@@ -227,18 +217,6 @@ void String::AppendString(const char* appendString, uint32_t Count)
 {
   if (Count > 0)
     InternalAppend(appendString, Count);
-}
-
-void String::AppendString(const std::string& appendString)
-{
-  if (!appendString.empty())
-    InternalAppend(appendString.c_str(), static_cast<uint32_t>(appendString.size()));
-}
-
-void String::AppendString(const std::string_view& appendString)
-{
-  if (!appendString.empty())
-    InternalAppend(appendString.data(), static_cast<uint32_t>(appendString.size()));
 }
 
 void String::Format(const char* FormatString, ...)
@@ -320,72 +298,9 @@ void String::Assign(String&& moveString)
   moveString.m_pStringData = const_cast<String::StringData*>(&s_EmptyStringData);
 }
 
-void String::Assign(const std::string& copyString)
-{
-  Clear();
-  AppendString(copyString.data(), static_cast<uint32_t>(copyString.size()));
-}
-
-void String::Assign(const std::string_view& copyString)
-{
-  Clear();
-  AppendString(copyString.data(), static_cast<uint32_t>(copyString.size()));
-}
-
-bool String::Compare(const String& otherString) const
-{
-  return (std::strcmp(m_pStringData->pBuffer, otherString.m_pStringData->pBuffer) == 0);
-}
-
 bool String::Compare(const char* otherText) const
 {
   return (std::strcmp(m_pStringData->pBuffer, otherText) == 0);
-}
-
-bool String::StartsWith(const char* compareString, bool caseSensitive /*= true*/) const
-{
-  uint32_t compareStringLength = static_cast<uint32_t>(std::strlen(compareString));
-  if (compareStringLength > m_pStringData->StringLength)
-    return false;
-
-  return (caseSensitive) ? (std::strncmp(compareString, m_pStringData->pBuffer, compareStringLength) == 0) :
-                           (CASE_N_COMPARE(compareString, m_pStringData->pBuffer, compareStringLength) == 0);
-}
-
-bool String::StartsWith(const String& compareString, bool caseSensitive /*= true*/) const
-{
-  uint32_t compareStringLength = compareString.GetLength();
-  if (compareStringLength > m_pStringData->StringLength)
-    return false;
-
-  return (caseSensitive) ?
-           (std::strncmp(compareString.m_pStringData->pBuffer, m_pStringData->pBuffer, compareStringLength) == 0) :
-           (CASE_N_COMPARE(compareString.m_pStringData->pBuffer, m_pStringData->pBuffer, compareStringLength) == 0);
-}
-
-bool String::EndsWith(const char* compareString, bool caseSensitive /*= true*/) const
-{
-  uint32_t compareStringLength = static_cast<uint32_t>(std::strlen(compareString));
-  if (compareStringLength > m_pStringData->StringLength)
-    return false;
-
-  uint32_t startOffset = m_pStringData->StringLength - compareStringLength;
-  return (caseSensitive) ?
-           (std::strncmp(compareString, m_pStringData->pBuffer + startOffset, compareStringLength) == 0) :
-           (CASE_N_COMPARE(compareString, m_pStringData->pBuffer + startOffset, compareStringLength) == 0);
-}
-
-bool String::EndsWith(const String& compareString, bool caseSensitive /*= true*/) const
-{
-  uint32_t compareStringLength = compareString.GetLength();
-  if (compareStringLength > m_pStringData->StringLength)
-    return false;
-
-  uint32_t startOffset = m_pStringData->StringLength - compareStringLength;
-  return (caseSensitive) ? (std::strncmp(compareString.m_pStringData->pBuffer, m_pStringData->pBuffer + startOffset,
-                                         compareStringLength) == 0) :
-                           (CASE_N_COMPARE(compareString.m_pStringData->pBuffer, m_pStringData->pBuffer + startOffset,
-                                           compareStringLength) == 0);
 }
 
 void String::Clear()

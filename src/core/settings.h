@@ -9,38 +9,6 @@
 
 class LibretroSettingsInterface;
 
-struct SettingInfo
-{
-  enum class Type
-  {
-    Boolean,
-    Integer,
-    Float,
-    String,
-    Path,
-  };
-
-  Type type;
-  const char* key;
-  const char* visible_name;
-  const char* description;
-  const char* default_value = nullptr;
-  const char* min_value = nullptr;
-  const char* max_value = nullptr;
-  const char* step_value = nullptr;
-
-  const char* StringDefaultValue() const;
-  bool BooleanDefaultValue() const;
-  int32_t IntegerDefaultValue() const;
-  int32_t IntegerMinValue() const;
-  int32_t IntegerMaxValue() const;
-  int32_t IntegerStepValue() const;
-  float FloatDefaultValue() const;
-  float FloatMinValue() const;
-  float FloatMaxValue() const;
-  float FloatStepValue() const;
-};
-
 struct Settings
 {
   Settings();
@@ -180,10 +148,7 @@ struct Settings
   bool HasAnyPerGameMemoryCards() const;
 
   static void CPUOverclockPercentToFraction(uint32_t percent, uint32_t* numerator, uint32_t* denominator);
-  static uint32_t CPUOverclockFractionToPercent(uint32_t numerator, uint32_t denominator);
 
-  void SetCPUOverclockPercent(uint32_t percent);
-  uint32_t GetCPUOverclockPercent() const;
   void UpdateOverclockActive();
 
   static constexpr uint32_t DEFAULT_DMA_MAX_SLICE_TICKS = 1000, DEFAULT_DMA_HALT_TICKS = 100, DEFAULT_GPU_FIFO_SIZE = 16,
@@ -199,42 +164,32 @@ struct Settings
   static const char* GetConsoleRegionName(ConsoleRegion region);
   static const char* GetConsoleRegionDisplayName(ConsoleRegion region);
 
-  static std::optional<DiscRegion> ParseDiscRegionName(const char* str);
   static const char* GetDiscRegionName(DiscRegion region);
   static const char* GetDiscRegionDisplayName(DiscRegion region);
 
   static std::optional<CPUExecutionMode> ParseCPUExecutionMode(const char* str);
   static const char* GetCPUExecutionModeName(CPUExecutionMode mode);
-  static const char* GetCPUExecutionModeDisplayName(CPUExecutionMode mode);
 
   static std::optional<CPUFastmemMode> ParseCPUFastmemMode(const char* str);
   static const char* GetCPUFastmemModeName(CPUFastmemMode mode);
-  static const char* GetCPUFastmemModeDisplayName(CPUFastmemMode mode);
 
   static std::optional<GPURenderer> ParseRendererName(const char* str);
   static const char* GetRendererName(GPURenderer renderer);
-  static const char* GetRendererDisplayName(GPURenderer renderer);
 
   static std::optional<GPUTextureFilter> ParseTextureFilterName(const char* str);
   static const char* GetTextureFilterName(GPUTextureFilter filter);
-  static const char* GetTextureFilterDisplayName(GPUTextureFilter filter);
 
   static std::optional<GPUDownsampleMode> ParseDownsampleModeName(const char* str);
   static const char* GetDownsampleModeName(GPUDownsampleMode mode);
-  static const char* GetDownsampleModeDisplayName(GPUDownsampleMode mode);
 
   static std::optional<GPUShaderPrecompileMode> ParseShaderPrecompileMode(const char* str);
   static const char* GetShaderPrecompileModeName(GPUShaderPrecompileMode mode);
 
   static std::optional<DisplayCropMode> ParseDisplayCropMode(const char* str);
   static const char* GetDisplayCropModeName(DisplayCropMode crop_mode);
-  static const char* GetDisplayCropModeDisplayName(DisplayCropMode crop_mode);
 
   static std::optional<DisplayAspectRatio> ParseDisplayAspectRatio(const char* str);
   static const char* GetDisplayAspectRatioName(DisplayAspectRatio ar);
-
-  static std::optional<ControllerType> ParseControllerTypeName(const char* str);
-  static const char* GetControllerTypeName(ControllerType type);
 
   static std::optional<MemoryCardType> ParseMemoryCardTypeName(const char* str);
   static const char* GetMemoryCardTypeName(MemoryCardType type);

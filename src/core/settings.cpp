@@ -12,62 +12,6 @@
 
 Settings g_settings;
 
-const char* SettingInfo::StringDefaultValue() const
-{
-  return default_value ? default_value : "";
-}
-
-bool SettingInfo::BooleanDefaultValue() const
-{
-  return default_value ? StringUtil::FromChars<bool>(default_value).value_or(false) : false;
-}
-
-int32_t SettingInfo::IntegerDefaultValue() const
-{
-  return default_value ? StringUtil::FromChars<int32_t>(default_value).value_or(0) : 0;
-}
-
-int32_t SettingInfo::IntegerMinValue() const
-{
-  static constexpr int32_t fallback_value = std::numeric_limits<int32_t>::min();
-  return min_value ? StringUtil::FromChars<int32_t>(min_value).value_or(fallback_value) : fallback_value;
-}
-
-int32_t SettingInfo::IntegerMaxValue() const
-{
-  static constexpr int32_t fallback_value = std::numeric_limits<int32_t>::max();
-  return max_value ? StringUtil::FromChars<int32_t>(max_value).value_or(fallback_value) : fallback_value;
-}
-
-int32_t SettingInfo::IntegerStepValue() const
-{
-  static constexpr int32_t fallback_value = 1;
-  return step_value ? StringUtil::FromChars<int32_t>(step_value).value_or(fallback_value) : fallback_value;
-}
-
-float SettingInfo::FloatDefaultValue() const
-{
-  return default_value ? StringUtil::FromChars<float>(default_value).value_or(0.0f) : 0.0f;
-}
-
-float SettingInfo::FloatMinValue() const
-{
-  static constexpr float fallback_value = std::numeric_limits<float>::min();
-  return min_value ? StringUtil::FromChars<float>(min_value).value_or(fallback_value) : fallback_value;
-}
-
-float SettingInfo::FloatMaxValue() const
-{
-  static constexpr float fallback_value = std::numeric_limits<float>::max();
-  return max_value ? StringUtil::FromChars<float>(max_value).value_or(fallback_value) : fallback_value;
-}
-
-float SettingInfo::FloatStepValue() const
-{
-  static constexpr float fallback_value = 0.1f;
-  return step_value ? StringUtil::FromChars<float>(step_value).value_or(fallback_value) : fallback_value;
-}
-
 Settings::Settings() = default;
 
 bool Settings::HasAnyPerGameMemoryCards() const
@@ -110,21 +54,6 @@ void Settings::CPUOverclockPercentToFraction(uint32_t percent, uint32_t* numerat
   const uint32_t percent_gcd = std::gcd(percent, 100);
   *numerator = percent / percent_gcd;
   *denominator = 100u / percent_gcd;
-}
-
-uint32_t Settings::CPUOverclockFractionToPercent(uint32_t numerator, uint32_t denominator)
-{
-  return (numerator * 100u) / denominator;
-}
-
-void Settings::SetCPUOverclockPercent(uint32_t percent)
-{
-  CPUOverclockPercentToFraction(percent, &cpu_overclock_numerator, &cpu_overclock_denominator);
-}
-
-uint32_t Settings::GetCPUOverclockPercent() const
-{
-  return CPUOverclockFractionToPercent(cpu_overclock_numerator, cpu_overclock_denominator);
 }
 
 void Settings::UpdateOverclockActive()
@@ -306,20 +235,6 @@ static std::array<const char*, 4> s_disc_region_display_names = {
   {TRANSLATABLE("DiscRegion", "NTSC-J (Japan)"), TRANSLATABLE("DiscRegion", "NTSC-U/C (US, Canada)"),
    TRANSLATABLE("DiscRegion", "PAL (Europe, Australia)"), TRANSLATABLE("DiscRegion", "Other")}};
 
-std::optional<DiscRegion> Settings::ParseDiscRegionName(const char* str)
-{
-  int index = 0;
-  for (const char* name : s_disc_region_names)
-  {
-    if (StringUtil::Strcasecmp(name, str) == 0)
-      return static_cast<DiscRegion>(index);
-
-    index++;
-  }
-
-  return std::nullopt;
-}
-
 const char* Settings::GetDiscRegionName(DiscRegion region)
 {
   return s_disc_region_names[static_cast<int>(region)];
@@ -331,10 +246,6 @@ const char* Settings::GetDiscRegionDisplayName(DiscRegion region)
 }
 
 static std::array<const char*, 3> s_cpu_execution_mode_names = {{"Interpreter", "CachedInterpreter", "Recompiler"}};
-static std::array<const char*, 3> s_cpu_execution_mode_display_names = {
-  {TRANSLATABLE("CPUExecutionMode", "Interpreter (Slowest)"),
-   TRANSLATABLE("CPUExecutionMode", "Cached Interpreter (Faster)"),
-   TRANSLATABLE("CPUExecutionMode", "Recompiler (Fastest)")}};
 
 std::optional<CPUExecutionMode> Settings::ParseCPUExecutionMode(const char* str)
 {
@@ -355,17 +266,8 @@ const char* Settings::GetCPUExecutionModeName(CPUExecutionMode mode)
   return s_cpu_execution_mode_names[static_cast<uint8_t>(mode)];
 }
 
-const char* Settings::GetCPUExecutionModeDisplayName(CPUExecutionMode mode)
-{
-  return s_cpu_execution_mode_display_names[static_cast<uint8_t>(mode)];
-}
-
 static std::array<const char*, static_cast<uint32_t>(CPUFastmemMode::Count)> s_cpu_fastmem_mode_names = {
   {"Disabled", "MMap", "LUT"}};
-static std::array<const char*, static_cast<uint32_t>(CPUFastmemMode::Count)> s_cpu_fastmem_mode_display_names = {
-  {TRANSLATABLE("CPUFastmemMode", "Disabled (Slowest)"),
-   TRANSLATABLE("CPUFastmemMode", "MMap (Hardware, Fastest, 64-Bit Only)"),
-   TRANSLATABLE("CPUFastmemMode", "LUT (Faster)")}};
 
 std::optional<CPUFastmemMode> Settings::ParseCPUFastmemMode(const char* str)
 {
@@ -386,24 +288,12 @@ const char* Settings::GetCPUFastmemModeName(CPUFastmemMode mode)
   return s_cpu_fastmem_mode_names[static_cast<uint8_t>(mode)];
 }
 
-const char* Settings::GetCPUFastmemModeDisplayName(CPUFastmemMode mode)
-{
-  return s_cpu_fastmem_mode_display_names[static_cast<uint8_t>(mode)];
-}
-
 static constexpr auto s_gpu_renderer_names = make_array(
 #ifdef _WIN32
   "D3D11",
   "D3D12",
 #endif
   "Vulkan", "OpenGL", "Software");
-static constexpr auto s_gpu_renderer_display_names = make_array(
-#ifdef _WIN32
-  TRANSLATABLE("GPURenderer", "Hardware (D3D11)"),
-  TRANSLATABLE("GPURenderer", "Hardware (D3D12)"),
-#endif
-  TRANSLATABLE("GPURenderer", "Hardware (Vulkan)"), TRANSLATABLE("GPURenderer", "Hardware (OpenGL)"),
-  TRANSLATABLE("GPURenderer", "Software"));
 
 std::optional<GPURenderer> Settings::ParseRendererName(const char* str)
 {
@@ -424,18 +314,8 @@ const char* Settings::GetRendererName(GPURenderer renderer)
   return s_gpu_renderer_names[static_cast<int>(renderer)];
 }
 
-const char* Settings::GetRendererDisplayName(GPURenderer renderer)
-{
-  return s_gpu_renderer_display_names[static_cast<int>(renderer)];
-}
-
 static constexpr auto s_texture_filter_names =
   make_array("Nearest", "Bilinear", "BilinearBinAlpha", "JINC2", "JINC2BinAlpha", "xBR", "xBRBinAlpha");
-static constexpr auto s_texture_filter_display_names =
-  make_array(TRANSLATABLE("GPUTextureFilter", "Nearest-Neighbor"), TRANSLATABLE("GPUTextureFilter", "Bilinear"),
-             TRANSLATABLE("GPUTextureFilter", "Bilinear (No Edge Blending)"), TRANSLATABLE("GPUTextureFilter", "JINC2"),
-             TRANSLATABLE("GPUTextureFilter", "JINC2 (No Edge Blending)"), TRANSLATABLE("GPUTextureFilter", "xBR"),
-             TRANSLATABLE("GPUTextureFilter", "xBR (No Edge Blending)"));
 
 std::optional<GPUTextureFilter> Settings::ParseTextureFilterName(const char* str)
 {
@@ -454,11 +334,6 @@ std::optional<GPUTextureFilter> Settings::ParseTextureFilterName(const char* str
 const char* Settings::GetTextureFilterName(GPUTextureFilter filter)
 {
   return s_texture_filter_names[static_cast<int>(filter)];
-}
-
-const char* Settings::GetTextureFilterDisplayName(GPUTextureFilter filter)
-{
-  return s_texture_filter_display_names[static_cast<int>(filter)];
 }
 
 static constexpr auto s_downsample_mode_names = make_array("Disabled", "Box", "Adaptive");
@@ -504,9 +379,6 @@ const char* Settings::GetShaderPrecompileModeName(GPUShaderPrecompileMode mode)
 }
 
 static std::array<const char*, 3> s_display_crop_mode_names = {{"None", "Overscan", "Borders"}};
-static std::array<const char*, 3> s_display_crop_mode_display_names = {
-  {TRANSLATABLE("DisplayCropMode", "None"), TRANSLATABLE("DisplayCropMode", "Only Overscan Area"),
-   TRANSLATABLE("DisplayCropMode", "All Borders")}};
 
 std::optional<DisplayCropMode> Settings::ParseDisplayCropMode(const char* str)
 {
@@ -525,11 +397,6 @@ std::optional<DisplayCropMode> Settings::ParseDisplayCropMode(const char* str)
 const char* Settings::GetDisplayCropModeName(DisplayCropMode crop_mode)
 {
   return s_display_crop_mode_names[static_cast<int>(crop_mode)];
-}
-
-const char* Settings::GetDisplayCropModeDisplayName(DisplayCropMode crop_mode)
-{
-  return s_display_crop_mode_display_names[static_cast<int>(crop_mode)];
 }
 
 static std::array<const char*, static_cast<size_t>(DisplayAspectRatio::Count)> s_display_aspect_ratio_names = {
@@ -583,28 +450,6 @@ float Settings::GetDisplayAspectRatioValue() const
       return s_display_aspect_ratio_values[static_cast<int>(display_aspect_ratio)];
     }
   }
-}
-
-static std::array<const char*, 8> s_controller_type_names = {
-  {"None", "DigitalController", "AnalogController", "AnalogJoystick", "NamcoGunCon", "PlayStationMouse", "NeGcon", "NeGconRumble"}};
-
-std::optional<ControllerType> Settings::ParseControllerTypeName(const char* str)
-{
-  int index = 0;
-  for (const char* name : s_controller_type_names)
-  {
-    if (StringUtil::Strcasecmp(name, str) == 0)
-      return static_cast<ControllerType>(index);
-
-    index++;
-  }
-
-  return std::nullopt;
-}
-
-const char* Settings::GetControllerTypeName(ControllerType type)
-{
-  return s_controller_type_names[static_cast<int>(type)];
 }
 
 static std::array<const char*, 7> s_memory_card_type_names = {
