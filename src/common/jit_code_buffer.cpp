@@ -17,16 +17,6 @@
 
 JitCodeBuffer::JitCodeBuffer() = default;
 
-JitCodeBuffer::JitCodeBuffer(u32 size, u32 far_code_size)
-{
-  Allocate(size, far_code_size);
-}
-
-JitCodeBuffer::JitCodeBuffer(void* buffer, u32 size, u32 far_code_size, u32 guard_pages)
-{
-  Initialize(buffer, size, far_code_size);
-}
-
 JitCodeBuffer::~JitCodeBuffer()
 {
   Destroy();

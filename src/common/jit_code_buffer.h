@@ -5,8 +5,6 @@ class JitCodeBuffer
 {
 public:
   JitCodeBuffer();
-  JitCodeBuffer(u32 size, u32 far_code_size);
-  JitCodeBuffer(void* buffer, u32 size, u32 far_code_size, u32 guard_size);
   ~JitCodeBuffer();
 
   bool IsValid() const { return (m_code_ptr != nullptr); }
