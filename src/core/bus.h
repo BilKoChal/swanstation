@@ -12,7 +12,7 @@ class StateWrapper;
 
 namespace Bus {
 
-inline constexpr uint32_t RAM_BASE = 0x00000000, RAM_2MB_SIZE = 0x200000, RAM_2MB_MASK = RAM_2MB_SIZE - 1,
+inline constexpr uint32_t RAM_2MB_SIZE = 0x200000, RAM_2MB_MASK = RAM_2MB_SIZE - 1,
                      RAM_8MB_SIZE = 0x800000, RAM_8MB_MASK = RAM_8MB_SIZE - 1, RAM_MIRROR_END = 0x800000,
                      EXP1_BASE = 0x1F000000, EXP1_SIZE = 0x800000, EXP1_MASK = EXP1_SIZE - 1, MEMCTRL_BASE = 0x1F801000,
                      MEMCTRL_SIZE = 0x40, MEMCTRL_MASK = MEMCTRL_SIZE - 1, PAD_BASE = 0x1F801040, PAD_SIZE = 0x10,

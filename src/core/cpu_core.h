@@ -16,9 +16,8 @@ inline constexpr VirtualMemoryAddress RESET_VECTOR = UINT32_C(0xBFC00000);
 inline constexpr PhysicalMemoryAddress DCACHE_LOCATION = UINT32_C(0x1F800000),
                                        DCACHE_LOCATION_MASK = UINT32_C(0xFFFFFC00),
                                        DCACHE_OFFSET_MASK = UINT32_C(0x000003FF), DCACHE_SIZE = UINT32_C(0x00000400),
-                                       ICACHE_SIZE = UINT32_C(0x00001000), ICACHE_SLOTS = ICACHE_SIZE / sizeof(uint32_t),
+                                       ICACHE_SIZE = UINT32_C(0x00001000),
                                        ICACHE_LINE_SIZE = 16, ICACHE_LINES = ICACHE_SIZE / ICACHE_LINE_SIZE,
-                                       ICACHE_SLOTS_PER_LINE = ICACHE_SLOTS / ICACHE_LINES,
                                        ICACHE_TAG_ADDRESS_MASK = 0xFFFFFFF0u, ICACHE_INVALID_BITS = 0x0Fu;
 
 union CacheControl
@@ -124,11 +123,6 @@ void ExecuteDebug();
 
 // Forces an early exit from the CPU dispatcher.
 void ForceDispatcherExit();
-
-ALWAYS_INLINE Registers& GetRegs()
-{
-  return g_state.regs;
-}
 
 ALWAYS_INLINE TickCount GetPendingTicks()
 {
