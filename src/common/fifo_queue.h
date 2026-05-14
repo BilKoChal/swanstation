@@ -1,13 +1,13 @@
 #pragma once
 #include "types.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <type_traits>
+#include <utility>
 
 #ifdef _WIN32
 #include <malloc.h> // _aligned_malloc
-#else
-#include <stdlib.h> // posix_memalign
 #endif
 
 template<typename T, uint32_t CAPACITY>
