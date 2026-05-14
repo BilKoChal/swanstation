@@ -5,6 +5,7 @@
 #include "stream_buffer.h"
 #include "util.h"
 
+#include <cstring>
 namespace D3D12 {
 
 Texture::Texture() = default;

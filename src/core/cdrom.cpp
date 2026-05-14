@@ -8,7 +8,7 @@
 #include "spu.h"
 #include "system.h"
 #include <cmath>
-
+#include <cstring>
 #if defined(CPU_X64)
 #include <emmintrin.h>
 #endif

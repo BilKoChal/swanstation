@@ -38,6 +38,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <deque>
 #include <fstream>
 #include <limits>

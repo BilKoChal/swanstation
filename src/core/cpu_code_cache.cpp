@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "system.h"
 #include "timing_event.h"
+#include <cstring>
 Log_SetChannel(CPU::CodeCache);
 
 #ifdef WITH_RECOMPILER

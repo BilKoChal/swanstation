@@ -3,6 +3,7 @@
 #include "log.h"
 #include "string_util.h"
 #include <array>
+#include <cstring>
 Log_SetChannel(CDImage);
 
 CDImage::CDImage(OpenFlags open_flags) : m_open_flags(open_flags) {}

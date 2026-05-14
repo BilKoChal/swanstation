@@ -5,6 +5,7 @@
 #include "log.h"
 #include <array>
 #include <cerrno>
+#include <cstring>
 #include <map>
 Log_SetChannel(CDImageEcm);
 

@@ -3,6 +3,7 @@
 #include "file_system.h"
 #include "log.h"
 #include <cerrno>
+#include <cstring>
 #include <limits>
 Log_SetChannel(CDImageMemory);
 

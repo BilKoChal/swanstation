@@ -1,7 +1,7 @@
 #include "cpu_recompiler_register_cache.h"
 #include "cpu_recompiler_code_generator.h"
 #include <cinttypes>
-
+#include <cstring>
 namespace CPU::Recompiler {
 
 Value::Value() = default;

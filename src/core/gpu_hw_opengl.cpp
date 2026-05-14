@@ -7,6 +7,7 @@
 #include "host_display.h"
 #include "shader_cache_version.h"
 #include "core/host_interface.h"
+#include <cstring>
 #include <libretro.h>
 #include "system.h"
 #include "texture_replacements.h"

@@ -6,9 +6,9 @@
 #include "settings.h"
 #include "system.h"
 #include <cmath>
+#include <cstring>
 #include <sstream>
 #include <tuple>
-
 #define IS_POW2(value) (((value) & ((value) - 1)) == 0)
 
 template<typename T>

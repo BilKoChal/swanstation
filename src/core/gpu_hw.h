@@ -2,12 +2,12 @@
 #include "common/heap_array.h"
 #include "gpu.h"
 #include "host_display.h"
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
-
 class GPU_SW_Backend;
 struct GPUBackendCommand;
 struct GPUBackendDrawCommand;

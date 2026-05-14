@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
-
+#include <cstring>
 namespace BIOS {
 static constexpr Hash MakeHashFromString(const char str[])
 {

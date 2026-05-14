@@ -6,6 +6,7 @@
 #include "interrupt_controller.h"
 #include "system.h"
 
+#include <cstring>
 MDEC g_mdec;
 
 MDEC::MDEC() = default;

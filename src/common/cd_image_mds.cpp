@@ -4,6 +4,7 @@
 #include "file_system.h"
 #include "log.h"
 #include <cerrno>
+#include <cstring>
 #include <map>
 Log_SetChannel(CDImageMds);
 

@@ -7,6 +7,7 @@
 #include "system.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <optional>
 
 #include <file/file_path.h>

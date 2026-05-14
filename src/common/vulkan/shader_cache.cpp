@@ -6,8 +6,8 @@
 #include "shader_compiler.h"
 #include "util.h"
 
+#include <cstring>
 #include <file/file_path.h>
-
 Log_SetChannel(Vulkan::ShaderCache);
 
 // TODO: store the driver version and stuff in the shader header

@@ -4,6 +4,7 @@
 #include "log.h"
 #include <algorithm>
 #include <cerrno>
+#include <cstring>
 #include <map>
 #include <unordered_map>
 Log_SetChannel(CDImagePPF);

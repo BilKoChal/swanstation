@@ -24,7 +24,7 @@
 #include "settings.h"
 #include <climits>
 #include <cmath>
-
+#include <cstring>
 namespace PGXP {
 
 inline constexpr u32 VERTEX_CACHE_WIDTH = 0x800 * 2, VERTEX_CACHE_HEIGHT = 0x800 * 2,

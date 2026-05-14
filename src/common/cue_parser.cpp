@@ -3,6 +3,7 @@
 #include "log.h"
 #include "string_util.h"
 #include <cstdarg>
+#include <cstring>
 #include <limits>
 Log_SetChannel(CueParser);
 

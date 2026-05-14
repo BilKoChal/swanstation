@@ -1,10 +1,10 @@
 #include "libretro_host_display.h"
 #include "common/align.h"
 #include "core/host_interface.h"
-#include <libretro.h>
 #include <array>
+#include <cstring>
+#include <libretro.h>
 #include <tuple>
-
 static retro_pixel_format GetRetroPixelFormat(HostDisplayPixelFormat format)
 {
   switch (format)

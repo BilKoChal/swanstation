@@ -2,7 +2,7 @@
 #include "align.h"
 #include "platform.h"
 #include <algorithm>
-
+#include <cstring>
 #if defined(_WIN32)
 #include "windows_headers.h"
 #else

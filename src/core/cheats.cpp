@@ -10,6 +10,7 @@
 #include "host_interface.h"
 #include "system.h"
 #include <cctype>
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 #include <type_traits>

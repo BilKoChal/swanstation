@@ -1,5 +1,6 @@
 #include "md5_digest.h"
 
+#include <cstring>
 // Plumb's reference MD5 needs to know the host endianness. The
 // algorithm operates on 32-bit longwords; on a big-endian host the
 // raw input bytes need to be byte-reversed before the per-block

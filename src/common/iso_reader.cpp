@@ -2,6 +2,7 @@
 #include "cd_image.h"
 #include "log.h"
 #include <cctype>
+#include <cstring>
 Log_SetChannel(ISOReader);
 
 static bool FilenamesEqual(const char* a, const char* b, u32 length)

@@ -9,6 +9,7 @@
 #include "miniz.h"
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <vector>
 Log_SetChannel(CDImagePBP);
 

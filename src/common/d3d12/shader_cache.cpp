@@ -3,6 +3,7 @@
 #include "../file_system.h"
 #include "../log.h"
 #include "../md5_digest.h"
+#include <cstring>
 #include <d3dcompiler.h>
 
 #include <file/file_path.h>

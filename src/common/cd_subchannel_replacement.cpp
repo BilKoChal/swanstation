@@ -2,6 +2,7 @@
 #include "file_system.h"
 #include "log.h"
 #include <algorithm>
+#include <cstring>
 #include <memory>
 Log_SetChannel(CDSubChannelReplacement);
 

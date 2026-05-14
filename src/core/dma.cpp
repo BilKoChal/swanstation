@@ -12,6 +12,7 @@
 #include "spu.h"
 #include "system.h"
 
+#include <cstring>
 static u32 GetAddressMask()
 {
   return Bus::g_ram_mask & 0xFFFFFFFCu;

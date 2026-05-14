@@ -10,8 +10,8 @@
 #include "timing_event.h"
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <numeric>
-
 namespace GTE {
 
 static constexpr s64 MAC0_MIN_VALUE = -(INT64_C(1) << 31);

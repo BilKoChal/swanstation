@@ -1,9 +1,9 @@
 #pragma once
 #include "types.h"
+#include <cstring>
 #include <optional>
 #include <string>
 #include <vector>
-
 namespace BIOS {
 
 inline constexpr u32 BIOS_BASE = 0x1FC00000, BIOS_SIZE = 0x80000, BIOS_SIZE_PS2 = 0x400000, BIOS_SIZE_PS3 = 0x3E66F0;

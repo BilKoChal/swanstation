@@ -16,9 +16,9 @@
 #include "spu.h"
 #include "timers.h"
 #include <cstdio>
+#include <cstring>
 #include <tuple>
 #include <utility>
-
 // Disable MSVC unreachable code warnings for code that actually get reached
 #ifdef _MSC_VER
 #pragma warning(push)

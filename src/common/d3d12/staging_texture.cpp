@@ -3,6 +3,7 @@
 #include "context.h"
 #include "util.h"
 
+#include <cstring>
 namespace D3D12 {
 
 StagingTexture::StagingTexture() : m_width(0), m_height(0) {}

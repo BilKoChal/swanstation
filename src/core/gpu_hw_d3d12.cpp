@@ -12,6 +12,7 @@
 #include "host_display.h"
 #include "host_interface.h"
 #include "system.h"
+#include <cstring>
 Log_SetChannel(GPU_HW_D3D12);
 
 GPU_HW_D3D12::GPU_HW_D3D12() = default;

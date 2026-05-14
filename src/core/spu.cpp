@@ -6,8 +6,8 @@
 #include "host_interface.h"
 #include "interrupt_controller.h"
 #include "system.h"
+#include <cstring>
 #include <limits>
-
 #define SPU_TriggerRAMIRQ() \
   m_SPUSTAT.irq9_flag = true; \
   g_interrupt_controller.InterruptRequest(InterruptController::IRQ::SPU)

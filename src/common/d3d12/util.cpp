@@ -5,6 +5,7 @@
 #include "context.h"
 #include "shader_cache.h"
 #include <cstdarg>
+#include <cstring>
 #include <limits>
 Log_SetChannel(D3D12);
 

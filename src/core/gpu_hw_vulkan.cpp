@@ -15,6 +15,7 @@
 #include "core/host_interface.h"
 #include "system.h"
 #include "vulkan_loader.h"
+#include <cstring>
 Log_SetChannel(GPU_HW_Vulkan);
 
 class LibretroVulkanHostDisplayTexture : public HostDisplayTexture

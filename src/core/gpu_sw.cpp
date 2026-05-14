@@ -5,7 +5,7 @@
 #include "host_display.h"
 #include "system.h"
 #include <algorithm>
-
+#include <cstring>
 #if defined(CPU_X64)
 #include <emmintrin.h>
 #elif defined(CPU_AARCH64)

@@ -7,6 +7,7 @@
 #include "context.h"
 #include "util.h"
 
+#include <cstring>
 namespace Vulkan {
 
 StagingTexture::StagingTexture() = default;

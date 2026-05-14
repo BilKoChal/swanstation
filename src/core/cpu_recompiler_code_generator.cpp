@@ -5,6 +5,7 @@
 #include "gte.h"
 #include "pgxp.h"
 #include "settings.h"
+#include <cstring>
 Log_SetChannel(CPU::Recompiler);
 
 // TODO: Turn load+sext/zext into a single signed/unsigned load
