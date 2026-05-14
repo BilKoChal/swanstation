@@ -37,16 +37,7 @@ public:
   void PushCommand(GPUBackendCommand* cmd);
   void Sync(bool allow_sleep);
 
-  /// Processes all pending GPU commands.
-  void RunGPULoop();
-
 protected:
-  void* AllocateCommand(GPUBackendCommandType command, uint32_t size);
-  uint32_t GetPendingCommandSize() const;
-  void WakeGPUThread();
-  void StartGPUThread();
-  void StopGPUThread();
-
   virtual void FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color, GPUBackendCommandParameters params) = 0;
   virtual void UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data,
                           GPUBackendCommandParameters params) = 0;
@@ -77,6 +68,17 @@ protected:
   HeapArray<uint8_t, COMMAND_QUEUE_SIZE> m_command_fifo_data;
   alignas(64) std::atomic<uint32_t> m_command_fifo_read_ptr{0};
   alignas(64) std::atomic<uint32_t> m_command_fifo_write_ptr{0};
+
+private:
+  /// Thread entry point for the GPU worker. Drains the command FIFO until
+  /// m_gpu_loop_done is set.
+  void RunGPULoop();
+
+  void* AllocateCommand(GPUBackendCommandType command, uint32_t size);
+  uint32_t GetPendingCommandSize() const;
+  void WakeGPUThread();
+  void StartGPUThread();
+  void StopGPUThread();
 };
 
 #ifdef _MSC_VER
