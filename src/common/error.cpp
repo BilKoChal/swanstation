@@ -1,12 +1,6 @@
 #include "error.h"
-#include <cstdlib>
+#include <cstdarg>
 #include <cstring>
-#include <type_traits>
-
-// Platform-specific includes
-#if defined(_WIN32)
-#include "windows_headers.h"
-#endif
 
 namespace Common {
 
