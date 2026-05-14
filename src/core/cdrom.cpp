@@ -2189,7 +2189,7 @@ void CDROM::ResampleXAADPCM(const int16_t* frames_in, uint32_t num_frames_in)
 
     if constexpr (!STEREO)
     {
-      UNREFERENCED_VARIABLE(right);
+      (void)right;
     }
 
     for (uint32_t sample_dup = 0; sample_dup < (SAMPLE_RATE ? 2 : 1); sample_dup++)

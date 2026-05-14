@@ -149,7 +149,7 @@ void GPUBackend::PushCommand(GPUBackendCommand* cmd)
   else
   {
     const uint32_t new_write_ptr = m_command_fifo_write_ptr.fetch_add(cmd->size) + cmd->size;
-    UNREFERENCED_VARIABLE(new_write_ptr);
+    (void)new_write_ptr;
     if (GetPendingCommandSize() >= THRESHOLD_TO_WAKE_GPU)
       WakeGPUThread();
   }
