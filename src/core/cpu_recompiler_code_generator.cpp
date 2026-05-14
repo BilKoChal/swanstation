@@ -1357,7 +1357,7 @@ bool CodeGenerator::Compile_Shift(const CodeBlockInstruction& cbi)
 
       result = SarValues(rt, shamt, false);
       if (rt_spec && shamt_spec)
-        result_spec = static_cast<u32>(static_cast<s32>(*rt_spec) << *shamt_spec);
+        result_spec = static_cast<u32>(static_cast<s32>(*rt_spec) >> *shamt_spec);
     }
     break;
 
