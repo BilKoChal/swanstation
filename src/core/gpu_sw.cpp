@@ -255,8 +255,8 @@ void GPU_SW::CopyOut15Bit(u32 src_x, u32 src_y, u32 width, u32 height, u32 field
   }
 
   const u32 output_stride = dst_stride;
-  const u8 interlaced_shift = BoolToUInt8(interlaced);
-  const u8 interleaved_shift = BoolToUInt8(interleaved);
+  const u8 interlaced_shift = static_cast<u8>(interlaced);
+  const u8 interleaved_shift = static_cast<u8>(interleaved);
 
   // Fast path when not wrapping around.
   if ((src_x + width) <= VRAM_WIDTH && (src_y + height) <= VRAM_HEIGHT)
@@ -347,8 +347,8 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
   }
 
   const u32 output_stride = dst_stride;
-  const u8 interlaced_shift = BoolToUInt8(interlaced);
-  const u8 interleaved_shift = BoolToUInt8(interleaved);
+  const u8 interlaced_shift = static_cast<u8>(interlaced);
+  const u8 interleaved_shift = static_cast<u8>(interleaved);
   const u32 rows = height >> interlaced_shift;
   dst_stride <<= interlaced_shift;
 

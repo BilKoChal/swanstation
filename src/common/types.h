@@ -94,24 +94,6 @@ ALWAYS_INLINE constexpr u8 IsValidPackedBCD(u8 value)
   return IsValidBCDDigit(value & 0x0F) && IsValidBCDDigit(value >> 4);
 }
 
-// Boolean to integer
-ALWAYS_INLINE constexpr u8 BoolToUInt8(bool value)
-{
-  return static_cast<u8>(value);
-}
-ALWAYS_INLINE constexpr u16 BoolToUInt16(bool value)
-{
-  return static_cast<u16>(value);
-}
-ALWAYS_INLINE constexpr u32 BoolToUInt32(bool value)
-{
-  return static_cast<u32>(value);
-}
-ALWAYS_INLINE constexpr u64 BoolToUInt64(bool value)
-{
-  return static_cast<u64>(value);
-}
-
 // Integer to boolean
 template<typename TValue>
 ALWAYS_INLINE constexpr bool ConvertToBool(TValue value)

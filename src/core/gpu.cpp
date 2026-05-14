@@ -674,8 +674,8 @@ void GPU::UpdateCRTCDisplayParameters()
 
   // If force-progressive is enabled, we only double the height in 480i mode. This way non-interleaved 480i framebuffers
   // won't be broken when displayed.
-  const u8 y_shift = BoolToUInt8(m_GPUSTAT.vertical_interlace && m_GPUSTAT.vertical_resolution);
-  const u8 height_shift = m_force_progressive_scan ? y_shift : BoolToUInt8(m_GPUSTAT.vertical_interlace);
+  const u8 y_shift = static_cast<u8>(m_GPUSTAT.vertical_interlace && m_GPUSTAT.vertical_resolution);
+  const u8 height_shift = m_force_progressive_scan ? y_shift : static_cast<u8>(m_GPUSTAT.vertical_interlace);
 
   // Determine screen size.
   cs.display_width = (cs.horizontal_visible_end - cs.horizontal_visible_start) / cs.dot_clock_divider;
@@ -840,7 +840,7 @@ void GPU::CRTCTickEvent(TickCount ticks)
   m_crtc_state.in_hblank = new_hblank;
   if (g_timers.IsUsingExternalClock(HBLANK_TIMER_INDEX))
   {
-    const u32 hblank_timer_ticks = BoolToUInt32(!old_hblank) + BoolToUInt32(new_hblank) + (lines_to_draw - 1);
+    const u32 hblank_timer_ticks = static_cast<u32>(!old_hblank) + static_cast<u32>(new_hblank) + (lines_to_draw - 1);
     g_timers.AddTicks(HBLANK_TIMER_INDEX, static_cast<TickCount>(hblank_timer_ticks));
   }
 
@@ -906,8 +906,8 @@ void GPU::CRTCTickEvent(TickCount ticks)
   if (m_GPUSTAT.InInterleaved480iMode())
   {
     m_crtc_state.active_line_lsb =
-      static_cast<u8>((m_crtc_state.regs.Y + BoolToUInt32(m_crtc_state.interlaced_display_field)) & u32(1));
-    m_GPUSTAT.display_line_lsb = static_cast<bool>((m_crtc_state.regs.Y + (BoolToUInt8(!m_crtc_state.in_vblank) & m_crtc_state.interlaced_display_field)) & u32(1));
+      static_cast<u8>((m_crtc_state.regs.Y + static_cast<u32>(m_crtc_state.interlaced_display_field)) & u32(1));
+    m_GPUSTAT.display_line_lsb = static_cast<bool>((m_crtc_state.regs.Y + (static_cast<u8>(!m_crtc_state.in_vblank) & m_crtc_state.interlaced_display_field)) & u32(1));
   }
   else
   {
@@ -969,7 +969,7 @@ bool GPU::ConvertScreenCoordinatesToBeamTicksAndLines(s32 window_x, s32 window_y
       static_cast<u32>(display_y) >= m_crtc_state.display_height)
     return false;
 
-  *out_line = (static_cast<u32>(std::round(display_y)) >> BoolToUInt8(m_GPUSTAT.vertical_interlace)) +
+  *out_line = (static_cast<u32>(std::round(display_y)) >> static_cast<u8>(m_GPUSTAT.vertical_interlace)) +
               m_crtc_state.vertical_visible_start;
   *out_tick = static_cast<u32>(std::round(display_x * static_cast<float>(m_crtc_state.dot_clock_divider))) +
               m_crtc_state.horizontal_visible_start;

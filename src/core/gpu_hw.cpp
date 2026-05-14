@@ -1221,8 +1221,8 @@ void GPU_HW::DispatchRenderCommand()
   {
     m_batch.check_mask_before_draw = check_mask_before_draw;
     m_batch.set_mask_while_drawing = set_mask_while_drawing;
-    m_batch_ubo_dirty |= (m_batch_ubo_data.u_set_mask_while_drawing != BoolToUInt32(set_mask_while_drawing));
-    m_batch_ubo_data.u_set_mask_while_drawing = BoolToUInt32(set_mask_while_drawing);
+    m_batch_ubo_dirty |= (m_batch_ubo_data.u_set_mask_while_drawing != static_cast<u32>(set_mask_while_drawing));
+    m_batch_ubo_data.u_set_mask_while_drawing = static_cast<u32>(set_mask_while_drawing);
   }
 
   m_batch.interlacing = IsInterlacedRenderingEnabled();

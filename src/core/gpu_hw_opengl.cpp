@@ -1309,7 +1309,7 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mod
                          (texture_mode == static_cast<u8>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
 
-  GL::Program& slot = m_render_programs[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+  GL::Program& slot = m_render_programs[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
   if (slot.IsValid())
     return &slot;
 
@@ -1356,7 +1356,7 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(u8 render_mode, u8 texture_mod
   if (!prog)
   {
     Log_ErrorPrintf("Lazy batch program compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode, texture_mode,
-                    BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                    static_cast<u8>(dithering), static_cast<u8>(interlacing));
     return nullptr;
   }
 
@@ -1556,7 +1556,7 @@ void GPU_HW_OpenGL::UpdateDisplay()
       glDisable(GL_SCISSOR_TEST);
       glDisable(GL_DEPTH_TEST);
 
-      m_display_programs[BoolToUInt8(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Bind();
+      m_display_programs[static_cast<u8>(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Bind();
       m_display_texture.BindFramebuffer(GL_DRAW_FRAMEBUFFER);
       m_vram_texture.Bind();
 
@@ -1566,7 +1566,7 @@ void GPU_HW_OpenGL::UpdateDisplay()
         glInvalidateFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLsizei>(attachments.size()), attachments.data());
       }
 
-      const u8 height_div2 = BoolToUInt8(interlaced == GPU_HW::InterlacedRenderMode::SeparateFields);
+      const u8 height_div2 = static_cast<u8>(interlaced == GPU_HW::InterlacedRenderMode::SeparateFields);
       const u32 reinterpret_field_offset = (interlaced != InterlacedRenderMode::None) ? GetInterlacedDisplayField() : 0;
       const u32 scaled_flipped_vram_offset_y = m_vram_texture.GetHeight() - scaled_vram_offset_y -
                                                reinterpret_field_offset - (scaled_display_height >> height_div2);
@@ -1670,7 +1670,7 @@ void GPU_HW_OpenGL::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   {
     const VRAMFillUBOData uniforms = GetVRAMFillUBOData(x, y, width, height, color);
 
-    m_vram_fill_programs[BoolToUInt8(wrapped)][BoolToUInt8(interlaced)].Bind();
+    m_vram_fill_programs[static_cast<u8>(wrapped)][static_cast<u8>(interlaced)].Bind();
     UploadUniformBuffer(&uniforms, sizeof(uniforms));
     glDisable(GL_BLEND);
     SetDepthFunc(GL_ALWAYS);

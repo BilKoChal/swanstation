@@ -1231,7 +1231,7 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_
   // main-thread fault-in did), we're done with no mutex / kernel
   // call / contention against the worker.
   std::atomic<ID3D11PixelShader*>& fast_slot =
-    m_batch_pixel_shader_fastpath[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+    m_batch_pixel_shader_fastpath[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
   ID3D11PixelShader* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
     return existing;
@@ -1251,7 +1251,7 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_
     return existing;
 
   ComPtr<ID3D11PixelShader>& canonical_slot =
-    m_batch_pixel_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+    m_batch_pixel_shaders[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
 
   if (!canonical_slot)
   {
@@ -1266,19 +1266,19 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(u8 render_mode, u8 texture_
     if (!canonical_slot)
     {
       Log_ErrorPrintf("Lazy batch pixel shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                      texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                      texture_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
       return nullptr;
     }
     // Publish the canonical raw pointer so future fast-path readers
     // for the canonical slot don't have to take the mutex.
-    m_batch_pixel_shader_fastpath[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)].store(
+    m_batch_pixel_shader_fastpath[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)].store(
       canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3D11PixelShader>& dup_slot =
-      m_batch_pixel_shaders[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+      m_batch_pixel_shaders[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
   }
@@ -1435,7 +1435,7 @@ void GPU_HW_D3D11::DrawBatchVertices(BatchRenderMode render_mode, u32 base_verte
 {
   const bool textured = (m_batch.texture_mode != GPUTextureMode::Disabled);
 
-  m_context->VSSetShader(m_batch_vertex_shaders[BoolToUInt8(textured)].Get(), nullptr, 0);
+  m_context->VSSetShader(m_batch_vertex_shaders[static_cast<u8>(textured)].Get(), nullptr, 0);
 
   // Fetch the batch pixel shader via the lazy helper. In 'Enabled'
   // precompile mode every slot was already filled at CompileShaders
@@ -1541,7 +1541,7 @@ void GPU_HW_D3D11::UpdateDisplay()
       const u32 uniforms[4] = {reinterpret_start_x, scaled_vram_offset_y + reinterpret_field_offset,
                                reinterpret_crop_left, reinterpret_field_offset};
       ID3D11PixelShader* display_pixel_shader =
-        m_display_pixel_shaders[BoolToUInt8(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Get();
+        m_display_pixel_shaders[static_cast<u8>(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Get();
 
       SetViewportAndScissor(0, 0, scaled_display_width, scaled_display_height);
       DrawUtilityShader(display_pixel_shader, uniforms, sizeof(uniforms));
@@ -1617,8 +1617,8 @@ void GPU_HW_D3D11::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
                         bounds.GetWidth() * m_resolution_scale, bounds.GetHeight() * m_resolution_scale);
 
   const VRAMFillUBOData uniforms = GetVRAMFillUBOData(x, y, width, height, color);
-  DrawUtilityShader(m_vram_fill_pixel_shaders[BoolToUInt8(IsVRAMFillOversized(x, y, width, height))]
-                                             [BoolToUInt8(IsInterlacedRenderingEnabled())]
+  DrawUtilityShader(m_vram_fill_pixel_shaders[static_cast<u8>(IsVRAMFillOversized(x, y, width, height))]
+                                             [static_cast<u8>(IsInterlacedRenderingEnabled())]
                                                .Get(),
                     &uniforms, sizeof(uniforms));
 

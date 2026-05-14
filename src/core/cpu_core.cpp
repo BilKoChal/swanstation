@@ -641,7 +641,7 @@ restart_instruction:
 
         case InstructionFunct::slt:
         {
-          const u32 result = BoolToUInt32(static_cast<s32>(ReadReg(inst.r.rs)) < static_cast<s32>(ReadReg(inst.r.rt)));
+          const u32 result = static_cast<u32>(static_cast<s32>(ReadReg(inst.r.rs)) < static_cast<s32>(ReadReg(inst.r.rt)));
           if constexpr (pgxp_mode >= PGXPMode::CPU)
             PGXP::CPU_SLT(inst.bits, ReadReg(inst.r.rs), ReadReg(inst.r.rt));
 
@@ -651,7 +651,7 @@ restart_instruction:
 
         case InstructionFunct::sltu:
         {
-          const u32 result = BoolToUInt32(ReadReg(inst.r.rs) < ReadReg(inst.r.rt));
+          const u32 result = static_cast<u32>(ReadReg(inst.r.rs) < ReadReg(inst.r.rt));
           if constexpr (pgxp_mode >= PGXPMode::CPU)
             PGXP::CPU_SLTU(inst.bits, ReadReg(inst.r.rs), ReadReg(inst.r.rt));
 
@@ -906,7 +906,7 @@ restart_instruction:
 
     case InstructionOp::slti:
     {
-      const u32 result = BoolToUInt32(static_cast<s32>(ReadReg(inst.i.rs)) < static_cast<s32>(inst.i.imm_sext32()));
+      const u32 result = static_cast<u32>(static_cast<s32>(ReadReg(inst.i.rs)) < static_cast<s32>(inst.i.imm_sext32()));
 
       if constexpr (pgxp_mode >= PGXPMode::CPU)
         PGXP::CPU_SLTI(inst.bits, ReadReg(inst.i.rs));
@@ -917,7 +917,7 @@ restart_instruction:
 
     case InstructionOp::sltiu:
     {
-      const u32 result = BoolToUInt32(ReadReg(inst.i.rs) < inst.i.imm_sext32());
+      const u32 result = static_cast<u32>(ReadReg(inst.i.rs) < inst.i.imm_sext32());
 
       if constexpr (pgxp_mode >= PGXPMode::CPU)
         PGXP::CPU_SLTIU(inst.bits, ReadReg(inst.i.rs));

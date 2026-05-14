@@ -349,7 +349,7 @@ bool AnalogController::Transfer(const u8 data_in, u8* data_out)
       {
         m_response_length = (GetResponseNumHalfwords() + 1) * 2;
         m_command = Command::GetAnalogMode;
-        m_tx_buffer = {GetIDByte(), m_status_byte, 0x01, 0x02, BoolToUInt8(m_analog_mode), 0x02, 0x01, 0x00};
+        m_tx_buffer = {GetIDByte(), m_status_byte, 0x01, 0x02, static_cast<u8>(m_analog_mode), 0x02, 0x01, 0x00};
       }
       else if (m_configuration_mode && data_in == 0x46)
       {

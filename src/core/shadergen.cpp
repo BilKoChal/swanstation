@@ -36,7 +36,7 @@ bool ShaderGen::UseGLSLBindingLayout()
 
 void ShaderGen::DefineMacro(std::stringstream& ss, const char* name, bool enabled)
 {
-  ss << "#define " << name << " " << BoolToUInt32(enabled) << "\n";
+  ss << "#define " << name << " " << static_cast<u32>(enabled) << "\n";
 }
 
 void ShaderGen::SetGLSLVersionString()

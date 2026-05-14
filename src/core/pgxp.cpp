@@ -744,7 +744,7 @@ void CPU_SLTI(u32 instr, u32 rsVal)
   ret.y = 0.f;
   ret.x = (CPU_reg[rs(instr)].x < tempImm.sw.h) ? 1.f : 0.f;
   ret.flags |= VALID_1;
-  ret.value = BoolToUInt32(static_cast<s32>(rsVal) < imm_sext(instr));
+  ret.value = static_cast<u32>(static_cast<s32>(rsVal) < imm_sext(instr));
 
   CPU_reg[rt(instr)] = ret;
 }
@@ -762,7 +762,7 @@ void CPU_SLTIU(u32 instr, u32 rsVal)
   ret.y = 0.f;
   ret.x = (f16Unsign(CPU_reg[rs(instr)].x) < tempImm.w.h) ? 1.f : 0.f;
   ret.flags |= VALID_1;
-  ret.value = BoolToUInt32(rsVal < imm(instr));
+  ret.value = static_cast<u32>(rsVal < imm(instr));
 
   CPU_reg[rt(instr)] = ret;
 }
@@ -996,7 +996,7 @@ void CPU_SLT(u32 instr, u32 rsVal, u32 rtVal)
           (f16Unsign(CPU_reg[rs(instr)].x) < f16Unsign(CPU_reg[rt(instr)].x)) ? 1.f :
                                                                                 0.f;
 
-  ret.value = BoolToUInt32(static_cast<s32>(rsVal) < static_cast<s32>(rtVal));
+  ret.value = static_cast<u32>(static_cast<s32>(rsVal) < static_cast<s32>(rtVal));
   CPU_reg[rd(instr)] = ret;
 }
 
@@ -1022,7 +1022,7 @@ void CPU_SLTU(u32 instr, u32 rsVal, u32 rtVal)
           (f16Unsign(CPU_reg[rs(instr)].x) < f16Unsign(CPU_reg[rt(instr)].x)) ? 1.f :
                                                                                 0.f;
 
-  ret.value = BoolToUInt32(rsVal < rtVal);
+  ret.value = static_cast<u32>(rsVal < rtVal);
   CPU_reg[rd(instr)] = ret;
 }
 

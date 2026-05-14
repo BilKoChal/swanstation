@@ -294,9 +294,9 @@ bool GPU::HandleRenderPolygonCommand()
   const GPURenderCommand rc{FifoPeek(0)};
 
   // shaded vertices use the colour from the first word for the first vertex
-  const u32 words_per_vertex = 1 + BoolToUInt32(rc.texture_enable) + BoolToUInt32(rc.shading_enable);
+  const u32 words_per_vertex = 1 + static_cast<u32>(rc.texture_enable) + static_cast<u32>(rc.shading_enable);
   const u32 num_vertices = rc.quad_polygon ? 4 : 3;
-  const u32 total_words = words_per_vertex * num_vertices + BoolToUInt32(!rc.shading_enable);
+  const u32 total_words = words_per_vertex * num_vertices + static_cast<u32>(!rc.shading_enable);
   CHECK_COMMAND_SIZE(total_words);
 
   if (IsInterlacedRenderingEnabled() && IsCRTCScanlinePending())
@@ -304,7 +304,7 @@ bool GPU::HandleRenderPolygonCommand()
 
   // setup time
   static constexpr u16 s_setup_time[2][2][2] = {{{46, 226}, {334, 496}}, {{82, 262}, {370, 532}}};
-  const TickCount setup_ticks = static_cast<TickCount>(static_cast<u32>(s_setup_time[BoolToUInt8(rc.quad_polygon)][BoolToUInt8(rc.shading_enable)][BoolToUInt8(rc.texture_enable)]));
+  const TickCount setup_ticks = static_cast<TickCount>(static_cast<u32>(s_setup_time[static_cast<u8>(rc.quad_polygon)][static_cast<u8>(rc.shading_enable)][static_cast<u8>(rc.texture_enable)]));
   AddCommandTicks(setup_ticks);
 
   // set draw state up
@@ -328,7 +328,7 @@ bool GPU::HandleRenderRectangleCommand()
 {
   const GPURenderCommand rc{FifoPeek(0)};
   const u32 total_words =
-    2 + BoolToUInt32(rc.texture_enable) + BoolToUInt32(rc.rectangle_size == GPUDrawRectangleSize::Variable);
+    2 + static_cast<u32>(rc.texture_enable) + static_cast<u32>(rc.rectangle_size == GPUDrawRectangleSize::Variable);
 
   CHECK_COMMAND_SIZE(total_words);
 

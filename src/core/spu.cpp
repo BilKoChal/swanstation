@@ -1039,7 +1039,7 @@ void SPU::VolumeEnvelope::Reset(u8 rate_, bool decreasing_, bool exponential_)
   decreasing = decreasing_;
   exponential = exponential_;
 
-  const ADSRTableEntry& table_entry = s_adsr_table[BoolToUInt8(decreasing)][rate];
+  const ADSRTableEntry& table_entry = s_adsr_table[static_cast<u8>(decreasing)][rate];
   counter = table_entry.ticks;
 }
 
@@ -1049,7 +1049,7 @@ s16 SPU::VolumeEnvelope::Tick(s16 current_level)
   if (counter > 0)
     return current_level;
 
-  const ADSRTableEntry& table_entry = s_adsr_table[BoolToUInt8(decreasing)][rate];
+  const ADSRTableEntry& table_entry = s_adsr_table[static_cast<u8>(decreasing)][rate];
   s32 this_step = table_entry.step;
   counter = table_entry.ticks;
 

@@ -2130,7 +2130,7 @@ bool CodeGenerator::Compile_SetLess(const CodeBlockInstruction& cbi)
   SpeculativeValue value_spec;
   if (lhs_spec && rhs_spec)
   {
-    value_spec = BoolToUInt32(signed_comparison ? (static_cast<s32>(*lhs_spec) < static_cast<s32>(*rhs_spec)) :
+    value_spec = static_cast<u32>(signed_comparison ? (static_cast<s32>(*lhs_spec) < static_cast<s32>(*rhs_spec)) :
                                                   (*lhs_spec < *rhs_spec));
   }
   SpeculativeWriteReg(cbi.instruction.r.rd, value_spec);

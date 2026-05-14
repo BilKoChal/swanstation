@@ -201,8 +201,8 @@ protected:
   /// Returns the number of vertices in the buffered poly-line.
   ALWAYS_INLINE u32 GetPolyLineVertexCount() const
   {
-    return (static_cast<u32>(m_blit_buffer.size()) + BoolToUInt32(m_render_command.shading_enable)) >>
-           BoolToUInt8(m_render_command.shading_enable);
+    return (static_cast<u32>(m_blit_buffer.size()) + static_cast<u32>(m_render_command.shading_enable)) >>
+           static_cast<u8>(m_render_command.shading_enable);
   }
 
   /// Returns true if the drawing area is valid (i.e. left <= right, top <= bottom).

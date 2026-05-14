@@ -1994,7 +1994,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(u8 render_mode, u8 texture_
   // main thread can read a slot concurrently without contending
   // with each other or with each other's slow-path compiles.
   std::atomic<VkShaderModule>& slot =
-    m_batch_fragment_shaders[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+    m_batch_fragment_shaders[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
   VkShaderModule existing = slot.load(std::memory_order_acquire);
   if (existing != VK_NULL_HANDLE)
     return existing;
@@ -2020,7 +2020,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(u8 render_mode, u8 texture_
   if (shader == VK_NULL_HANDLE)
   {
     Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                    texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                    texture_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
     return VK_NULL_HANDLE;
   }
 
@@ -2042,8 +2042,8 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 tex
                                                                                                       texture_mode;
 
   std::atomic<VkPipeline>& slot =
-    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
-                     [BoolToUInt8(interlacing)];
+    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<u8>(dithering)]
+                     [static_cast<u8>(interlacing)];
 
   // Fast path: lock-free atomic load. This is what DrawBatchVertices
   // hits once a slot is filled (either by the precompile worker or
@@ -2094,7 +2094,7 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 tex
   // Vertex shaders are filled at CompilePipelines time before the
   // worker is spawned, so a relaxed load is sufficient - we're
   // strictly after that store in happens-before order.
-  gpbuilder.SetVertexShader(m_batch_vertex_shaders[BoolToUInt8(textured)].load(std::memory_order_relaxed));
+  gpbuilder.SetVertexShader(m_batch_vertex_shaders[static_cast<u8>(textured)].load(std::memory_order_relaxed));
   gpbuilder.SetFragmentShader(fs);
 
   gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -2142,7 +2142,7 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(u8 depth_test, u8 render_mode, u8 tex
   if (pipeline == VK_NULL_HANDLE)
   {
     Log_ErrorPrintf("Lazy batch PSO compile failed for (dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)", depth_test,
-                    render_mode, texture_mode, transparency_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                    render_mode, texture_mode, transparency_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
     return VK_NULL_HANDLE;
   }
 
@@ -2221,7 +2221,7 @@ void GPU_HW_Vulkan::DrawBatchVertices(BatchRenderMode render_mode, u32 base_vert
   // the main thread on race, Disabled compiles on every first use.
   //
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
-  const u8 depth_test = m_batch.use_depth_buffer ? static_cast<u8>(2) : BoolToUInt8(m_batch.check_mask_before_draw);
+  const u8 depth_test = m_batch.use_depth_buffer ? static_cast<u8>(2) : static_cast<u8>(m_batch.check_mask_before_draw);
   VkPipeline pipeline =
     GetBatchPipeline(depth_test, static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode),
                      static_cast<u8>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
@@ -2315,7 +2315,7 @@ void GPU_HW_Vulkan::UpdateDisplay()
 
       vkCmdBindPipeline(
         cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_display_pipelines[BoolToUInt8(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)]);
+        m_display_pipelines[static_cast<u8>(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)]);
       vkCmdPushConstants(cmdbuf, m_single_sampler_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uniforms),
                          uniforms);
       vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_single_sampler_pipeline_layout, 0, 1,
@@ -2410,8 +2410,8 @@ void GPU_HW_Vulkan::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   vkCmdPushConstants(cmdbuf, m_no_samplers_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uniforms),
                      &uniforms);
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    m_vram_fill_pipelines[BoolToUInt8(IsVRAMFillOversized(x, y, width, height))]
-                                         [BoolToUInt8(IsInterlacedRenderingEnabled())]);
+                    m_vram_fill_pipelines[static_cast<u8>(IsVRAMFillOversized(x, y, width, height))]
+                                         [static_cast<u8>(IsInterlacedRenderingEnabled())]);
 
   const Common::Rectangle<u32> bounds(GetVRAMTransferBounds(x, y, width, height));
   Vulkan::Util::SetViewportAndScissor(cmdbuf, bounds.left * m_resolution_scale, bounds.top * m_resolution_scale,
@@ -2462,7 +2462,7 @@ void GPU_HW_Vulkan::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* 
   vkCmdPushConstants(cmdbuf, m_vram_write_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uniforms),
                      &uniforms);
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    m_vram_write_pipelines[BoolToUInt8(check_mask && !m_pgxp_depth_buffer)]);
+                    m_vram_write_pipelines[static_cast<u8>(check_mask && !m_pgxp_depth_buffer)]);
   vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_vram_write_pipeline_layout, 0, 1,
                           &m_vram_write_descriptor_set, 0, nullptr);
 
@@ -2495,7 +2495,7 @@ void GPU_HW_Vulkan::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wid
     BeginVRAMRenderPass();
 
     vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      m_vram_copy_pipelines[BoolToUInt8(m_GPUSTAT.check_mask_before_draw && !m_pgxp_depth_buffer)]);
+                      m_vram_copy_pipelines[static_cast<u8>(m_GPUSTAT.check_mask_before_draw && !m_pgxp_depth_buffer)]);
     vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_single_sampler_pipeline_layout, 0, 1,
                             &m_vram_copy_descriptor_set, 0, nullptr);
     vkCmdPushConstants(cmdbuf, m_single_sampler_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uniforms),

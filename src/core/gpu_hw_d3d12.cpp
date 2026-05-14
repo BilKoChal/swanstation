@@ -831,7 +831,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   // a slot concurrently without serialising against each other or
   // each other's slow-path compiles.
   std::atomic<ID3DBlob*>& fast_slot =
-    m_batch_fragment_shader_blobs_fastpath[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+    m_batch_fragment_shader_blobs_fastpath[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
   ID3DBlob* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
   {
@@ -857,7 +857,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
   }
 
   ComPtr<ID3DBlob>& canonical_slot =
-    m_batch_fragment_shader_blobs[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+    m_batch_fragment_shader_blobs[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
 
   if (!canonical_slot)
   {
@@ -872,19 +872,19 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(u8 render_mo
     if (!canonical_slot)
     {
       Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                      texture_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                      texture_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
       return {};
     }
     // Publish the canonical raw pointer so future fast-path readers
     // for the canonical slot don't have to take the mutex.
-    m_batch_fragment_shader_blobs_fastpath[render_mode][lookup_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)]
+    m_batch_fragment_shader_blobs_fastpath[render_mode][lookup_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)]
       .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3DBlob>& dup_slot =
-      m_batch_fragment_shader_blobs[render_mode][texture_mode][BoolToUInt8(dithering)][BoolToUInt8(interlacing)];
+      m_batch_fragment_shader_blobs[render_mode][texture_mode][static_cast<u8>(dithering)][static_cast<u8>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
   }
@@ -914,8 +914,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
   // an earlier main-thread fault-in). No mutex, no contention
   // against the worker.
   std::atomic<ID3D12PipelineState*>& fast_slot =
-    m_batch_pipelines_fastpath[depth_test][render_mode][texture_mode][transparency_mode][BoolToUInt8(dithering)]
-                              [BoolToUInt8(interlacing)];
+    m_batch_pipelines_fastpath[depth_test][render_mode][texture_mode][transparency_mode][static_cast<u8>(dithering)]
+                              [static_cast<u8>(interlacing)];
   ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
   {
@@ -946,8 +946,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
   }
 
   ComPtr<ID3D12PipelineState>& canonical_slot =
-    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
-                     [BoolToUInt8(interlacing)];
+    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<u8>(dithering)]
+                     [static_cast<u8>(interlacing)];
 
   if (!canonical_slot)
   {
@@ -973,7 +973,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
     }
 
     gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[BoolToUInt8(textured)].Get());
+    gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<u8>(textured)].Get());
     gpbuilder.SetPixelShader(fs_blob.Get());
 
     gpbuilder.SetRasterizationState(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, false);
@@ -1004,25 +1004,25 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(u8 dept
     if (!canonical_slot)
     {
       Log_ErrorPrintf("Lazy batch PSO compile failed for (dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)", depth_test,
-                      render_mode, texture_mode, transparency_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                      render_mode, texture_mode, transparency_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
       return {};
     }
 
     D3D12::SetObjectNameFormatted(canonical_slot.Get(), "Batch Pipeline %u,%u,%u,%u,%u,%u", depth_test, render_mode,
-                                  lookup_mode, transparency_mode, BoolToUInt8(dithering), BoolToUInt8(interlacing));
+                                  lookup_mode, transparency_mode, static_cast<u8>(dithering), static_cast<u8>(interlacing));
 
     // Publish the canonical raw pointer for future fast-path
     // readers of the canonical slot.
-    m_batch_pipelines_fastpath[depth_test][render_mode][lookup_mode][transparency_mode][BoolToUInt8(dithering)]
-                              [BoolToUInt8(interlacing)]
+    m_batch_pipelines_fastpath[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<u8>(dithering)]
+                              [static_cast<u8>(interlacing)]
                                 .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3D12PipelineState>& dup_slot =
-      m_batch_pipelines[depth_test][render_mode][texture_mode][transparency_mode][BoolToUInt8(dithering)]
-                       [BoolToUInt8(interlacing)];
+      m_batch_pipelines[depth_test][render_mode][texture_mode][transparency_mode][static_cast<u8>(dithering)]
+                       [static_cast<u8>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
   }
@@ -1137,7 +1137,7 @@ void GPU_HW_D3D12::DrawBatchVertices(BatchRenderMode render_mode, u32 base_verte
   // mutation; cost is ~20 ns uncontended per modern std::mutex impl.
   //
   // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
-  const u8 depth_test = BoolToUInt8(m_batch.check_mask_before_draw || m_batch.use_depth_buffer);
+  const u8 depth_test = static_cast<u8>(m_batch.check_mask_before_draw || m_batch.use_depth_buffer);
   ComPtr<ID3D12PipelineState> pipeline =
     GetBatchPipeline(depth_test, static_cast<u8>(render_mode), static_cast<u8>(m_batch.texture_mode),
                      static_cast<u8>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
@@ -1217,7 +1217,7 @@ void GPU_HW_D3D12::UpdateDisplay()
       cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), uniforms, 0);
       cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_texture.GetSRVDescriptor());
       cmdlist->SetPipelineState(
-        m_display_pipelines[BoolToUInt8(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Get());
+        m_display_pipelines[static_cast<u8>(m_GPUSTAT.display_area_color_depth_24)][static_cast<u8>(interlaced)].Get());
       D3D12::SetViewportAndScissor(cmdlist, 0, 0, scaled_display_width, scaled_display_height);
       cmdlist->DrawInstanced(3, 1, 0, 0);
 
@@ -1302,8 +1302,8 @@ void GPU_HW_D3D12::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
   cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), &uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, g_d3d12_context->GetNullSRVDescriptor());
-  cmdlist->SetPipelineState(m_vram_fill_pipelines[BoolToUInt8(IsVRAMFillOversized(x, y, width, height))]
-                                                 [BoolToUInt8(IsInterlacedRenderingEnabled())]
+  cmdlist->SetPipelineState(m_vram_fill_pipelines[static_cast<u8>(IsVRAMFillOversized(x, y, width, height))]
+                                                 [static_cast<u8>(IsInterlacedRenderingEnabled())]
                                                    .Get());
 
   const Common::Rectangle<u32> bounds(GetVRAMTransferBounds(x, y, width, height));
@@ -1353,7 +1353,7 @@ void GPU_HW_D3D12::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* d
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
   cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), &uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_texture_stream_buffer_srv);
-  cmdlist->SetPipelineState(m_vram_write_pipelines[BoolToUInt8(check_mask)].Get());
+  cmdlist->SetPipelineState(m_vram_write_pipelines[static_cast<u8>(check_mask)].Get());
 
   // the viewport should already be set to the full vram, so just adjust the scissor
   const Common::Rectangle<u32> scaled_bounds = bounds * m_resolution_scale;
@@ -1385,7 +1385,7 @@ void GPU_HW_D3D12::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 widt
     cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
     cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(u32), &uniforms, 0);
     cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_read_texture.GetSRVDescriptor());
-    cmdlist->SetPipelineState(m_vram_copy_pipelines[BoolToUInt8(m_GPUSTAT.check_mask_before_draw)].Get());
+    cmdlist->SetPipelineState(m_vram_copy_pipelines[static_cast<u8>(m_GPUSTAT.check_mask_before_draw)].Get());
     D3D12::SetViewportAndScissor(cmdlist, dst_bounds_scaled.left, dst_bounds_scaled.top, dst_bounds_scaled.GetWidth(),
                                  dst_bounds_scaled.GetHeight());
     cmdlist->DrawInstanced(3, 1, 0, 0);
