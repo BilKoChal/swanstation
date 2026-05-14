@@ -629,11 +629,6 @@ void HostInterface::UpdateGeometry()
 void HostInterface::UpdateLogging()
 {
   Log::SetFilterLevel(g_settings.log_level);
-
-  if (s_libretro_log_callback_valid)
-    Log::SetConsoleOutputParams(false);
-  else
-    Log::SetConsoleOutputParams(true, nullptr, g_settings.log_level);
 }
 
 bool HostInterface::UpdateGameSettings()

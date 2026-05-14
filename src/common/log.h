@@ -30,9 +30,6 @@ void RegisterCallback(CallbackFunctionType callbackFunction, void* pUserParam);
 // unregisters a log callback
 void UnregisterCallback(CallbackFunctionType callbackFunction, void* pUserParam);
 
-// adds a standard console output
-void SetConsoleOutputParams(bool enabled, const char* channelFilter = nullptr, LogLevel levelFilter = LogLevel::Trace);
-
 // Sets global filtering level, messages below this level won't be sent to any of the logging sinks.
 void SetFilterLevel(LogLevel level);
 
