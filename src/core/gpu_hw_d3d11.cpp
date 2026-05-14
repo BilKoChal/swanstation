@@ -1010,7 +1010,7 @@ bool GPU_HW_D3D11::CompileShaders()
 
   for (u8 textured = 0; textured < 2; textured++)
   {
-    const std::string vs = shadergen.GenerateBatchVertexShader(ConvertToBoolUnchecked(textured));
+    const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
     m_batch_vertex_shaders[textured] = shader_cache.GetVertexShader(m_device.Get(), vs);
     if (!m_batch_vertex_shaders[textured])
       return false;
@@ -1045,8 +1045,8 @@ bool GPU_HW_D3D11::CompileShaders()
           for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
             ID3D11PixelShader* shader = GetBatchPixelShader(render_mode, texture_mode,
-                                                            ConvertToBoolUnchecked(dithering),
-                                                            ConvertToBoolUnchecked(interlacing));
+                                                            static_cast<bool>(dithering),
+                                                            static_cast<bool>(interlacing));
             if (!shader)
               return false;
 
@@ -1072,7 +1072,7 @@ bool GPU_HW_D3D11::CompileShaders()
     for (u8 interlaced = 0; interlaced < 2; interlaced++)
     {
       const std::string ps =
-        shadergen.GenerateVRAMFillFragmentShader(ConvertToBoolUnchecked(wrapped), ConvertToBoolUnchecked(interlaced));
+        shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced));
       m_vram_fill_pixel_shaders[wrapped][interlaced] = shader_cache.GetPixelShader(m_device.Get(), ps);
       if (!m_vram_fill_pixel_shaders[wrapped][interlaced])
         return false;
@@ -1112,8 +1112,8 @@ bool GPU_HW_D3D11::CompileShaders()
     for (u8 interlacing = 0; interlacing < 3; interlacing++)
     {
       const std::string ps = shadergen.GenerateDisplayFragmentShader(
-        ConvertToBoolUnchecked(depth_24bit), static_cast<InterlacedRenderMode>(interlacing),
-        ConvertToBoolUnchecked(depth_24bit) && m_chroma_smoothing);
+        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlacing),
+        static_cast<bool>(depth_24bit) && m_chroma_smoothing);
       m_display_pixel_shaders[depth_24bit][interlacing] = shader_cache.GetPixelShader(m_device.Get(), ps);
       if (!m_display_pixel_shaders[depth_24bit][interlacing])
         return false;
@@ -1206,8 +1206,8 @@ void GPU_HW_D3D11::ShaderCompileThreadEntryPoint()
           if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
             return;
 
-          GetBatchPixelShader(render_mode, texture_mode, ConvertToBoolUnchecked(dithering),
-                              ConvertToBoolUnchecked(interlacing));
+          GetBatchPixelShader(render_mode, texture_mode, static_cast<bool>(dithering),
+                              static_cast<bool>(interlacing));
         }
       }
     }

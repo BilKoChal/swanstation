@@ -1183,7 +1183,7 @@ restart_instruction:
       const u8 rt = static_cast<u8>(inst.i.rt.GetValue());
 
       // bgez is the inverse of bltz, so simply do ltz and xor the result
-      const bool bgez = ConvertToBoolUnchecked(rt & u8(1));
+      const bool bgez = static_cast<bool>(rt & u8(1));
       const bool branch = (static_cast<s32>(ReadReg(inst.i.rs)) < 0) ^ bgez;
 
       // register is still linked even if the branch isn't taken

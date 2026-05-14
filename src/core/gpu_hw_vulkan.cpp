@@ -1484,7 +1484,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
 
   for (u8 textured = 0; textured < 2; textured++)
   {
-    const std::string vs = shadergen.GenerateBatchVertexShader(ConvertToBoolUnchecked(textured));
+    const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
     VkShaderModule shader = g_vulkan_shader_cache->GetVertexShader(vs);
     if (shader == VK_NULL_HANDLE)
     {
@@ -1526,8 +1526,8 @@ bool GPU_HW_Vulkan::CompilePipelines()
           for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
             VkShaderModule shader =
-              GetBatchFragmentShader(render_mode, texture_mode, ConvertToBoolUnchecked(dithering),
-                                     ConvertToBoolUnchecked(interlacing));
+              GetBatchFragmentShader(render_mode, texture_mode, static_cast<bool>(dithering),
+                                     static_cast<bool>(interlacing));
             if (shader == VK_NULL_HANDLE)
               return false;
             progress.Increment();
@@ -1550,7 +1550,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
               {
                 VkPipeline pipeline =
                   GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
-                                   ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
+                                   static_cast<bool>(dithering), static_cast<bool>(interlacing));
                 if (pipeline == VK_NULL_HANDLE)
                   return false;
                 progress.Increment();
@@ -1602,7 +1602,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
     for (u8 interlaced = 0; interlaced < 2; interlaced++)
     {
       VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(
-        shadergen.GenerateVRAMFillFragmentShader(ConvertToBoolUnchecked(wrapped), ConvertToBoolUnchecked(interlaced)));
+        shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
       if (fs == VK_NULL_HANDLE)
       {
         vkDestroyShaderModule(g_vulkan_context->GetDevice(), fullscreen_quad_vertex_shader, nullptr);
@@ -1768,7 +1768,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
       for (u8 interlace_mode = 0; interlace_mode < 3; interlace_mode++)
       {
         VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(shadergen.GenerateDisplayFragmentShader(
-          ConvertToBoolUnchecked(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
+          static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
         if (fs == VK_NULL_HANDLE)
 	{
           vkDestroyShaderModule(g_vulkan_context->GetDevice(), fullscreen_quad_vertex_shader, nullptr);
@@ -1971,7 +1971,7 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
                 return;
 
               GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
-                               ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
+                               static_cast<bool>(dithering), static_cast<bool>(interlacing));
             }
           }
         }

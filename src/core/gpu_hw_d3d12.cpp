@@ -457,7 +457,7 @@ bool GPU_HW_D3D12::CompilePipelines()
 
   for (u8 textured = 0; textured < 2; textured++)
   {
-    const std::string vs = shadergen.GenerateBatchVertexShader(ConvertToBoolUnchecked(textured));
+    const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
     batch_vertex_shaders[textured] = shader_cache.GetVertexShader(vs);
     if (!batch_vertex_shaders[textured])
       return false;
@@ -493,8 +493,8 @@ bool GPU_HW_D3D12::CompilePipelines()
           for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
             ComPtr<ID3DBlob> blob = GetBatchFragmentShader(render_mode, texture_mode,
-                                                          ConvertToBoolUnchecked(dithering),
-                                                          ConvertToBoolUnchecked(interlacing));
+                                                          static_cast<bool>(dithering),
+                                                          static_cast<bool>(interlacing));
             if (!blob)
               return false;
             progress.Increment();
@@ -517,7 +517,7 @@ bool GPU_HW_D3D12::CompilePipelines()
               {
                 ComPtr<ID3D12PipelineState> pso =
                   GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
-                                   ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
+                                   static_cast<bool>(dithering), static_cast<bool>(interlacing));
                 if (!pso)
                   return false;
                 progress.Increment();
@@ -566,7 +566,7 @@ bool GPU_HW_D3D12::CompilePipelines()
     for (u8 interlaced = 0; interlaced < 2; interlaced++)
     {
       ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(
-        shadergen.GenerateVRAMFillFragmentShader(ConvertToBoolUnchecked(wrapped), ConvertToBoolUnchecked(interlaced)));
+        shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
       if (!fs)
         return false;
 
@@ -694,7 +694,7 @@ bool GPU_HW_D3D12::CompilePipelines()
       for (u8 interlace_mode = 0; interlace_mode < 3; interlace_mode++)
       {
         ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateDisplayFragmentShader(
-          ConvertToBoolUnchecked(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
+          static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
         if (!fs)
           return false;
 
@@ -803,7 +803,7 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
                 return;
 
               GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
-                               ConvertToBoolUnchecked(dithering), ConvertToBoolUnchecked(interlacing));
+                               static_cast<bool>(dithering), static_cast<bool>(interlacing));
             }
           }
         }

@@ -2451,7 +2451,7 @@ bool CodeGenerator::Compile_Branch(const CodeBlockInstruction& cbi)
       Value branch_target = CalculatePC(cbi.instruction.i.imm_sext32() << 2);
 
       const u8 rt = static_cast<u8>(cbi.instruction.i.rt.GetValue());
-      const bool bgez = ConvertToBoolUnchecked(rt & u8(1));
+      const bool bgez = static_cast<bool>(rt & u8(1));
       const Condition condition = (bgez && cbi.instruction.r.rs == Reg::zero) ?
                                     Condition::Always :
                                     (bgez ? Condition::PositiveOrZero : Condition::Negative);

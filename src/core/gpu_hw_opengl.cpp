@@ -1137,8 +1137,8 @@ bool GPU_HW_OpenGL::CompilePrograms()
         {
           for (u8 interlacing = 0; interlacing < 2; interlacing++)
           {
-            const GL::Program* prog = GetBatchProgram(render_mode, texture_mode, ConvertToBoolUnchecked(dithering),
-                                                      ConvertToBoolUnchecked(interlacing));
+            const GL::Program* prog = GetBatchProgram(render_mode, texture_mode, static_cast<bool>(dithering),
+                                                      static_cast<bool>(interlacing));
             if (!prog)
               return false;
             progress.Increment();
@@ -1157,7 +1157,7 @@ bool GPU_HW_OpenGL::CompilePrograms()
     {
       const std::string vs = shadergen.GenerateScreenQuadVertexShader();
       const std::string fs = shadergen.GenerateDisplayFragmentShader(
-        ConvertToBoolUnchecked(depth_24bit), static_cast<InterlacedRenderMode>(interlaced), m_chroma_smoothing);
+        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlaced), m_chroma_smoothing);
 
       std::optional<GL::Program> prog =
         shader_cache.GetProgram(vs, {}, fs, [this, use_binding_layout](GL::Program& prog) {
@@ -1184,7 +1184,7 @@ bool GPU_HW_OpenGL::CompilePrograms()
     {
       std::optional<GL::Program> prog = shader_cache.GetProgram(
         shadergen.GenerateScreenQuadVertexShader(), {},
-        shadergen.GenerateVRAMFillFragmentShader(ConvertToBoolUnchecked(wrapped), ConvertToBoolUnchecked(interlaced)),
+        shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)),
         [this, use_binding_layout](GL::Program& prog) {
           if (!IsGLES() && !use_binding_layout)
             prog.BindFragData(0, "o_col0");

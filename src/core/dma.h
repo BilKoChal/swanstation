@@ -148,7 +148,7 @@ private:
 
     bool GetMasterEnable(Channel channel) const
     {
-      return ConvertToBoolUnchecked((bits >> (static_cast<u8>(channel) * 4 + 3)) & u32(1));
+      return static_cast<bool>((bits >> (static_cast<u8>(channel) * 4 + 3)) & u32(1));
     }
   } m_DPCR = {};
 
@@ -178,7 +178,7 @@ private:
 
     bool IsIRQEnabled(Channel channel) const
     {
-      return ConvertToBoolUnchecked((bits >> (static_cast<u8>(channel) + 16)) & u32(1));
+      return static_cast<bool>((bits >> (static_cast<u8>(channel) + 16)) & u32(1));
     }
 
     void SetIRQFlag(Channel channel) { bits |= (u32(1) << (static_cast<u8>(channel) + 24)); }

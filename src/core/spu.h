@@ -314,15 +314,15 @@ private:
 
   ALWAYS_INLINE bool IsVoiceReverbEnabled(u32 i) const
   {
-    return ConvertToBoolUnchecked((m_reverb_on_register >> i) & u32(1));
+    return static_cast<bool>((m_reverb_on_register >> i) & u32(1));
   }
   ALWAYS_INLINE bool IsVoiceNoiseEnabled(u32 i) const
   {
-    return ConvertToBoolUnchecked((m_noise_mode_register >> i) & u32(1));
+    return static_cast<bool>((m_noise_mode_register >> i) & u32(1));
   }
   ALWAYS_INLINE bool IsPitchModulationEnabled(u32 i) const
   {
-    return ((i > 0) && ConvertToBoolUnchecked((m_pitch_modulation_enable_register >> i) & u32(1)));
+    return ((i > 0) && static_cast<bool>((m_pitch_modulation_enable_register >> i) & u32(1)));
   }
   ALWAYS_INLINE s16 GetVoiceNoiseLevel() const { return static_cast<s16>(static_cast<u16>(m_noise_level)); }
 

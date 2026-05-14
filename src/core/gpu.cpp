@@ -907,13 +907,12 @@ void GPU::CRTCTickEvent(TickCount ticks)
   {
     m_crtc_state.active_line_lsb =
       static_cast<u8>((m_crtc_state.regs.Y + BoolToUInt32(m_crtc_state.interlaced_display_field)) & u32(1));
-    m_GPUSTAT.display_line_lsb = ConvertToBoolUnchecked(
-      (m_crtc_state.regs.Y + (BoolToUInt8(!m_crtc_state.in_vblank) & m_crtc_state.interlaced_display_field)) & u32(1));
+    m_GPUSTAT.display_line_lsb = static_cast<bool>((m_crtc_state.regs.Y + (BoolToUInt8(!m_crtc_state.in_vblank) & m_crtc_state.interlaced_display_field)) & u32(1));
   }
   else
   {
     m_crtc_state.active_line_lsb = 0;
-    m_GPUSTAT.display_line_lsb = ConvertToBoolUnchecked((m_crtc_state.regs.Y + m_crtc_state.current_scanline) & u32(1));
+    m_GPUSTAT.display_line_lsb = static_cast<bool>((m_crtc_state.regs.Y + m_crtc_state.current_scanline) & u32(1));
   }
 
   UpdateCRTCTickEvent();
@@ -1056,7 +1055,7 @@ void GPU::WriteGP1(u32 value)
 
     case 0x03: // Display on/off
     {
-      const bool disable = ConvertToBoolUnchecked(value & 0x01);
+      const bool disable = static_cast<bool>(value & 0x01);
       SynchronizeCRTC();
 
       if (!m_GPUSTAT.display_disable && disable && m_GPUSTAT.vertical_interlace && !m_force_progressive_scan)
@@ -1160,7 +1159,7 @@ void GPU::WriteGP1(u32 value)
 
     case 0x09: // Allow texture disable
     {
-      m_set_texture_disable_mask = ConvertToBoolUnchecked(param & 0x01);
+      m_set_texture_disable_mask = static_cast<bool>(param & 0x01);
     }
     break;
 

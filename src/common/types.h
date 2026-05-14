@@ -119,15 +119,6 @@ ALWAYS_INLINE constexpr bool ConvertToBool(TValue value)
   return static_cast<bool>(value);
 }
 
-// Unsafe integer to boolean
-template<typename TValue>
-ALWAYS_INLINE bool ConvertToBoolUnchecked(TValue value)
-{
-  bool ret;
-  std::memcpy(&ret, &value, sizeof(bool));
-  return ret;
-}
-
 // Enum class bitwise operators
 #define IMPLEMENT_ENUM_CLASS_BITWISE_OPERATORS(type_)                                                                  \
   ALWAYS_INLINE constexpr type_ operator&(type_ lhs, type_ rhs)                                                        \

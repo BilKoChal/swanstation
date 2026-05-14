@@ -529,7 +529,7 @@ void CDROM::WriteRegister(u32 offset, u8 value)
     case 11:
     {
 
-      const bool adpcm_muted = ConvertToBoolUnchecked(value & u8(0x01));
+      const bool adpcm_muted = static_cast<bool>(value & u8(0x01));
       if (adpcm_muted != m_adpcm_muted ||
           (value & 0x20 && std::memcmp(m_cd_audio_volume_matrix.data(), m_next_cd_audio_volume_matrix.data(),
                                        sizeof(m_cd_audio_volume_matrix)) != 0))
