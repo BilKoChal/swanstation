@@ -24,9 +24,31 @@ struct CacheIndexEntry
 };
 #pragma pack(pop)
 
+// Pipeline-state-object disk caching has been disabled.
+//
+// The previous implementation persisted each PSO's full
+// ID3D12PipelineState::GetCachedBlob output as an independent
+// entry keyed by the merged graphics-pipeline-state descriptor hash.
+// On a stock SwanStation matrix that meant ~1440 batch PSOs plus
+// the non-batch pipelines, each blob carrying a fully-validated
+// state object with VS and PS bytecode embedded - ~16 KB per PSO on
+// average. The on-disk d3d12_pipelines_sm50.bin grew to ~75 MB for
+// roughly the same coverage that PCSX2's Vulkan/D3D12 caches reach
+// at ~1.5 MB, because PCSX2 caches at the shader-bytecode level only
+// and lets the runtime build PSOs from cached bytecode on demand.
+//
+// We keep the shader bytecode cache (d3d12_shaders_sm50.bin); that's
+// the expensive recompile to save. Driver-side PSO assembly from
+// already-compiled DXBC is fast - sub-millisecond on modern desktop
+// GPUs - so re-doing it each cold start is not a real cost. The
+// only path that benefited from the persistent PSO cache was a
+// huge-matrix synchronous "Enabled" precompile, and even there the
+// 75 MB file did very little because reading it back and feeding
+// CachedPSO to CreateGraphicsPipelineState was not meaningfully
+// faster than just rebuilding from cached shader bytecode.
 static bool CanUsePipelineCache()
 {
-  return true;
+  return false;
 }
 
 ShaderCache::ShaderCache() : m_use_pipeline_cache(CanUsePipelineCache()) {}
@@ -78,6 +100,22 @@ void ShaderCache::Open(std::string_view base_path, D3D_FEATURE_LEVEL feature_lev
       {
         CreateNew(pipelines_index_filename, pipelines_blob_filename, m_pipeline_index_file, m_pipeline_blob_file);
       }
+    }
+    else
+    {
+      // Scrub any leftover pipeline cache from a previous build that
+      // had the per-PSO blob cache enabled. The file is no longer
+      // touched at runtime, so without this it would just sit in the
+      // user's system directory forever consuming ~75 MB. Doing this
+      // on every Open is cheap (two path_is_valid+unlink hits) and
+      // self-healing across upgrades and downgrades.
+      const std::string base_pipelines_filename = GetCacheBaseFileName(base_path, "pipelines", feature_level, debug);
+      const std::string pipelines_index_filename = base_pipelines_filename + ".idx";
+      const std::string pipelines_blob_filename = base_pipelines_filename + ".bin";
+      if (path_is_valid(pipelines_index_filename.c_str()))
+        filestream_delete(pipelines_index_filename.c_str());
+      if (path_is_valid(pipelines_blob_filename.c_str()))
+        filestream_delete(pipelines_blob_filename.c_str());
     }
   }
 }
