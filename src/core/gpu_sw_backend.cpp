@@ -228,12 +228,12 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
   {
     const s32 y = origin_y + static_cast<s32>(offset_y);
     if (y < static_cast<s32>(m_drawing_area.top) || y > static_cast<s32>(m_drawing_area.bottom) ||
-        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (static_cast<u8>(static_cast<u32>(y)) & 1u)))
+        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y & 1)))
     {
       continue;
     }
 
-    const u8 texcoord_y = static_cast<u8>(static_cast<u32>(origin_texcoord_y) + offset_y);
+    const u8 texcoord_y = static_cast<u8>(origin_texcoord_y + offset_y);
 
     for (u32 offset_x = 0; offset_x < cmd->width; offset_x++)
     {
@@ -241,7 +241,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
       if (x < static_cast<s32>(m_drawing_area.left) || x > static_cast<s32>(m_drawing_area.right))
         continue;
 
-      const u8 texcoord_x = static_cast<u8>(static_cast<u32>(origin_texcoord_x) + offset_x);
+      const u8 texcoord_x = static_cast<u8>(origin_texcoord_x + offset_x);
 
       ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false>(
         cmd, static_cast<u32>(x), static_cast<u32>(y), r, g, b, texcoord_x, texcoord_y);
@@ -360,7 +360,7 @@ template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool
 void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
                               const i_deltas& idl)
 {
-  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (static_cast<u8>(static_cast<u32>(y)) & 1u))
+  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y & 1))
     return;
 
   s32 x_ig_adjust = x_start;
@@ -683,7 +683,7 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
     const s32 x = (cur_point.x >> Line_XY_FractBits) & 2047;
     const s32 y = (cur_point.y >> Line_XY_FractBits) & 2047;
 
-    if ((!cmd->params.interlaced_rendering || cmd->params.active_line_lsb != (static_cast<u8>(static_cast<u32>(y)) & 1u)) &&
+    if ((!cmd->params.interlaced_rendering || cmd->params.active_line_lsb != (y & 1)) &&
         x >= static_cast<s32>(m_drawing_area.left) && x <= static_cast<s32>(m_drawing_area.right) &&
         y >= static_cast<s32>(m_drawing_area.top) && y <= static_cast<s32>(m_drawing_area.bottom))
     {
