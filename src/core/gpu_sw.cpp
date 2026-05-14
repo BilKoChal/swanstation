@@ -149,7 +149,7 @@ ALWAYS_INLINE void CopyOutRow16<HostDisplayPixelFormat::RGBA5551, uint16_t>(cons
     const __m128i single_mask = _mm_set1_epi16(0x1F);
     __m128i value = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src_ptr));
     src_ptr += 8;
-    __m128i a = _mm_and_si128(value, _mm_set1_epi16(static_cast<int16_t>(static_cast<uint16_t>(0x3E0))));
+    __m128i a = _mm_and_si128(value, _mm_set1_epi16(static_cast<int16_t>(0x3E0)));
     __m128i b = _mm_and_si128(_mm_srli_epi16(value, 10), single_mask);
     __m128i c = _mm_slli_epi16(_mm_and_si128(value, single_mask), 10);
     value = _mm_or_si128(_mm_or_si128(a, b), c);
@@ -188,8 +188,8 @@ ALWAYS_INLINE void CopyOutRow16<HostDisplayPixelFormat::RGB565, uint16_t>(const 
     const __m128i single_mask = _mm_set1_epi16(0x1F);
     __m128i value = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src_ptr));
     src_ptr += 8;
-    __m128i a = _mm_slli_epi16(_mm_and_si128(value, _mm_set1_epi16(static_cast<int16_t>(static_cast<uint16_t>(0x3E0)))), 1);
-    __m128i b = _mm_slli_epi16(_mm_and_si128(value, _mm_set1_epi16(static_cast<int16_t>(static_cast<uint16_t>(0x20)))), 1);
+    __m128i a = _mm_slli_epi16(_mm_and_si128(value, _mm_set1_epi16(static_cast<int16_t>(0x3E0))), 1);
+    __m128i b = _mm_slli_epi16(_mm_and_si128(value, _mm_set1_epi16(static_cast<int16_t>(0x20))), 1);
     __m128i c = _mm_and_si128(_mm_srli_epi16(value, 10), single_mask);
     __m128i d = _mm_slli_epi16(_mm_and_si128(value, single_mask), 11);
     value = _mm_or_si128(_mm_or_si128(_mm_or_si128(a, b), c), d);
