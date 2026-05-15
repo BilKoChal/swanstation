@@ -167,6 +167,34 @@ private:
   VkPipeline GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode, bool dithering,
                               bool interlacing);
 
+  // Lazy non-batch PSO compile path. Mirrors the D3D12 backend's
+  // GetVRAMFillPipeline / GetVRAMCopyPipeline / GetDisplayPipeline
+  // / etc. helpers: each non-batch pipeline (VRAM fill / copy /
+  // write / update depth / readback, display, downsample) is
+  // built on first use rather than unconditionally at GPU init.
+  //
+  // Unlike the batch helpers these helpers run main-thread-only.
+  // The Lazy worker pre-fills them via the main-thread pre-fill
+  // pass in CompilePipelines BEFORE spawning the batch worker, so
+  // by the time gameplay begins all 18-ish non-batch slots are
+  // filled and no contention can occur.
+  //
+  // The shared fullscreen-quad / UV-quad vertex shader modules are
+  // cached as members so each helper can reach them without
+  // re-running glslang + vkCreateShaderModule on every call.
+  VkShaderModule GetFullscreenQuadVertexShader();
+  VkShaderModule GetUVQuadVertexShader();
+  VkPipeline GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlaced);
+  VkPipeline GetVRAMCopyPipeline(uint8_t depth_test);
+  VkPipeline GetVRAMWritePipeline(uint8_t depth_test);
+  VkPipeline GetVRAMUpdateDepthPipeline();
+  VkPipeline GetVRAMReadbackPipeline();
+  VkPipeline GetDisplayPipeline(uint8_t depth_24, uint8_t interlace_mode);
+  VkPipeline GetDownsampleFirstPassPipeline();
+  VkPipeline GetDownsampleMidPassPipeline();
+  VkPipeline GetDownsampleBlurPassPipeline();
+  VkPipeline GetDownsampleCompositePassPipeline();
+
   // Background-thread worker for 'Lazy' mode: walks the full PSO
   // matrix and calls GetBatchPipeline on each cell. Main thread
   // can race ahead and fault in any slot it actually needs at draw
@@ -235,19 +263,22 @@ private:
   //
   // std::atomic<VkPipeline> rather than a plain VkPipeline so the
   // draw path can sample a slot without taking any lock. The slow
-  // path (slot still null after the atomic load) takes the compile
-  // mutex, re-checks the slot, compiles if still null, publishes
-  // back to the slot. The fast path - which is what DrawBatchVertices
+  // path (slot still null after the atomic load) compiles glslang
+  // + vkCreateGraphicsPipelines lock-free, then takes
+  // m_batch_shader_mutex briefly to publish into the slot under a
+  // double-check. The fast path - which is what DrawBatchVertices
   // hits once a slot has been filled either by the precompile worker
   // or by an earlier main-thread fault-in - is a single
   // memory_order_acquire load with no kernel calls and no
-  // serialisation against the worker. Without this, the user-visible
-  // experience after a texture-filter change was a multi-second
-  // hang: the precompile worker holds m_batch_shader_mutex for the
-  // duration of each ~50-200 ms vkCreateGraphicsPipelines call, so
+  // serialisation against the worker.
+  //
+  // Without this, the user-visible experience after a texture-filter
+  // change was a multi-second hang: the precompile worker held
+  // m_batch_shader_mutex for the duration of each glslang ->
+  // SPIR-V compile (~hundreds of ms on the heavier shaders), so
   // every concurrent main-thread DrawBatchVertices stalled behind
-  // it for one PSO compile, and the runloop never made forward
-  // progress until the worker finished the entire 2160-entry
+  // it for at least one full compile, and the runloop never made
+  // forward progress until the worker finished the entire 2160-entry
   // matrix.
   DimensionalArray<std::atomic<VkPipeline>, 2, 2, 5, 9, 4, 3> m_batch_pipelines{};
 
@@ -256,21 +287,25 @@ private:
   // locals in CompilePipelines and were leaked on success; now they
   // live for the lifetime of this GPU backend so the lazy PSO
   // builder can reach them at draw time, and DestroyPipelines tears
-  // them down properly via SafeDestroyShaderModule.
+  // them down properly.
   //
   // Dup slots for texture_mode 3 / 7 stay VK_NULL_HANDLE; the
   // helper-entry remap (see GetBatchFragmentShader) routes all
   // accesses through the canonical slots 2 / 6.
   //
-  // m_batch_shader_mutex serialises the SLOW path of the lazy
-  // helpers:
-  //   - g_vulkan_shader_cache mutations (its unordered_map indices
-  //     aren't thread-safe on insert)
-  //   - the VkPipelineCache passed to vkCreateGraphicsPipelines
-  //     (Vulkan spec: must be externally synchronised when shared
-  //     across threads)
-  //   - the writes that publish a newly-compiled VkPipeline /
-  //     VkShaderModule back into the matrix slot
+  // m_batch_shader_mutex serialises only the PUBLISH step of the
+  // lazy batch helpers - writing a freshly-compiled VkPipeline /
+  // VkShaderModule back into the matrix slot, under a double-check
+  // for "did another thread win the race". The slow operations
+  // themselves (glslang -> SPIR-V, vkCreateShaderModule,
+  // vkCreateGraphicsPipelines) all run WITHOUT this mutex held:
+  //   - g_vulkan_shader_cache has its own internal mutex (covers
+  //     SPIR-V index + cache file I/O; does NOT span the glslang
+  //     compile).
+  //   - g_vulkan_shader_cache->PipelineCacheMutex() (Vulkan 1.0
+  //     spec: the pipelineCache parameter to
+  //     vkCreateGraphicsPipelines is host-synchronised) is taken
+  //     just around the gpbuilder.Create() call.
   // The FAST path - draw-time lookup of an already-filled slot -
   // does NOT take this mutex; it uses an atomic load on the slot
   // itself. See the comment on m_batch_pipelines above for why
@@ -282,6 +317,14 @@ private:
 
   DimensionalArray<std::atomic<VkShaderModule>, 2> m_batch_vertex_shaders{};              // [textured]
   DimensionalArray<std::atomic<VkShaderModule>, 2, 2, 9, 4> m_batch_fragment_shaders{};   // [render][texture][dither][interlace]
+
+  // Shared vertex shaders used by all non-batch pipelines. Cached
+  // here so the lazy non-batch helpers don't run glslang +
+  // vkCreateShaderModule on every call - first GetXxxQuadVertexShader
+  // call populates them, subsequent calls return the cached handle.
+  // DestroyPipelines tears them down via SafeDestroyShaderModule.
+  VkShaderModule m_fullscreen_quad_vertex_shader = VK_NULL_HANDLE;
+  VkShaderModule m_uv_quad_vertex_shader = VK_NULL_HANDLE;
 
   // [wrapped][interlaced]
   DimensionalArray<VkPipeline, 2, 2> m_vram_fill_pipelines{};

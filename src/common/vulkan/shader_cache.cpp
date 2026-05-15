@@ -425,19 +425,35 @@ std::optional<ShaderCompiler::SPIRVCodeVector> ShaderCache::GetShaderSPV(ShaderC
                                                                          std::string_view shader_code)
 {
   const auto key = GetCacheKey(type, shader_code);
-  auto iter = m_index.find(key);
-  if (iter == m_index.end())
-    return CompileAndAddShaderSPV(key, shader_code);
 
-  SPIRVCodeVector spv(iter->second.blob_size);
-  if (rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
-      rfread(spv.data(), sizeof(SPIRVCodeType), iter->second.blob_size, m_blob_file) != iter->second.blob_size)
+  // Fast path: look up in the index under the lock and read the
+  // existing SPIR-V if present. The lock window covers the
+  // unordered_map lookup AND the rfseek+rfread on the blob file
+  // since file position is shared mutable state.
   {
-    Log_ErrorPrintf("Read blob from file failed, recompiling");
-    return ShaderCompiler::CompileShader(type, shader_code, m_debug);
+    std::lock_guard<std::mutex> lock(m_shader_cache_mutex);
+    auto iter = m_index.find(key);
+    if (iter != m_index.end())
+    {
+      SPIRVCodeVector spv(iter->second.blob_size);
+      if (rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+          rfread(spv.data(), sizeof(SPIRVCodeType), iter->second.blob_size, m_blob_file) != iter->second.blob_size)
+      {
+        Log_ErrorPrintf("Read blob from file failed, recompiling");
+        // Fall through to compile path below (outside the lock).
+      }
+      else
+      {
+        return spv;
+      }
+    }
   }
 
-  return spv;
+  // Slow path: compile WITHOUT the cache mutex held, so other threads
+  // can use the cache (or fault their own different shaders) in
+  // parallel. Concurrent compiles of the same shader are tolerated -
+  // see the publish step in CompileAndAddShaderSPV.
+  return CompileAndAddShaderSPV(key, shader_code);
 }
 
 VkShaderModule ShaderCache::GetShaderModule(ShaderCompiler::Type type, std::string_view shader_code)
@@ -473,9 +489,37 @@ VkShaderModule ShaderCache::GetFragmentShader(std::string_view shader_code)
 std::optional<ShaderCompiler::SPIRVCodeVector> ShaderCache::CompileAndAddShaderSPV(const CacheIndexKey& key,
                                                                                    std::string_view shader_code)
 {
+  // SLOW: glslang -> SPIR-V runs WITHOUT the cache mutex held. Two
+  // threads racing to compile the same shader both end up here;
+  // glslang is deterministic on identical source so they produce
+  // identical SPIR-V. The double-check below picks whichever
+  // completed first.
   std::optional<SPIRVCodeVector> spv = ShaderCompiler::CompileShader(key.shader_type, shader_code, m_debug);
   if (!spv.has_value())
     return {};
+
+  // FAST: take the lock to publish. Double-check under the lock in
+  // case another thread won the race - if so, read their SPIR-V
+  // from disk and return it instead of writing ours (saves a file
+  // write and keeps the index uniquely-keyed).
+  std::lock_guard<std::mutex> lock(m_shader_cache_mutex);
+
+  auto iter = m_index.find(key);
+  if (iter != m_index.end())
+  {
+    SPIRVCodeVector existing(iter->second.blob_size);
+    if (rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+        rfread(existing.data(), sizeof(SPIRVCodeType), iter->second.blob_size, m_blob_file) != iter->second.blob_size)
+    {
+      // Read failure on the existing entry - fall through to our
+      // freshly-compiled SPIR-V rather than fail the call.
+      Log_WarningPrintf("Double-checked shader cache read failed; using freshly-compiled SPIR-V");
+    }
+    else
+    {
+      return existing;
+    }
+  }
 
   if (!m_blob_file || rfseek(m_blob_file, 0, SEEK_END) != 0)
     return spv;
