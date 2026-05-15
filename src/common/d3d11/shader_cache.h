@@ -6,6 +6,7 @@
 #include "shader_compiler.h"
 #include <cstdio>
 #include <d3d11.h>
+#include <mutex>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -81,6 +82,17 @@ private:
   RFILE* m_blob_file = nullptr;
 
   CacheIndex m_index;
+
+  // Protects m_index (the unordered_map), m_blob_file (rfseek/rfread
+  // share file position state), and m_index_file. NOT held across
+  // the slow ShaderCompiler::CompileShader (HLSL -> DXBC via
+  // D3DCompile) call - that runs lock-free so two threads compiling
+  // different shaders truly run in parallel. Two threads racing to
+  // compile the same shader is harmless: D3DCompile is deterministic
+  // on identical source, so both produce identical DXBC; the
+  // double-check in CompileAndAddShaderBlob picks whichever publishes
+  // first.
+  std::mutex m_shader_cache_mutex;
 
   D3D_FEATURE_LEVEL m_feature_level = D3D_FEATURE_LEVEL_11_0;
   uint32_t m_version = 0;

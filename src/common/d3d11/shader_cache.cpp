@@ -210,20 +210,36 @@ ShaderCache::CacheIndexKey ShaderCache::GetCacheKey(ShaderCompiler::Type type, c
 ShaderCache::ComPtr<ID3DBlob> ShaderCache::GetShaderBlob(ShaderCompiler::Type type, std::string_view shader_code)
 {
   const auto key = GetCacheKey(type, shader_code);
-  auto iter = m_index.find(key);
-  if (iter == m_index.end())
-    return CompileAndAddShaderBlob(key, shader_code);
 
-  ComPtr<ID3DBlob> blob;
-  HRESULT hr = D3DCreateBlob(iter->second.blob_size, blob.GetAddressOf());
-  if (FAILED(hr) || rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
-      rfread(blob->GetBufferPointer(), 1, iter->second.blob_size, m_blob_file) != iter->second.blob_size)
+  // Fast path: look up in the index under the lock and read the
+  // existing DXBC if present. The lock window covers the
+  // unordered_map lookup AND the rfseek+rfread on the blob file
+  // since file position is shared mutable state.
   {
-    Log_ErrorPrintf("Read blob from file failed");
-    return {};
+    std::lock_guard<std::mutex> lock(m_shader_cache_mutex);
+    auto iter = m_index.find(key);
+    if (iter != m_index.end())
+    {
+      ComPtr<ID3DBlob> blob;
+      HRESULT hr = D3DCreateBlob(iter->second.blob_size, blob.GetAddressOf());
+      if (FAILED(hr) || rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+          rfread(blob->GetBufferPointer(), 1, iter->second.blob_size, m_blob_file) != iter->second.blob_size)
+      {
+        Log_ErrorPrintf("Read blob from file failed, recompiling");
+        // Fall through to compile path below (outside the lock).
+      }
+      else
+      {
+        return blob;
+      }
+    }
   }
 
-  return blob;
+  // Slow path: compile WITHOUT the cache mutex held, so other threads
+  // can use the cache (or fault their own different shaders) in
+  // parallel. Concurrent compiles of the same shader are tolerated -
+  // see the publish step in CompileAndAddShaderBlob.
+  return CompileAndAddShaderBlob(key, shader_code);
 }
 
 ShaderCache::ComPtr<ID3D11VertexShader> ShaderCache::GetVertexShader(ID3D11Device* device, std::string_view shader_code)
@@ -247,9 +263,38 @@ ShaderCache::ComPtr<ID3D11PixelShader> ShaderCache::GetPixelShader(ID3D11Device*
 ShaderCache::ComPtr<ID3DBlob> ShaderCache::CompileAndAddShaderBlob(const CacheIndexKey& key,
                                                                    std::string_view shader_code)
 {
+  // SLOW: D3DCompile (HLSL -> DXBC) runs WITHOUT the cache mutex
+  // held. Two threads racing to compile the same shader both end up
+  // here; D3DCompile is deterministic on identical source so they
+  // produce identical DXBC. The double-check below picks whichever
+  // completed first.
   ComPtr<ID3DBlob> blob = ShaderCompiler::CompileShader(key.shader_type, m_feature_level, shader_code, m_debug);
   if (!blob)
     return {};
+
+  // FAST: take the lock to publish. Double-check under the lock in
+  // case another thread won the race - if so, read their DXBC from
+  // disk and return it instead of writing ours (saves a file write
+  // and keeps the index uniquely-keyed).
+  std::lock_guard<std::mutex> lock(m_shader_cache_mutex);
+
+  auto iter = m_index.find(key);
+  if (iter != m_index.end())
+  {
+    ComPtr<ID3DBlob> existing;
+    HRESULT hr = D3DCreateBlob(iter->second.blob_size, existing.GetAddressOf());
+    if (FAILED(hr) || rfseek(m_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+        rfread(existing->GetBufferPointer(), 1, iter->second.blob_size, m_blob_file) != iter->second.blob_size)
+    {
+      // Read failure on the existing entry - fall through to our
+      // freshly-compiled DXBC rather than fail the call.
+      Log_WarningPrintf("Double-checked shader cache read failed; using freshly-compiled DXBC");
+    }
+    else
+    {
+      return existing;
+    }
+  }
 
   if (!m_blob_file || rfseek(m_blob_file, 0, SEEK_END) != 0)
     return blob;

@@ -1175,14 +1175,16 @@ void GPU_HW_D3D11::ShaderCompileThreadEntryPoint()
   // common/thread_priority.h for the per-platform mechanics.
   ThreadPriority::LowerCurrentThreadPriority();
 
-  // Walk the matrix in (render, texture, dither, interlace) order and
-  // call GetBatchPixelShader on each cell. Each call takes
-  // m_batch_shader_mutex internally; we don't hold a lock across the
-  // loop so the main thread can still race ahead and pre-fill any
-  // slots it actually needs at draw time without waiting for the
-  // worker to reach them. The quit flag is checked between cells so
-  // DestroyShaders can bring the worker down within at most one
-  // shader-compile worth of latency.
+  // Walk the matrix in (render, texture, dither, interlace) order
+  // and call GetBatchPixelShader on each cell. Each call runs the
+  // slow D3DCompile + CreatePixelShader lock-free and takes
+  // m_batch_shader_mutex only for the publish step (microsecond
+  // window). The main thread can race ahead and pre-fill any slot
+  // it actually needs at draw time without waiting for the worker
+  // to reach them, and the worker's race-loser detection picks up
+  // any slot the main thread filled first. The quit flag is
+  // checked between cells so DestroyShaders can bring the worker
+  // down within at most one shader-compile worth of latency.
   for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
   {
     for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
@@ -1224,14 +1226,36 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(uint8_t render_mode, uint8_
   if (existing)
     return existing;
 
-  // Slow path. Take the mutex; double-check the fast slot in case
-  // someone else just published while we were waiting; otherwise
-  // compile via m_shader_cache.GetPixelShader (mutex-protected
-  // because the cache's m_index unordered_map isn't thread-safe on
-  // insert), populate the canonical ComPtr slot, propagate to the
-  // dup slot if the request was for a Reserved_* texture mode, and
-  // publish the raw pointer back out through fast_slot via
-  // memory_order_release.
+  // Slow path. Compile WITHOUT m_batch_shader_mutex held - that
+  // mutex was the head-of-line blocking culprit in the pre-fix
+  // design. m_shader_cache is internally thread-safe (it runs
+  // D3DCompile lock-free, takes its own mutex only for index /
+  // blob-file mutations and the disk-publish double-check), and
+  // ID3D11Device::CreatePixelShader is documented free-threaded
+  // by Microsoft, so multiple threads can compile different
+  // shaders here in parallel. Two threads racing to compile the
+  // SAME slot both produce equivalent ID3D11PixelShader objects;
+  // the loser's ComPtr is released when it falls out of scope
+  // below.
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetBatchPixelShader called before CompileShaders constructed the shadergen");
+    return nullptr;
+  }
+  const std::string ps = m_shadergen->GenerateBatchFragmentShader(
+    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+  ComPtr<ID3D11PixelShader> fresh = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+  if (!fresh)
+  {
+    Log_ErrorPrintf("Lazy batch pixel shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
+                    texture_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
+    return nullptr;
+  }
+
+  // Publish step. Take the mutex briefly to coordinate writes into
+  // m_batch_pixel_shaders (ComPtr ownership) and the fastpath
+  // raw-pointer mirror. Double-check the fast slot under the lock
+  // so a race winner doesn't get displaced.
   std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
 
   existing = fast_slot.load(std::memory_order_relaxed);
@@ -1243,25 +1267,16 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(uint8_t render_mode, uint8_
 
   if (!canonical_slot)
   {
-    if (!m_shadergen)
-    {
-      Log_ErrorPrint("GetBatchPixelShader called before CompileShaders constructed the shadergen");
-      return nullptr;
-    }
-    const std::string ps = m_shadergen->GenerateBatchFragmentShader(
-      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-    canonical_slot = m_shader_cache.GetPixelShader(m_device.Get(), ps);
-    if (!canonical_slot)
-    {
-      Log_ErrorPrintf("Lazy batch pixel shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                      texture_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
-      return nullptr;
-    }
-    // Publish the canonical raw pointer so future fast-path readers
-    // for the canonical slot don't have to take the mutex.
+    // We won the race on the canonical slot - take ownership of
+    // our freshly-compiled shader.
+    canonical_slot = fresh;
     m_batch_pixel_shader_fastpath[render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)].store(
       canonical_slot.Get(), std::memory_order_release);
   }
+  // Else: canonical_slot was already filled by another racing
+  // thread. Our `fresh` ComPtr releases its ID3D11PixelShader when
+  // it falls out of scope below, and we use the already-published
+  // canonical_slot.
 
   if (lookup_mode != texture_mode)
   {

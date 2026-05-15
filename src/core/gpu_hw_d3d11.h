@@ -151,13 +151,16 @@ private:
   //     no kernel call, no serialisation against the background
   //     precompile worker. This is what DrawBatchVertices hits in
   //     steady state.
-  //   - SLOW path (slot null after the atomic load): take
-  //     m_batch_shader_mutex, double-check the slot, compile via
-  //     m_shader_cache.GetPixelShader (which mutates its
-  //     unordered_map index and so requires external synchronisation),
-  //     publish the ComPtr into m_batch_pixel_shaders, and then
-  //     atomic-store the raw pointer into m_batch_pixel_shader_fastpath
-  //     so future fast-path readers see it.
+  //   - SLOW path (slot null after the atomic load): runs
+  //     shadergen + m_shader_cache.GetPixelShader (HLSL -> DXBC
+  //     via D3DCompile + CreatePixelShader) WITHOUT
+  //     m_batch_shader_mutex held. m_shader_cache is internally
+  //     thread-safe (separate mutex around the index, NOT held
+  //     across D3DCompile). After the compile completes,
+  //     m_batch_shader_mutex is taken briefly to publish into the
+  //     matrix under a double-check; the mutex window is now
+  //     publish-only (microseconds), not compile-spanning
+  //     (50-200 ms).
   //
   // ID3D11PixelShader* itself is free-threaded for the consumer
   // side (PSSetShader), so DrawBatchVertices can use the raw
@@ -230,22 +233,28 @@ private:
   //
   // m_batch_pixel_shaders holds the COM ownership and is only
   // written under m_batch_shader_mutex (in GetBatchPixelShader's
-  // slow path). The shader stays alive for the lifetime of this
-  // GPU backend (until DestroyShaders walks the ComPtr array), so
-  // the raw pointer published into m_batch_pixel_shader_fastpath
-  // is valid until then.
+  // PUBLISH step - the mutex is held only for the slot-store and
+  // race-loser detection, NOT across the slow D3DCompile +
+  // CreatePixelShader work, which runs lock-free). The shader
+  // stays alive for the lifetime of this GPU backend (until
+  // DestroyShaders walks the ComPtr array), so the raw pointer
+  // published into m_batch_pixel_shader_fastpath is valid until
+  // then.
   //
   // The Reserved_*Direct16Bit dedup at the matrix level copies
   // the ComPtr (sharing one shader across two slots) and copies
   // the raw pointer too. SafeDestroy is via ComPtr-reset on the
   // owning array; the atomic array is just a view.
   //
-  // Without this split the fast path took the same mutex the
+  // Without this design the fast path took the same mutex the
   // background precompile worker holds during 50-200 ms HLSL
   // compiles, so concurrent main-thread draws would stall behind
-  // the worker for one whole shader compile per draw. With the
-  // split, DrawBatchVertices is lock-free on cache-hit and the
-  // worker can compile in the background unmolested.
+  // the worker for one whole shader compile per draw - which on
+  // Lazy mode meant the runloop locked up entirely before the BIOS
+  // screen as the worker walked the 144-entry batch matrix on its
+  // first run. With this design DrawBatchVertices is lock-free on
+  // cache-hit AND on race the slow path doesn't block the worker
+  // either; the worker can compile in the background unmolested.
   std::array<std::array<std::array<std::array<ComPtr<ID3D11PixelShader>, 2>, 2>, 9>, 4>
     m_batch_pixel_shaders; // [render_mode][texture_mode][dithering][interlacing]
   std::array<std::array<std::array<std::array<std::atomic<ID3D11PixelShader*>, 2>, 2>, 9>, 4>
