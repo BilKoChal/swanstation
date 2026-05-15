@@ -684,7 +684,8 @@ bool GPU_HW_D3D12::CompilePipelines()
   // m_pipeline_index entries and leak the previous RFILE* handles.
   if (!m_shader_cache.IsOpen())
   {
-    m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), g_d3d12_context->GetFeatureLevel(), false);
+    m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), g_d3d12_context->GetDevice(),
+                        g_d3d12_context->GetFeatureLevel(), false);
   }
   // Convenience local reference for readability in the rest of this
   // function; the lazy helpers below also reach into m_shader_cache
