@@ -148,6 +148,40 @@ private:
   ComPtr<ID3D12PipelineState> GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode,
                                                bool dithering, bool interlacing);
 
+  // Lazy non-batch PSO compile path.
+  //
+  // The non-batch pipelines (VRAM fill / copy / write / update depth
+  // / readback, display, copy/blit) used to be compiled
+  // unconditionally at CompilePipelines time regardless of the
+  // gpu_shader_precompile_mode setting. Even with 'Disabled' the
+  // user would pay the cost of building 17 PSOs + the fullscreen
+  // quad vertex shader at GPU init - on a cold cache that is
+  // hundreds of ms of D3DCompile + driver PSO assembly. The
+  // 'Disabled' contract is meant to be "skip all compilation at
+  // init time, fault everything in on first use", so these helpers
+  // bring the non-batch pipelines under the same lazy-fault
+  // umbrella as the batch matrix.
+  //
+  // Each helper follows the same fast-path / slow-path layout as
+  // GetBatchPipeline: an acquire-load on an atomic raw-pointer
+  // fast-path array, falling back to the ComPtr slot under
+  // m_batch_shader_mutex on a miss. The atomic fast path means
+  // the runloop hot path - FillVRAM / CopyVRAM / UpdateVRAM /
+  // UpdateDisplay / etc. - takes no lock once the slot is filled.
+  // The single-PSO ones use a bare std::atomic + ComPtr pair.
+  //
+  // GetFullscreenQuadVertexShader is shared across most of the
+  // non-batch pipelines and is hoisted out as a separate helper so
+  // each PSO compile fetches it via the same lazy-fault pattern.
+  ComPtr<ID3DBlob> GetFullscreenQuadVertexShader();
+  ComPtr<ID3D12PipelineState> GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlaced);
+  ComPtr<ID3D12PipelineState> GetVRAMCopyPipeline(uint8_t depth_test);
+  ComPtr<ID3D12PipelineState> GetVRAMWritePipeline(uint8_t depth_test);
+  ComPtr<ID3D12PipelineState> GetVRAMUpdateDepthPipeline();
+  ComPtr<ID3D12PipelineState> GetVRAMReadbackPipeline();
+  ComPtr<ID3D12PipelineState> GetDisplayPipeline(uint8_t depth_24, uint8_t interlace_mode);
+  ComPtr<ID3D12PipelineState> GetCopyPipeline();
+
   // Background-thread worker for 'Lazy' precompile mode: walks the
   // full PSO matrix in (depth_test, render_mode, transparency_mode,
   // texture_mode, dithering, interlacing) order and calls
@@ -230,18 +264,33 @@ private:
 
   // [wrapped][interlaced]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2> m_vram_fill_pipelines;
+  DimensionalArray<std::atomic<ID3D12PipelineState*>, 2, 2> m_vram_fill_pipelines_fastpath{};
 
   // [depth_test]
   std::array<ComPtr<ID3D12PipelineState>, 2> m_vram_write_pipelines;
   std::array<ComPtr<ID3D12PipelineState>, 2> m_vram_copy_pipelines;
+  std::array<std::atomic<ID3D12PipelineState*>, 2> m_vram_write_pipelines_fastpath{};
+  std::array<std::atomic<ID3D12PipelineState*>, 2> m_vram_copy_pipelines_fastpath{};
 
   ComPtr<ID3D12PipelineState> m_vram_readback_pipeline;
   ComPtr<ID3D12PipelineState> m_vram_update_depth_pipeline;
+  std::atomic<ID3D12PipelineState*> m_vram_readback_pipeline_fastpath{nullptr};
+  std::atomic<ID3D12PipelineState*> m_vram_update_depth_pipeline_fastpath{nullptr};
 
   // [depth_24][interlace_mode]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 3, 2> m_display_pipelines;
+  DimensionalArray<std::atomic<ID3D12PipelineState*>, 3, 2> m_display_pipelines_fastpath{};
 
   ComPtr<ID3D12PipelineState> m_copy_pipeline;
+  std::atomic<ID3D12PipelineState*> m_copy_pipeline_fastpath{nullptr};
+
+  // Vertex shader shared across the non-batch pipelines (VRAM read,
+  // display, copy/blit). Compiled lazily on first use via
+  // GetFullscreenQuadVertexShader; serialised through
+  // m_batch_shader_mutex. Used to be a CompilePipelines local that
+  // was always built at init.
+  ComPtr<ID3DBlob> m_fullscreen_quad_vertex_shader;
+
   D3D12::Texture m_vram_write_replacement_texture;
   D3D12::StreamBuffer m_texture_replacment_stream_buffer;
 };

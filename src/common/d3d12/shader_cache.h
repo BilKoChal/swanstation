@@ -5,6 +5,7 @@
 #include "../windows_headers.h"
 #include <cstdio>
 #include <d3d12.h>
+#include <mutex>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -102,6 +103,22 @@ private:
                                                     const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc);
 
   std::string m_base_path;
+
+  // Two mutexes covering the two cache sides (HLSL shader blobs vs
+  // D3D12 pipeline blobs). The mutexes are deliberately NOT held
+  // across the slow operations - D3DCompile in
+  // CompileAndAddShaderBlob and CreateGraphicsPipelineState in
+  // CompileAndAddPipeline - so two threads compiling different
+  // shaders / pipelines run truly in parallel.
+  //
+  // Two threads racing to compile the SAME shader is harmless: each
+  // does its own D3DCompile, then takes the mutex to publish the
+  // result. The second one observes the slot already filled (via the
+  // double-check inside CompileAndAddXxx) and discards its copy. The
+  // wasted compile is the cost of avoiding the deadlock the previous
+  // single-mutex-around-everything design would have caused.
+  std::mutex m_shader_cache_mutex;
+  std::mutex m_pipeline_cache_mutex;
 
   RFILE* m_shader_index_file = nullptr;
   RFILE* m_shader_blob_file = nullptr;

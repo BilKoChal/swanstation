@@ -353,20 +353,33 @@ ShaderCache::CacheIndexKey ShaderCache::GetPipelineCacheKey(const D3D12_GRAPHICS
 ShaderCache::ComPtr<ID3DBlob> ShaderCache::GetShaderBlob(EntryType type, std::string_view shader_code)
 {
   const auto key = GetShaderCacheKey(type, shader_code);
-  auto iter = m_shader_index.find(key);
-  if (iter == m_shader_index.end())
-    return CompileAndAddShaderBlob(key, shader_code);
 
-  ComPtr<ID3DBlob> blob;
-  HRESULT hr = D3DCreateBlob(iter->second.blob_size, blob.GetAddressOf());
-  if (FAILED(hr) || rfseek(m_shader_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
-      rfread(blob->GetBufferPointer(), 1, iter->second.blob_size, m_shader_blob_file) != iter->second.blob_size)
+  // Fast path: look up in the index under the lock and read the
+  // existing blob if present. The lock window covers the
+  // unordered_map lookup AND the rfseek+rfread on the blob file
+  // since file position is shared mutable state.
   {
-    Log_ErrorPrintf("Read blob from file failed");
-    return {};
+    std::lock_guard<std::mutex> lock(m_shader_cache_mutex);
+    auto iter = m_shader_index.find(key);
+    if (iter != m_shader_index.end())
+    {
+      ComPtr<ID3DBlob> blob;
+      HRESULT hr = D3DCreateBlob(iter->second.blob_size, blob.GetAddressOf());
+      if (FAILED(hr) || rfseek(m_shader_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+          rfread(blob->GetBufferPointer(), 1, iter->second.blob_size, m_shader_blob_file) != iter->second.blob_size)
+      {
+        Log_ErrorPrintf("Read blob from file failed");
+        return {};
+      }
+      return blob;
+    }
   }
 
-  return blob;
+  // Slow path: compile WITHOUT the cache mutex held, so other threads
+  // can use the cache (or fault their own different shaders) in
+  // parallel. Concurrent compiles of the same shader are tolerated -
+  // see the publish step in CompileAndAddShaderBlob.
+  return CompileAndAddShaderBlob(key, shader_code);
 }
 
 ShaderCache::ComPtr<ID3D12PipelineState> ShaderCache::GetPipelineState(ID3D12Device* device,
@@ -374,29 +387,52 @@ ShaderCache::ComPtr<ID3D12PipelineState> ShaderCache::GetPipelineState(ID3D12Dev
 {
   const auto key = GetPipelineCacheKey(desc);
 
-  auto iter = m_pipeline_index.find(key);
-  if (iter == m_pipeline_index.end())
-    return CompileAndAddPipeline(device, key, desc);
-
+  // Fast path: index lookup under the lock. Read the cached blob
+  // from disk (and the rfseek/rfread file-position state) all
+  // inside the lock so two threads' reads don't trample each
+  // other's seek position.
+  //
+  // Note: after the disk PSO cache was dropped (commit
+  // 81e3a2b8) m_pipeline_blob_file is always null when the cache
+  // is open, so the iter-found branch never fires in practice -
+  // the index stays empty. Code kept correct in case the cache
+  // comes back.
   ComPtr<ID3DBlob> blob;
-  HRESULT hr = D3DCreateBlob(iter->second.blob_size, blob.GetAddressOf());
-  if (FAILED(hr) || rfseek(m_pipeline_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
-      rfread(blob->GetBufferPointer(), 1, iter->second.blob_size, m_pipeline_blob_file) != iter->second.blob_size)
+  bool have_existing = false;
   {
-    Log_ErrorPrintf("Read blob from file failed");
-    return {};
+    std::lock_guard<std::mutex> lock(m_pipeline_cache_mutex);
+    auto iter = m_pipeline_index.find(key);
+    if (iter != m_pipeline_index.end())
+    {
+      HRESULT hr = D3DCreateBlob(iter->second.blob_size, blob.GetAddressOf());
+      if (FAILED(hr) || rfseek(m_pipeline_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+          rfread(blob->GetBufferPointer(), 1, iter->second.blob_size, m_pipeline_blob_file) != iter->second.blob_size)
+      {
+        Log_ErrorPrintf("Read blob from file failed");
+        return {};
+      }
+      have_existing = true;
+    }
   }
+
+  if (!have_existing)
+    return CompileAndAddPipeline(device, key, desc);
 
   D3D12_GRAPHICS_PIPELINE_STATE_DESC desc_with_blob(desc);
   desc_with_blob.CachedPSO.pCachedBlob = blob->GetBufferPointer();
   desc_with_blob.CachedPSO.CachedBlobSizeInBytes = blob->GetBufferSize();
 
+  // CreateGraphicsPipelineState runs WITHOUT the cache mutex held -
+  // it's the slow operation we never want to serialise threads on.
   ComPtr<ID3D12PipelineState> pso;
-  hr = device->CreateGraphicsPipelineState(&desc_with_blob, IID_PPV_ARGS(pso.GetAddressOf()));
+  HRESULT hr = device->CreateGraphicsPipelineState(&desc_with_blob, IID_PPV_ARGS(pso.GetAddressOf()));
   if (FAILED(hr))
   {
     Log_WarningPrintf("Creating cached PSO failed: %08X. Invalidating cache.", hr);
-    InvalidatePipelineCache();
+    {
+      std::lock_guard<std::mutex> lock(m_pipeline_cache_mutex);
+      InvalidatePipelineCache();
+    }
     pso = CompileAndAddPipeline(device, key, desc);
   }
 
@@ -406,6 +442,10 @@ ShaderCache::ComPtr<ID3D12PipelineState> ShaderCache::GetPipelineState(ID3D12Dev
 ShaderCache::ComPtr<ID3DBlob> ShaderCache::CompileAndAddShaderBlob(const CacheIndexKey& key,
                                                                    std::string_view shader_code)
 {
+  // SLOW: D3DCompile runs WITHOUT the cache mutex held. Two threads
+  // racing to compile the same shader both end up here; D3DCompile
+  // is deterministic on identical source so they produce identical
+  // DXBC. The double-check below picks whichever completed first.
   ComPtr<ID3DBlob> blob;
 
   switch (key.type)
@@ -428,6 +468,31 @@ ShaderCache::ComPtr<ID3DBlob> ShaderCache::CompileAndAddShaderBlob(const CacheIn
 
   if (!blob)
     return {};
+
+  // FAST: take the lock to publish. Double-check under the lock in
+  // case another thread won the race - if so, read their blob from
+  // disk and return it instead of writing ours (saves a file write
+  // and keeps the index uniquely-keyed).
+  std::lock_guard<std::mutex> lock(m_shader_cache_mutex);
+
+  auto iter = m_shader_index.find(key);
+  if (iter != m_shader_index.end())
+  {
+    ComPtr<ID3DBlob> existing_blob;
+    HRESULT hr = D3DCreateBlob(iter->second.blob_size, existing_blob.GetAddressOf());
+    if (FAILED(hr) || rfseek(m_shader_blob_file, iter->second.file_offset, SEEK_SET) != 0 ||
+        rfread(existing_blob->GetBufferPointer(), 1, iter->second.blob_size, m_shader_blob_file) !=
+          iter->second.blob_size)
+    {
+      // Read failure on the existing entry - fall through to our
+      // freshly-compiled blob rather than fail the call.
+      Log_WarningPrintf("Double-checked shader cache read failed; using freshly-compiled blob");
+    }
+    else
+    {
+      return existing_blob;
+    }
+  }
 
   if (!m_shader_blob_file || rfseek(m_shader_blob_file, 0, SEEK_END) != 0)
     return blob;
@@ -460,6 +525,12 @@ ShaderCache::ComPtr<ID3D12PipelineState>
 ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& key,
                                    const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc)
 {
+  // SLOW: CreateGraphicsPipelineState runs WITHOUT the cache mutex
+  // held - it's the equivalent of D3DCompile on the PSO side. Two
+  // threads racing to compile the same PSO key both end up here;
+  // both produce equivalent ID3D12PipelineState objects (PSOs are
+  // deterministic on identical descriptors). The double-check
+  // below picks whichever completed first.
   ComPtr<ID3D12PipelineState> pso;
   HRESULT hr = device->CreateGraphicsPipelineState(&gpdesc, IID_PPV_ARGS(pso.GetAddressOf()));
   if (FAILED(hr))
@@ -468,7 +539,13 @@ ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& ke
     return {};
   }
 
-  if (!m_pipeline_blob_file || rfseek(m_pipeline_blob_file, 0, SEEK_END) != 0)
+  // After the disk PSO cache drop (commit 81e3a2b8) the
+  // m_pipeline_blob_file is always null when the cache is open, so
+  // the whole index-update block below is dead in practice. Code
+  // kept correct in case the cache comes back. The earlier
+  // m_shader_index.emplace was a latent typo in dead code - it's
+  // been corrected to m_pipeline_index.emplace here.
+  if (!m_pipeline_blob_file)
     return pso;
 
   ComPtr<ID3DBlob> blob;
@@ -478,6 +555,23 @@ ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& ke
     Log_WarningPrintf("Failed to get cached PSO data: %08X", hr);
     return pso;
   }
+
+  // FAST: take the lock to write the index/blob file. Double-check
+  // under the lock - if another thread won the race, return their
+  // PSO instead of writing ours.
+  std::lock_guard<std::mutex> lock(m_pipeline_cache_mutex);
+
+  auto iter = m_pipeline_index.find(key);
+  if (iter != m_pipeline_index.end())
+  {
+    // Someone else already wrote this key. Our PSO is equivalent
+    // by construction; just return it (no point reading theirs
+    // from disk - the in-memory PSO works the same).
+    return pso;
+  }
+
+  if (rfseek(m_pipeline_blob_file, 0, SEEK_END) != 0)
+    return pso;
 
   CacheIndexData data;
   data.file_offset = static_cast<uint32_t>(rftell(m_pipeline_blob_file));
@@ -499,7 +593,7 @@ ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& ke
     return pso;
   }
 
-  m_shader_index.emplace(key, data);
+  m_pipeline_index.emplace(key, data);
   return pso;
 }
 

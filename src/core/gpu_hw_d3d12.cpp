@@ -700,16 +700,32 @@ bool GPU_HW_D3D12::CompilePipelines()
   // Whether to walk the full batch / PSO matrix synchronously,
   // hand it to a background thread, or skip it entirely. See the
   // comment on GPUShaderPrecompileMode in core/types.h.
+  //
+  // 'precompile_sync' also gates the non-batch pipelines (VRAM
+  // fill / copy / write / update depth / readback, display,
+  // copy/blit, and the shared fullscreen-quad vertex shader). On
+  // 'Disabled' those are faulted in via the GetXxxPipeline helpers
+  // the first time the runloop actually needs them, matching the
+  // documented "Disabled = no compilation at init" contract. On
+  // 'Lazy' the background thread pre-fills them before walking the
+  // batch matrix. On 'Enabled' we still build everything upfront
+  // here.
   const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
   const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
   const uint32_t batch_shader_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
+    precompile_sync ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
   const uint32_t batch_pipeline_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(2 * 4 * 5 * 9 * 2 * 2) : 0u;
+    precompile_sync ? static_cast<uint32_t>(2 * 4 * 5 * 9 * 2 * 2) : 0u;
+  // Non-batch units only counted when we build them upfront. The
+  // fullscreen-quad VS (1), VRAM fill (4), VRAM copy (2), VRAM
+  // write (2), VRAM update depth (1), VRAM readback (1), display
+  // (6) and copy/blit (1) sum to 18 - one tick per pipeline so the
+  // progress bar tracks the actual work being done.
+  const uint32_t non_batch_progress_units = precompile_sync ? 18u : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Pipelines",
-                                        2 + batch_shader_progress_units + batch_pipeline_progress_units + 1 + (2 * 2) +
-                                          2 + 2 + 1 + 1 + (2 * 3) + 1);
+                                        2 + batch_shader_progress_units + batch_pipeline_progress_units +
+                                          non_batch_progress_units);
 
   // Vertex shaders are still always compiled synchronously - there
   // are only two (textured / not) and we need them for the lazy
@@ -797,214 +813,123 @@ bool GPU_HW_D3D12::CompilePipelines()
   // background-thread launch for Lazy happens at the end of this
   // function, after the rest of the non-batch pipelines are built.
 
-  // GraphicsPipelineBuilder used by all the non-batch pipelines below
-  // (VRAM fill, VRAM copy, VRAM write, VRAM readback, VRAM update
-  // depth, display). The batch pipelines build their own private
-  // gpbuilder inside GetBatchPipeline so this one doesn't need to
-  // carry any of their per-batch state.
-  D3D12::GraphicsPipelineBuilder gpbuilder;
-
-  ComPtr<ID3DBlob> fullscreen_quad_vertex_shader =
-    shader_cache.GetVertexShader(shadergen.GenerateScreenQuadVertexShader());
-  if (!fullscreen_quad_vertex_shader)
-    return false;
-
-  progress.Increment();
-
-  // common state
-  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
-  gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
-  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
-  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetNoCullRasterizationState();
-  gpbuilder.SetNoDepthTestState();
-  gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(fullscreen_quad_vertex_shader.Get());
-  gpbuilder.SetMultisamples(m_multisamples);
-  gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
-  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
-
-  // VRAM fill
-  for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
+  // Non-batch pipelines (VRAM fill / copy / write / update depth /
+  // readback, display, copy/blit, fullscreen-quad VS). On 'Enabled'
+  // build them all upfront here through the lazy helpers so the
+  // helpers' GetXxx slot-fill machinery is exercised the same way
+  // it would be at draw time. The progress bar continues to tick
+  // per pipeline so the user sees the same "1 + 4 + 2 + 2 + 1 + 1
+  // + 6 + 1 = 18 unit" count it always did.
+  //
+  // On 'Lazy' the worker thread reaches these via the same helpers
+  // before walking the batch matrix. On 'Disabled' nothing happens
+  // here at all - first FillVRAM / CopyVRAM / etc. on the runloop
+  // faults the corresponding pipeline in and stores the result for
+  // subsequent calls.
+  if (precompile_sync)
   {
-    for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
-    {
-      ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(
-        shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
-      if (!fs)
-        return false;
-
-      gpbuilder.SetPixelShader(fs.Get());
-      gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
-
-      m_vram_fill_pipelines[wrapped][interlaced] = gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache, false);
-      if (!m_vram_fill_pipelines[wrapped][interlaced])
-        return false;
-
-      D3D12::SetObjectNameFormatted(m_vram_fill_pipelines[wrapped][interlaced].Get(),
-                                    "VRAM Fill Pipeline Wrapped=%u,Interlacing=%u", wrapped, interlaced);
-
-      progress.Increment();
-    }
-  }
-
-  // VRAM copy
-  {
-    ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateVRAMCopyFragmentShader());
-    if (!fs)
+    if (!GetFullscreenQuadVertexShader())
       return false;
+    progress.Increment();
 
-    gpbuilder.SetPixelShader(fs.Get());
+    for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
+    {
+      for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
+      {
+        if (!GetVRAMFillPipeline(wrapped, interlaced))
+          return false;
+        progress.Increment();
+      }
+    }
     for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
     {
-      gpbuilder.SetDepthState((depth_test != 0), true,
-                              (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
-
-      m_vram_copy_pipelines[depth_test] = gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache, false);
-      if (!m_vram_copy_pipelines[depth_test])
+      if (!GetVRAMCopyPipeline(depth_test))
         return false;
-
-      D3D12::SetObjectNameFormatted(m_vram_copy_pipelines[depth_test].Get(), "VRAM Copy Pipeline Depth=%u", depth_test);
-
       progress.Increment();
     }
-  }
-
-  // VRAM write
-  {
-    ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateVRAMWriteFragmentShader(false));
-    if (!fs)
-      return false;
-
-    gpbuilder.SetPixelShader(fs.Get());
     for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
     {
-      gpbuilder.SetDepthState(true, true,
-                              (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
-      m_vram_write_pipelines[depth_test] = gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache, false);
-      if (!m_vram_write_pipelines[depth_test])
+      if (!GetVRAMWritePipeline(depth_test))
         return false;
-
-      D3D12::SetObjectNameFormatted(m_vram_write_pipelines[depth_test].Get(), "VRAM Write Pipeline Depth=%u",
-                                    depth_test);
-
       progress.Increment();
     }
-  }
-
-  // VRAM update depth
-  {
-    ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateVRAMUpdateDepthFragmentShader());
-    if (!fs)
+    if (!GetVRAMUpdateDepthPipeline())
       return false;
-
-    gpbuilder.SetRootSignature(m_batch_root_signature.Get());
-    gpbuilder.SetPixelShader(fs.Get());
-    gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
-    gpbuilder.SetBlendState(0, false, D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE,
-                            D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, 0);
-    gpbuilder.ClearRenderTargets();
-
-    m_vram_update_depth_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache, false);
-    if (!m_vram_update_depth_pipeline)
-      return false;
-
-    D3D12::SetObjectName(m_vram_update_depth_pipeline.Get(), "VRAM Update Depth Pipeline");
-
     progress.Increment();
-  }
-
-  gpbuilder.Clear();
-
-  // VRAM read
-  {
-    ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateVRAMReadFragmentShader());
-    if (!fs)
+    if (!GetVRAMReadbackPipeline())
       return false;
-
-    gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
-    gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    gpbuilder.SetVertexShader(fullscreen_quad_vertex_shader.Get());
-    gpbuilder.SetPixelShader(fs.Get());
-    gpbuilder.SetNoCullRasterizationState();
-    gpbuilder.SetNoDepthTestState();
-    gpbuilder.SetNoBlendingState();
-    gpbuilder.SetRenderTarget(0, m_vram_readback_texture.GetFormat());
-    gpbuilder.ClearDepthStencilFormat();
-
-    m_vram_readback_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache, false);
-    if (!m_vram_readback_pipeline)
-      return false;
-
-    D3D12::SetObjectName(m_vram_update_depth_pipeline.Get(), "VRAM Readback Pipeline");
-
     progress.Increment();
-  }
-
-  gpbuilder.Clear();
-
-  // Display
-  {
-    gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
-    gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    gpbuilder.SetVertexShader(fullscreen_quad_vertex_shader.Get());
-    gpbuilder.SetNoCullRasterizationState();
-    gpbuilder.SetNoDepthTestState();
-    gpbuilder.SetNoBlendingState();
-    gpbuilder.SetRenderTarget(0, m_display_texture.GetFormat());
-
     for (uint8_t depth_24 = 0; depth_24 < 2; depth_24++)
     {
       for (uint8_t interlace_mode = 0; interlace_mode < 3; interlace_mode++)
       {
-        ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateDisplayFragmentShader(
-          static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
-        if (!fs)
+        if (!GetDisplayPipeline(depth_24, interlace_mode))
           return false;
-
-        gpbuilder.SetPixelShader(fs.Get());
-
-        m_display_pipelines[depth_24][interlace_mode] =
-          gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache, false);
-        if (!m_display_pipelines[depth_24][interlace_mode])
-          return false;
-
-        D3D12::SetObjectNameFormatted(m_display_pipelines[depth_24][interlace_mode].Get(),
-                                      "Display Pipeline Depth=%u Interlace=%u", depth_24, interlace_mode);
-
         progress.Increment();
       }
     }
-  }
-
-  // copy/blit
-  {
-    gpbuilder.Clear();
-    gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
-    gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    gpbuilder.SetVertexShader(fullscreen_quad_vertex_shader.Get());
-    gpbuilder.SetNoCullRasterizationState();
-    gpbuilder.SetNoDepthTestState();
-    gpbuilder.SetNoBlendingState();
-    gpbuilder.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
-
-    ComPtr<ID3DBlob> fs = shader_cache.GetPixelShader(shadergen.GenerateCopyFragmentShader());
-    if (!fs)
+    if (!GetCopyPipeline())
       return false;
-
-    gpbuilder.SetPixelShader(fs.Get());
-
-    m_copy_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice(), shader_cache);
-    if (!m_copy_pipeline)
-      return false;
-
     progress.Increment();
   }
 
-#undef UPDATE_PROGRESS
-
   if (precompile_mode == GPUShaderPrecompileMode::Lazy)
   {
+    // Pre-fill the non-batch pipelines on the main thread BEFORE
+    // launching the worker. This is mandatory, not an optimisation -
+    // without it the runloop's UpdateDepthBufferFromMaskBit() call at
+    // the end of Initialize() (and the first FillVRAM / UpdateDisplay
+    // etc. on the first frame after) goes to the corresponding
+    // GetXxxPipeline helper, which would have to take
+    // m_batch_shader_mutex - the same mutex the worker holds for the
+    // entire duration of each batch PSO compile. With 1440 batch PSOs
+    // averaging 20-50ms each on a modern GPU, std::mutex's lack of
+    // fairness on Windows means the main thread can starve for the
+    // entire worker run (30-60 seconds) waiting for a lock window
+    // between compiles. The window appears frozen the whole time.
+    //
+    // Pre-filling the 18 non-batch pipelines here costs Lazy the same
+    // few-hundred-ms upfront pause 'Enabled' pays for its non-batch
+    // section, which is well under a second on the 5090 and not
+    // perceived as a "frozen" window. The worker then only walks the
+    // batch matrix - the main thread doesn't generally need batch
+    // PSOs until a few frames into gameplay, by which point the
+    // worker is past its first few cells and the wait window is brief.
+    if (!GetFullscreenQuadVertexShader())
+      return false;
+    for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
+    {
+      for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
+      {
+        if (!GetVRAMFillPipeline(wrapped, interlaced))
+          return false;
+      }
+    }
+    for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
+    {
+      if (!GetVRAMCopyPipeline(depth_test))
+        return false;
+    }
+    for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
+    {
+      if (!GetVRAMWritePipeline(depth_test))
+        return false;
+    }
+    if (!GetVRAMUpdateDepthPipeline())
+      return false;
+    if (!GetVRAMReadbackPipeline())
+      return false;
+    for (uint8_t depth_24 = 0; depth_24 < 2; depth_24++)
+    {
+      for (uint8_t interlace_mode = 0; interlace_mode < 3; interlace_mode++)
+      {
+        if (!GetDisplayPipeline(depth_24, interlace_mode))
+          return false;
+      }
+    }
+    if (!GetCopyPipeline())
+      return false;
+
     // Kick off the background batch / PSO fill so gameplay can start
     // immediately. The worker walks the full PSO matrix in
     // (depth_test, render_mode, transparency_mode, texture_mode,
@@ -1040,6 +965,11 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   // common/thread_priority.h for the per-platform mechanics.
   ThreadPriority::LowerCurrentThreadPriority();
 
+  // The non-batch pipelines (VRAM ops, display, copy/blit) are
+  // pre-filled by the main thread in CompilePipelines before the
+  // worker is launched - see the comment block on the Lazy branch
+  // there for why. The worker only walks the batch matrix.
+  //
   // Walks the PSO matrix in (depth_test, render_mode,
   // transparency_mode, texture_mode, dithering, interlacing) order
   // - the same order CompilePipelines uses for the Enabled precompile
@@ -1099,16 +1029,37 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(uint8_t rend
   ID3DBlob* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
   {
-    // Build a temporary ComPtr that holds its own ref. The matrix
-    // ComPtr keeps the underlying object alive, so this is a
-    // straightforward AddRef on the way out.
     ComPtr<ID3DBlob> ret;
     ret.Attach(existing);
     existing->AddRef();
     return ret;
   }
 
-  // Slow path: take the mutex, double-check, compile if still null.
+  // Slow path: compile WITHOUT m_batch_shader_mutex held. The shader
+  // cache itself is thread-safe (it has its own internal locking
+  // that does NOT span D3DCompile), so multiple threads can compile
+  // different shaders here in parallel. Two threads compiling the
+  // SAME shader is harmless - both produce identical DXBC and the
+  // cache dedups internally via its own double-check.
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  const std::string fs = m_shadergen->GenerateBatchFragmentShader(
+    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+  ComPtr<ID3DBlob> fresh_blob = m_shader_cache.GetPixelShader(fs);
+  if (!fresh_blob)
+  {
+    Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
+                    texture_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
+    return {};
+  }
+
+  // Publish step: take the helper mutex briefly to write the
+  // canonical slot, the dup slot (for Reserved_* texture modes),
+  // and the fast-path atomics. The mutex window is microseconds -
+  // no D3DCompile call inside it.
   std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
 
   existing = fast_slot.load(std::memory_order_relaxed);
@@ -1125,22 +1076,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(uint8_t rend
 
   if (!canonical_slot)
   {
-    if (!m_shadergen)
-    {
-      Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
-      return {};
-    }
-    const std::string fs = m_shadergen->GenerateBatchFragmentShader(
-      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-    canonical_slot = m_shader_cache.GetPixelShader(fs);
-    if (!canonical_slot)
-    {
-      Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
-                      texture_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
-      return {};
-    }
-    // Publish the canonical raw pointer so future fast-path readers
-    // for the canonical slot don't have to take the mutex.
+    canonical_slot = fresh_blob;
     m_batch_fragment_shader_blobs_fastpath[render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)]
       .store(canonical_slot.Get(), std::memory_order_release);
   }
@@ -1189,14 +1125,76 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(uint8_t
     return ret;
   }
 
-  // Slow path. The fragment-shader fetch has its own internal
-  // lock-acquire-release; we call it WITHOUT holding our own
-  // m_batch_shader_mutex so a sibling helper isn't deadlocked
-  // when it tries to take the same lock.
+  // Slow path. Compile the PSO WITHOUT m_batch_shader_mutex held.
+  // GetBatchFragmentShader is internally thread-safe and so is
+  // m_shader_cache.GetPipelineState (via the per-instance mutexes
+  // added inside D3D12::ShaderCache). The actual D3DCompile and
+  // CreateGraphicsPipelineState calls run lock-free, so the worker
+  // compiling slot A doesn't block the main thread compiling
+  // slot B. Two threads racing to compile the SAME slot is
+  // wasteful but harmless - both produce equivalent PSOs and the
+  // double-check below picks the winner.
   ComPtr<ID3DBlob> fs_blob = GetBatchFragmentShader(render_mode, lookup_mode, dithering, interlacing);
   if (!fs_blob)
     return {};
 
+  const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_batch_root_signature.Get());
+  gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
+  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
+
+  gpbuilder.AddVertexAttribute("ATTR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, offsetof(BatchVertex, x));
+  gpbuilder.AddVertexAttribute("ATTR", 1, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, color));
+  if (textured)
+  {
+    gpbuilder.AddVertexAttribute("ATTR", 2, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, u));
+    gpbuilder.AddVertexAttribute("ATTR", 3, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, texpage));
+    if (m_using_uv_limits)
+      gpbuilder.AddVertexAttribute("ATTR", 4, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, uv_limits));
+  }
+
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<uint8_t>(textured)].Get());
+  gpbuilder.SetPixelShader(fs_blob.Get());
+
+  gpbuilder.SetRasterizationState(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, false);
+  gpbuilder.SetDepthState(true, true,
+                          (depth_test != 0) ? (m_pgxp_depth_buffer ? D3D12_COMPARISON_FUNC_LESS_EQUAL :
+                                                                     D3D12_COMPARISON_FUNC_GREATER_EQUAL) :
+                                              D3D12_COMPARISON_FUNC_ALWAYS);
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetMultisamples(m_multisamples);
+
+  if ((static_cast<GPUTransparencyMode>(transparency_mode) != GPUTransparencyMode::Disabled &&
+       (static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
+        static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque)) ||
+      m_texture_filtering != GPUTextureFilter::Nearest)
+  {
+    gpbuilder.SetBlendState(
+      0, true, D3D12_BLEND_ONE,
+      m_supports_dual_source_blend ? D3D12_BLEND_SRC1_ALPHA : D3D12_BLEND_SRC_ALPHA,
+      (static_cast<GPUTransparencyMode>(transparency_mode) == GPUTransparencyMode::BackgroundMinusForeground &&
+       static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
+       static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque) ?
+        D3D12_BLEND_OP_REV_SUBTRACT :
+        D3D12_BLEND_OP_ADD,
+      D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD);
+  }
+
+  ComPtr<ID3D12PipelineState> fresh_pso = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache);
+  if (!fresh_pso)
+  {
+    Log_ErrorPrintf("Lazy batch PSO compile failed for (dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)", depth_test,
+                    render_mode, texture_mode, transparency_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
+    return {};
+  }
+
+  // Publish step: take the helper mutex briefly to write the
+  // canonical slot, the dup slot (for Reserved_* texture modes),
+  // and the fast-path atomics. The mutex window is microseconds -
+  // no D3DCompile or CreateGraphicsPipelineState inside it.
   std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
 
   // Double-check the fast slot under the lock.
@@ -1215,63 +1213,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(uint8_t
 
   if (!canonical_slot)
   {
-    const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
-
-    // Build a fresh local builder each fault-in so we don't carry
-    // state between invocations. The cost of building the descriptor
-    // is dwarfed by the actual PSO compile in m_shader_cache.GetPipelineState
-    // below.
-    D3D12::GraphicsPipelineBuilder gpbuilder;
-    gpbuilder.SetRootSignature(m_batch_root_signature.Get());
-    gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
-    gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
-
-    gpbuilder.AddVertexAttribute("ATTR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, offsetof(BatchVertex, x));
-    gpbuilder.AddVertexAttribute("ATTR", 1, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, color));
-    if (textured)
-    {
-      gpbuilder.AddVertexAttribute("ATTR", 2, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, u));
-      gpbuilder.AddVertexAttribute("ATTR", 3, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, texpage));
-      if (m_using_uv_limits)
-        gpbuilder.AddVertexAttribute("ATTR", 4, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, uv_limits));
-    }
-
-    gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<uint8_t>(textured)].Get());
-    gpbuilder.SetPixelShader(fs_blob.Get());
-
-    gpbuilder.SetRasterizationState(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, false);
-    gpbuilder.SetDepthState(true, true,
-                            (depth_test != 0) ? (m_pgxp_depth_buffer ? D3D12_COMPARISON_FUNC_LESS_EQUAL :
-                                                                       D3D12_COMPARISON_FUNC_GREATER_EQUAL) :
-                                                D3D12_COMPARISON_FUNC_ALWAYS);
-    gpbuilder.SetNoBlendingState();
-    gpbuilder.SetMultisamples(m_multisamples);
-
-    if ((static_cast<GPUTransparencyMode>(transparency_mode) != GPUTransparencyMode::Disabled &&
-         (static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
-          static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque)) ||
-        m_texture_filtering != GPUTextureFilter::Nearest)
-    {
-      gpbuilder.SetBlendState(
-        0, true, D3D12_BLEND_ONE,
-        m_supports_dual_source_blend ? D3D12_BLEND_SRC1_ALPHA : D3D12_BLEND_SRC_ALPHA,
-        (static_cast<GPUTransparencyMode>(transparency_mode) == GPUTransparencyMode::BackgroundMinusForeground &&
-         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
-         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque) ?
-          D3D12_BLEND_OP_REV_SUBTRACT :
-          D3D12_BLEND_OP_ADD,
-        D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD);
-    }
-
-    canonical_slot = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache);
-    if (!canonical_slot)
-    {
-      Log_ErrorPrintf("Lazy batch PSO compile failed for (dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)", depth_test,
-                      render_mode, texture_mode, transparency_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
-      return {};
-    }
-
+    canonical_slot = fresh_pso;
     D3D12::SetObjectNameFormatted(canonical_slot.Get(), "Batch Pipeline %u,%u,%u,%u,%u,%u", depth_test, render_mode,
                                   lookup_mode, transparency_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
 
@@ -1296,6 +1238,474 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(uint8_t
   return canonical_slot;
 }
 
+// ----------------------------------------------------------------------
+// Non-batch lazy helpers. Same fast-path / slow-path layout as
+// GetBatchPipeline: an acquire-load on an atomic raw-pointer fast
+// path, falling back to the ComPtr slot under m_batch_shader_mutex
+// on a miss. The fast path is one uncontended atomic load per call
+// once the slot is filled.
+//
+// The shared fullscreen-quad vertex shader has its own helper that
+// the PSO helpers fall through to. That keeps each fault-in
+// self-contained: the very first non-batch helper call from a
+// 'Disabled' session pays for the VS compile, every subsequent call
+// reuses it.
+// ----------------------------------------------------------------------
+
+GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetFullscreenQuadVertexShader()
+{
+  // Single-slot variant of the fast/slow path. Fast path: read the
+  // ComPtr under the lock (cheap - just a pointer copy + AddRef).
+  // Slow path: compile WITHOUT the lock held (so concurrent
+  // non-batch helpers can fault other pipelines while one compiles
+  // the shared VS), then publish under the lock with a double-check.
+  {
+    std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+    if (m_fullscreen_quad_vertex_shader)
+      return m_fullscreen_quad_vertex_shader;
+  }
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetFullscreenQuadVertexShader called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fresh = m_shader_cache.GetVertexShader(m_shadergen->GenerateScreenQuadVertexShader());
+  if (!fresh)
+  {
+    Log_ErrorPrint("Lazy fullscreen-quad vertex shader compile failed");
+    return {};
+  }
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  if (!m_fullscreen_quad_vertex_shader)
+    m_fullscreen_quad_vertex_shader = fresh;
+  return m_fullscreen_quad_vertex_shader;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlaced)
+{
+  std::atomic<ID3D12PipelineState*>& fast_slot = m_vram_fill_pipelines_fastpath[wrapped][interlaced];
+  ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetVRAMFillPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(
+    m_shadergen->GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
+  if (!fs)
+    return {};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
+  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetMultisamples(m_multisamples);
+  gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  // Publish under brief lock; double-check for race winner.
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  ComPtr<ID3D12PipelineState>& slot = m_vram_fill_pipelines[wrapped][interlaced];
+  if (!slot)
+  {
+    slot = fresh;
+    D3D12::SetObjectNameFormatted(slot.Get(), "VRAM Fill Pipeline Wrapped=%u,Interlacing=%u", wrapped, interlaced);
+  }
+  fast_slot.store(slot.Get(), std::memory_order_release);
+  return slot;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint8_t depth_test)
+{
+  std::atomic<ID3D12PipelineState*>& fast_slot = m_vram_copy_pipelines_fastpath[depth_test];
+  ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetVRAMCopyPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMCopyFragmentShader());
+  if (!fs)
+    return {};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
+  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetMultisamples(m_multisamples);
+  gpbuilder.SetDepthState((depth_test != 0), true,
+                          (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  ComPtr<ID3D12PipelineState>& slot = m_vram_copy_pipelines[depth_test];
+  if (!slot)
+  {
+    slot = fresh;
+    D3D12::SetObjectNameFormatted(slot.Get(), "VRAM Copy Pipeline Depth=%u", depth_test);
+  }
+  fast_slot.store(slot.Get(), std::memory_order_release);
+  return slot;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMWritePipeline(uint8_t depth_test)
+{
+  std::atomic<ID3D12PipelineState*>& fast_slot = m_vram_write_pipelines_fastpath[depth_test];
+  ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetVRAMWritePipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMWriteFragmentShader(false));
+  if (!fs)
+    return {};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetRenderTarget(0, m_vram_texture.GetFormat());
+  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetMultisamples(m_multisamples);
+  gpbuilder.SetDepthState(true, true,
+                          (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  ComPtr<ID3D12PipelineState>& slot = m_vram_write_pipelines[depth_test];
+  if (!slot)
+  {
+    slot = fresh;
+    D3D12::SetObjectNameFormatted(slot.Get(), "VRAM Write Pipeline Depth=%u", depth_test);
+  }
+  fast_slot.store(slot.Get(), std::memory_order_release);
+  return slot;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeline()
+{
+  ID3D12PipelineState* existing = m_vram_update_depth_pipeline_fastpath.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetVRAMUpdateDepthPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMUpdateDepthFragmentShader());
+  if (!fs)
+    return {};
+
+  // VRAM update depth differs from the other VRAM ops in three
+  // ways: it uses m_batch_root_signature (the regular ops use the
+  // single-sampler root sig), it writes to depth only (no render
+  // targets - ClearRenderTargets() drops the RT[0] entry the
+  // helper would otherwise inherit), and it carries an explicit
+  // blend state. Everything else - VS, topology, cull, multisamples,
+  // depth-stencil format, depth-state - matches the standard
+  // fullscreen-quad pipeline the other VRAM ops use.
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_batch_root_signature.Get());
+  gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetMultisamples(m_multisamples);
+  gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
+  gpbuilder.SetBlendState(0, false, D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE,
+                          D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, 0);
+  gpbuilder.ClearRenderTargets();
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = m_vram_update_depth_pipeline_fastpath.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  if (!m_vram_update_depth_pipeline)
+  {
+    m_vram_update_depth_pipeline = fresh;
+    D3D12::SetObjectName(m_vram_update_depth_pipeline.Get(), "VRAM Update Depth Pipeline");
+  }
+  m_vram_update_depth_pipeline_fastpath.store(m_vram_update_depth_pipeline.Get(), std::memory_order_release);
+  return m_vram_update_depth_pipeline;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline()
+{
+  ID3D12PipelineState* existing = m_vram_readback_pipeline_fastpath.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetVRAMReadbackPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMReadFragmentShader());
+  if (!fs)
+    return {};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoDepthTestState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetRenderTarget(0, m_vram_readback_texture.GetFormat());
+  gpbuilder.ClearDepthStencilFormat();
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = m_vram_readback_pipeline_fastpath.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  if (!m_vram_readback_pipeline)
+  {
+    m_vram_readback_pipeline = fresh;
+    D3D12::SetObjectName(m_vram_readback_pipeline.Get(), "VRAM Readback Pipeline");
+  }
+  m_vram_readback_pipeline_fastpath.store(m_vram_readback_pipeline.Get(), std::memory_order_release);
+  return m_vram_readback_pipeline;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8_t depth_24, uint8_t interlace_mode)
+{
+  std::atomic<ID3D12PipelineState*>& fast_slot = m_display_pipelines_fastpath[depth_24][interlace_mode];
+  ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetDisplayPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateDisplayFragmentShader(
+    static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
+  if (!fs)
+    return {};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoDepthTestState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetRenderTarget(0, m_display_texture.GetFormat());
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = fast_slot.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  ComPtr<ID3D12PipelineState>& slot = m_display_pipelines[depth_24][interlace_mode];
+  if (!slot)
+  {
+    slot = fresh;
+    D3D12::SetObjectNameFormatted(slot.Get(), "Display Pipeline Depth=%u Interlace=%u", depth_24, interlace_mode);
+  }
+  fast_slot.store(slot.Get(), std::memory_order_release);
+  return slot;
+}
+
+GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
+{
+  ID3D12PipelineState* existing = m_copy_pipeline_fastpath.load(std::memory_order_acquire);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+
+  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
+  if (!vs)
+    return {};
+
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetCopyPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateCopyFragmentShader());
+  if (!fs)
+    return {};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoDepthTestState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
+
+  ComPtr<ID3D12PipelineState> fresh = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!fresh)
+    return {};
+
+  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
+  existing = m_copy_pipeline_fastpath.load(std::memory_order_relaxed);
+  if (existing)
+  {
+    ComPtr<ID3D12PipelineState> ret;
+    ret.Attach(existing);
+    existing->AddRef();
+    return ret;
+  }
+  if (!m_copy_pipeline)
+  {
+    m_copy_pipeline = fresh;
+    D3D12::SetObjectName(m_copy_pipeline.Get(), "Copy/Blit Pipeline");
+  }
+  m_copy_pipeline_fastpath.store(m_copy_pipeline.Get(), std::memory_order_release);
+  return m_copy_pipeline;
+}
+
 void GPU_HW_D3D12::DestroyPipelines()
 {
   // Tear down the background-compile worker before clearing the
@@ -1315,6 +1725,20 @@ void GPU_HW_D3D12::DestroyPipelines()
   m_batch_fragment_shader_blobs_fastpath.enumerate(
     [](std::atomic<ID3DBlob*>& s) { s.store(nullptr, std::memory_order_relaxed); });
 
+  // Same pattern for the non-batch fast-path mirrors added when
+  // these pipelines moved onto the lazy-fault path.
+  m_vram_fill_pipelines_fastpath.enumerate(
+    [](std::atomic<ID3D12PipelineState*>& s) { s.store(nullptr, std::memory_order_relaxed); });
+  for (auto& s : m_vram_copy_pipelines_fastpath)
+    s.store(nullptr, std::memory_order_relaxed);
+  for (auto& s : m_vram_write_pipelines_fastpath)
+    s.store(nullptr, std::memory_order_relaxed);
+  m_display_pipelines_fastpath.enumerate(
+    [](std::atomic<ID3D12PipelineState*>& s) { s.store(nullptr, std::memory_order_relaxed); });
+  m_vram_readback_pipeline_fastpath.store(nullptr, std::memory_order_relaxed);
+  m_vram_update_depth_pipeline_fastpath.store(nullptr, std::memory_order_relaxed);
+  m_copy_pipeline_fastpath.store(nullptr, std::memory_order_relaxed);
+
   m_batch_pipelines = {};
   m_vram_fill_pipelines = {};
   m_vram_write_pipelines = {};
@@ -1326,6 +1750,15 @@ void GPU_HW_D3D12::DestroyPipelines()
   m_batch_vertex_shader_blobs = {};
 
   m_display_pipelines = {};
+
+  // m_copy_pipeline was previously not cleared here - latent leak
+  // across UpdateSettings -> DestroyPipelines -> CompilePipelines
+  // cycles. The shared fullscreen-quad VS likewise needs to be
+  // dropped so the next CompilePipelines pass picks up any
+  // shadergen changes (e.g. the GLSL binding layout differing
+  // between Vulkan and Direct3D).
+  m_copy_pipeline.Reset();
+  m_fullscreen_quad_vertex_shader.Reset();
 }
 
 bool GPU_HW_D3D12::CreateTextureReplacementStreamBuffer()
@@ -1380,7 +1813,10 @@ bool GPU_HW_D3D12::BlitVRAMReplacementTexture(const TextureReplacementTexture* t
   cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_write_replacement_texture.GetSRVDescriptor());
   cmdlist->SetGraphicsRootDescriptorTable(2, m_linear_sampler.gpu_handle);
-  cmdlist->SetPipelineState(m_copy_pipeline.Get());
+  ComPtr<ID3D12PipelineState> copy_pso = GetCopyPipeline();
+  if (!copy_pso)
+    return false;
+  cmdlist->SetPipelineState(copy_pso.Get());
   D3D12::SetViewportAndScissor(cmdlist, dst_x, dst_y, width, height);
   cmdlist->DrawInstanced(3, 1, 0, 0);
   RestoreGraphicsAPIState();
@@ -1480,8 +1916,11 @@ void GPU_HW_D3D12::UpdateDisplay()
       cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
       cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
       cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_texture.GetSRVDescriptor());
-      cmdlist->SetPipelineState(
-        m_display_pipelines[static_cast<uint8_t>(m_GPUSTAT.display_area_color_depth_24)][static_cast<uint8_t>(interlaced)].Get());
+      ComPtr<ID3D12PipelineState> display_pso =
+        GetDisplayPipeline(static_cast<uint8_t>(m_GPUSTAT.display_area_color_depth_24), static_cast<uint8_t>(interlaced));
+      if (!display_pso)
+        return;
+      cmdlist->SetPipelineState(display_pso.Get());
       D3D12::SetViewportAndScissor(cmdlist, 0, 0, scaled_display_width, scaled_display_height);
       cmdlist->DrawInstanced(3, 1, 0, 0);
 
@@ -1520,7 +1959,10 @@ void GPU_HW_D3D12::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t hei
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
   cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_texture.GetSRVDescriptor());
-  cmdlist->SetPipelineState(m_vram_readback_pipeline.Get());
+  ComPtr<ID3D12PipelineState> readback_pso = GetVRAMReadbackPipeline();
+  if (!readback_pso)
+    return;
+  cmdlist->SetPipelineState(readback_pso.Get());
   D3D12::SetViewportAndScissor(cmdlist, 0, 0, encoded_width, encoded_height);
   cmdlist->DrawInstanced(3, 1, 0, 0);
 
@@ -1566,9 +2008,12 @@ void GPU_HW_D3D12::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t hei
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
   cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, g_d3d12_context->GetNullSRVDescriptor());
-  cmdlist->SetPipelineState(m_vram_fill_pipelines[static_cast<uint8_t>(IsVRAMFillOversized(x, y, width, height))]
-                                                 [static_cast<uint8_t>(IsInterlacedRenderingEnabled())]
-                                                   .Get());
+  ComPtr<ID3D12PipelineState> fill_pso =
+    GetVRAMFillPipeline(static_cast<uint8_t>(IsVRAMFillOversized(x, y, width, height)),
+                        static_cast<uint8_t>(IsInterlacedRenderingEnabled()));
+  if (!fill_pso)
+    return;
+  cmdlist->SetPipelineState(fill_pso.Get());
 
   const Common::Rectangle<uint32_t> bounds(GetVRAMTransferBounds(x, y, width, height));
   D3D12::SetViewportAndScissor(cmdlist, bounds.left * m_resolution_scale, bounds.top * m_resolution_scale,
@@ -1617,7 +2062,10 @@ void GPU_HW_D3D12::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t h
   cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
   cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_texture_stream_buffer_srv);
-  cmdlist->SetPipelineState(m_vram_write_pipelines[static_cast<uint8_t>(check_mask)].Get());
+  ComPtr<ID3D12PipelineState> write_pso = GetVRAMWritePipeline(static_cast<uint8_t>(check_mask));
+  if (!write_pso)
+    return;
+  cmdlist->SetPipelineState(write_pso.Get());
 
   // the viewport should already be set to the full vram, so just adjust the scissor
   const Common::Rectangle<uint32_t> scaled_bounds = bounds * m_resolution_scale;
@@ -1649,7 +2097,10 @@ void GPU_HW_D3D12::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint
     cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
     cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
     cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_read_texture.GetSRVDescriptor());
-    cmdlist->SetPipelineState(m_vram_copy_pipelines[static_cast<uint8_t>(m_GPUSTAT.check_mask_before_draw)].Get());
+    ComPtr<ID3D12PipelineState> copy_pso = GetVRAMCopyPipeline(static_cast<uint8_t>(m_GPUSTAT.check_mask_before_draw));
+    if (!copy_pso)
+      return;
+    cmdlist->SetPipelineState(copy_pso.Get());
     D3D12::SetViewportAndScissor(cmdlist, dst_bounds_scaled.left, dst_bounds_scaled.top, dst_bounds_scaled.GetWidth(),
                                  dst_bounds_scaled.GetHeight());
     cmdlist->DrawInstanced(3, 1, 0, 0);
@@ -1725,7 +2176,10 @@ void GPU_HW_D3D12::UpdateDepthBufferFromMaskBit()
 
   cmdlist->OMSetRenderTargets(0, nullptr, FALSE, &m_vram_depth_texture.GetRTVOrDSVDescriptor().cpu_handle);
   cmdlist->SetGraphicsRootDescriptorTable(1, m_vram_texture.GetSRVDescriptor());
-  cmdlist->SetPipelineState(m_vram_update_depth_pipeline.Get());
+  ComPtr<ID3D12PipelineState> update_depth_pso = GetVRAMUpdateDepthPipeline();
+  if (!update_depth_pso)
+    return;
+  cmdlist->SetPipelineState(update_depth_pso.Get());
   D3D12::SetViewportAndScissor(cmdlist, 0, 0, m_vram_texture.GetWidth(), m_vram_texture.GetHeight());
   cmdlist->DrawInstanced(3, 1, 0, 0);
 
