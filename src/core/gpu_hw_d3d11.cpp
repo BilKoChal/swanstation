@@ -954,8 +954,12 @@ bool GPU_HW_D3D11::CompileShaders()
   // in core/types.h.
   const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
   const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+  // batch_progress_units counts only reachable cells in the (render,
+  // texture, dither, interlace) matrix - see IsBatchShaderReachable in
+  // gpu_hw.h. This lets the progress bar end at exactly the number of
+  // compiles the precompile loop will perform.
   const uint32_t batch_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
+    precompile_sync ? CountReachableBatchShaders(m_supports_dual_source_blend) : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Shaders",
                                         1 + 1 + 2 + batch_progress_units + 1 + (2 * 2) + 4 + (2 * 3) + 1);
@@ -1022,12 +1026,22 @@ bool GPU_HW_D3D11::CompileShaders()
   // internally, so the precompile loop here doesn't need to special-
   // case those - it'll call GetBatchPixelShader and the second
   // duplicate will be a cheap cache hit / pointer copy.
+  //
+  // Structurally unreachable cells (reserved texture modes, two-pass
+  // fallback modes for untextured polys, single-pass dual-source on
+  // hardware that lacks it) are skipped via IsBatchShaderReachable.
+  // batch_progress_units is sized to the same reachable count so the
+  // progress bar lands at 100%.
   if (precompile_sync)
   {
+    const bool dual_source = m_supports_dual_source_blend;
     for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
       for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
       {
+        if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+          continue;
+
         for (uint8_t dithering = 0; dithering < 2; dithering++)
         {
           for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
@@ -1185,10 +1199,23 @@ void GPU_HW_D3D11::ShaderCompileThreadEntryPoint()
   // any slot the main thread filled first. The quit flag is
   // checked between cells so DestroyShaders can bring the worker
   // down within at most one shader-compile worth of latency.
+  //
+  // Structurally unreachable cells are skipped via
+  // IsBatchShaderReachable - see the comment on that helper in
+  // gpu_hw.h. Reserved texture modes alias the canonical slot
+  // through the dedup logic in GetBatchPixelShader, so first-fault
+  // on the alias only does a ComPtr copy, not a compile. The
+  // two-pass-fallback render modes with no texture are never
+  // selected by FlushRender. TransparentAndOpaque with a texture
+  // mode is never selected on hardware without dual-source blend.
+  const bool dual_source = m_supports_dual_source_blend;
   for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
   {
     for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
     {
+      if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+        continue;
+
       for (uint8_t dithering = 0; dithering < 2; dithering++)
       {
         for (uint8_t interlacing = 0; interlacing < 2; interlacing++)

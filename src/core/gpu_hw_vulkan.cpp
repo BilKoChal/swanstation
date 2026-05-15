@@ -1467,10 +1467,14 @@ bool GPU_HW_Vulkan::CompilePipelines()
   // still build everything upfront here.
   const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
   const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
-  const uint32_t batch_shader_progress_units =
-    precompile_sync ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
+  // Reachable cell counts for each matrix - see IsBatchShaderReachable
+  // in gpu_hw.h. The PSO matrix multiplies by 3 (depth_test) * 5
+  // (transparency_mode); these axes don't affect reachability, so the
+  // per-(render_mode, texture_mode) skip rule is independent of them.
+  const uint32_t reachable_batch_cells = CountReachableBatchShaders(m_supports_dual_source_blend);
+  const uint32_t batch_shader_progress_units = precompile_sync ? reachable_batch_cells : 0u;
   const uint32_t batch_pipeline_progress_units =
-    precompile_sync ? static_cast<uint32_t>(3 * 4 * 5 * 9 * 2 * 2) : 0u;
+    precompile_sync ? reachable_batch_cells * 3u * 5u : 0u;
   // Non-batch units only counted when we build them upfront. The
   // fullscreen-quad VS (1), VRAM fill (4), VRAM copy (2), VRAM
   // write (2), VRAM update depth (1), VRAM readback (1), display
@@ -1518,12 +1522,20 @@ bool GPU_HW_Vulkan::CompilePipelines()
   // array index), so the precompile loop doesn't need to special-
   // case them - the entry for 3 / 7 simply forwards to the
   // canonical slot.
+  //
+  // Structurally unreachable cells (reserved texture modes, two-pass
+  // fallback render modes with no texture, single-pass dual-source
+  // on hardware that lacks it) are skipped via IsBatchShaderReachable.
   if (precompile_sync)
   {
+    const bool dual_source = m_supports_dual_source_blend;
     for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
       for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
       {
+        if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+          continue;
+
         for (uint8_t dithering = 0; dithering < 2; dithering++)
         {
           for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
@@ -1547,6 +1559,9 @@ bool GPU_HW_Vulkan::CompilePipelines()
         {
           for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
           {
+            if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+              continue;
+
             for (uint8_t dithering = 0; dithering < 2; dithering++)
             {
               for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
@@ -1750,6 +1765,10 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
   // flag is checked between cells so DestroyPipelines can stop the
   // worker within at most one PSO compile of latency (Vulkan PSO
   // compiles can be ~50-200 ms with the heavier texture filters).
+  //
+  // Structurally unreachable cells are skipped via
+  // IsBatchShaderReachable.
+  const bool dual_source = m_supports_dual_source_blend;
   for (uint8_t depth_test = 0; depth_test < 3; depth_test++)
   {
     for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
@@ -1758,6 +1777,9 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
       {
         for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
         {
+          if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+            continue;
+
           for (uint8_t dithering = 0; dithering < 2; dithering++)
           {
             for (uint8_t interlacing = 0; interlacing < 2; interlacing++)

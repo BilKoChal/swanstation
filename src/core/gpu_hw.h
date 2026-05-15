@@ -259,6 +259,72 @@ protected:
              (!m_supports_dual_source_blend && m_batch.transparency_mode != GPUTransparencyMode::Disabled)));
   }
 
+  /// Returns true if a given (render_mode, texture_mode) batch shader slot can
+  /// actually be selected by the runtime at draw time. Used by the precompile
+  /// loop and the background-compile worker to skip cells that the runtime
+  /// would never bind, so we don't burn D3DCompile / glslang time on shaders
+  /// that can't ever be used.
+  ///
+  /// Three classes of cell are structurally unreachable:
+  ///
+  ///   - texture_mode 3 (Reserved_Direct16Bit) and 7 (Reserved_RawDirect16Bit)
+  ///     dedupe to canonical modes 2 and 6 inside GetBatchPixelShader /
+  ///     GetBatchPipeline. The first runtime fault on the reserved slot just
+  ///     aliases the canonical slot's ComPtr; no fresh compile is needed.
+  ///
+  ///   - OnlyOpaque / OnlyTransparent with texture_mode == Disabled.
+  ///     NeedsTwoPassRendering short-circuits on (texture_mode != Disabled),
+  ///     so untextured polys never go through the two-pass fallback path.
+  ///
+  ///   - TransparentAndOpaque with texture_mode != Disabled on hardware
+  ///     WITHOUT dual-source blend support. NeedsTwoPassRendering returns
+  ///     true for textured transparent draws on this hardware, so the
+  ///     single-pass dual-source path is never selected. (Untextured
+  ///     transparent draws on the same hardware still use
+  ///     TransparentAndOpaque - NeedsTwoPassRendering returns false for
+  ///     them - so this skip is texture_mode-dependent.)
+  ALWAYS_INLINE static bool IsBatchShaderReachable(BatchRenderMode render_mode, uint8_t texture_mode,
+                                                   bool supports_dual_source_blend)
+  {
+    if (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit) ||
+        texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit))
+      return false;
+
+    if ((render_mode == BatchRenderMode::OnlyOpaque || render_mode == BatchRenderMode::OnlyTransparent) &&
+        texture_mode == static_cast<uint8_t>(GPUTextureMode::Disabled))
+      return false;
+
+    if (!supports_dual_source_blend && render_mode == BatchRenderMode::TransparentAndOpaque &&
+        texture_mode != static_cast<uint8_t>(GPUTextureMode::Disabled))
+      return false;
+
+    return true;
+  }
+
+  /// Total reachable cell count in the batch shader matrix, for sizing the
+  /// progress tracker upfront in Enabled mode.
+  static uint32_t CountReachableBatchShaders(bool supports_dual_source_blend)
+  {
+    uint32_t count = 0;
+    for (uint8_t rm = 0; rm < 4; rm++)
+    {
+      for (uint8_t tm = 0; tm < 9; tm++)
+      {
+        for (uint8_t d = 0; d < 2; d++)
+        {
+          for (uint8_t i = 0; i < 2; i++)
+          {
+            (void)d;
+            (void)i;
+            if (IsBatchShaderReachable(static_cast<BatchRenderMode>(rm), tm, supports_dual_source_blend))
+              count++;
+          }
+        }
+      }
+    }
+    return count;
+  }
+
   /// Returns true if the specified VRAM fill is oversized.
   ALWAYS_INLINE static bool IsVRAMFillOversized(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
   {
