@@ -23,6 +23,7 @@ namespace Vulkan::EmbeddedShaders {
 #include "embedded_spirv/present_fullscreen_vs.inc"
 #include "embedded_spirv/screen_quad_vs.inc"
 #include "embedded_spirv/uv_quad_vs.inc"
+#include "embedded_spirv/vram_copy_fs.inc"
 #include "embedded_spirv/vram_fill_fs.inc"
 
 VkShaderModule CreateShaderModule(const uint32_t* spv, size_t spv_size_bytes)

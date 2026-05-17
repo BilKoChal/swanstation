@@ -2067,14 +2067,17 @@ VkPipeline GPU_HW_Vulkan::GetVRAMCopyPipeline(uint8_t depth_test)
   VkShaderModule vs = GetFullscreenQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetVRAMCopyPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateVRAMCopyFragmentShader());
+
+  // Pre-baked path: single SPIR-V blob, two spec constants.
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_vram_copy_fs,
+    Vulkan::EmbeddedShaders::k_vram_copy_fs_size_bytes);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddUInt(0, static_cast<uint32_t>(m_resolution_scale));  // RESOLUTION_SCALE
+  fs_spec.AddBool(3, m_pgxp_depth_buffer);                        // PGXP_DEPTH
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2087,7 +2090,7 @@ VkPipeline GPU_HW_Vulkan::GetVRAMCopyPipeline(uint8_t depth_test)
   gpbuilder.SetNoBlendingState();
   gpbuilder.SetDynamicViewportAndScissorState();
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetMultisamples(m_multisamples, false);
   gpbuilder.SetDepthState((depth_test != 0), true,
                           (depth_test != 0) ? VK_COMPARE_OP_GREATER_OR_EQUAL : VK_COMPARE_OP_ALWAYS);

@@ -87,6 +87,14 @@ extern const size_t k_box_sample_downsample_fs_size_bytes;
 extern const uint32_t k_vram_fill_fs[];
 extern const size_t k_vram_fill_fs_size_bytes;
 
+// VRAM copy FS. Single SPIR-V blob; the only non-shader knob (depth_test)
+// is a pipeline-state toggle, not a spec constant. Two spec constants:
+//   id = 0 RESOLUTION_SCALE (uint) - drives VRAM_SIZE in wrap-around math.
+//   id = 3 PGXP_DEPTH       (bool) - depth source selection.
+// Single sampler at binding 1 (non-MSAA only; see shadergen TODO).
+extern const uint32_t k_vram_copy_fs[];
+extern const size_t k_vram_copy_fs_size_bytes;
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
