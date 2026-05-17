@@ -1560,10 +1560,12 @@ bool GPU_HW_Vulkan::CompilePipelines()
   //
   // On 'Lazy' the main thread pre-fills them below (before
   // spawning the worker) - see the Lazy branch comment for why
-  // pre-filling can't be deferred to the worker. On 'Disabled'
-  // nothing happens here at all - first FillVRAM / UpdateDisplay
-  // / etc. on the runloop faults the corresponding pipeline in
-  // and stores the result for subsequent calls.
+  // pre-filling can't be deferred to the worker. On 'Disabled' the
+  // bulk of utility pipelines stay lazy, but the three hot-path
+  // pipelines exercised inside UpdateSettings (vram_readback,
+  // vram_write, vram_update_depth) get a targeted pre-build below
+  // alongside the Lazy branch - see that block for the full
+  // explanation.
   if (precompile_sync)
   {
     if (GetFullscreenQuadVertexShader() == VK_NULL_HANDLE)
@@ -1704,6 +1706,53 @@ bool GPU_HW_Vulkan::CompilePipelines()
     // m_shader_compile_thread_quit and joins.
     m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
     m_shader_compile_thread = std::thread(&GPU_HW_Vulkan::ShaderCompileThreadEntryPoint, this);
+  }
+  else if (precompile_mode == GPUShaderPrecompileMode::Disabled)
+  {
+    // Targeted hot-path pre-build, even in Disabled mode. Three
+    // utility pipelines are exercised inside UpdateSettings when a
+    // setting change triggers framebuffer recreation (antialiasing
+    // toggle, resolution scale change, true colour toggle, anything
+    // that flips m_multisamples or m_resolution_scale):
+    //
+    //   - m_vram_readback_pipeline    - ReadVRAM call before the
+    //                                   ExecuteCommandBuffer drain
+    //                                   (UpdateSettings line ~794).
+    //   - m_vram_write_pipelines[0/1] - UpdateVRAM call after the new
+    //                                   framebuffer is in place
+    //                                   (UpdateSettings line ~816).
+    //   - m_vram_update_depth_pipeline - UpdateDepthBufferFromMask-
+    //                                   Bit call directly after
+    //                                   UpdateVRAM (UpdateSettings
+    //                                   line ~817).
+    //
+    // Lazy-building any of these inside their respective UpdateSettings
+    // cmdbufs hits an NVIDIA driver quirk that produces corrupted
+    // rendering on the frame immediately after the toggle (most
+    // visible as blocky / wrong-colour HUD and background tiles on
+    // the second toggle cycle). Pre-building them here side-steps the
+    // entire failure mode without changing Disabled's contract for
+    // anything else - batch pipelines stay truly lazy (which is where
+    // the actual init-time cost lives), and the other utility
+    // pipelines (VRAM fill / copy / display / downsample) remain
+    // lazy too because they are only ever exercised on game-driven
+    // draws, well after the UpdateSettings cmdbuf has been submitted
+    // and a fresh cmdbuf is recording.
+    //
+    // Cost: four extra vkCreateGraphicsPipelines calls on the main
+    // thread at boot / setting-change time; well under 50 ms in
+    // aggregate on a desktop GPU, invisible to the user.
+    if (GetFullscreenQuadVertexShader() == VK_NULL_HANDLE)
+      return false;
+    for (uint8_t depth_test = 0; depth_test < 2; depth_test++)
+    {
+      if (GetVRAMWritePipeline(depth_test) == VK_NULL_HANDLE)
+        return false;
+    }
+    if (GetVRAMUpdateDepthPipeline() == VK_NULL_HANDLE)
+      return false;
+    if (GetVRAMReadbackPipeline() == VK_NULL_HANDLE)
+      return false;
   }
 
   return true;
