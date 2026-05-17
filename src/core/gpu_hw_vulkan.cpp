@@ -2217,12 +2217,20 @@ VkPipeline GPU_HW_Vulkan::GetVRAMUpdateDepthPipeline()
   VkShaderModule vs = GetFullscreenQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetVRAMUpdateDepthPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateVRAMUpdateDepthFragmentShader());
+
+  // Pre-baked path: two blobs handle the structural MSAA split
+  // (sampler2D vs sampler2DMS). No spec constants - the body is just
+  // "copy alpha to depth" with the only variance in the sampler type.
+  // The MSAA blob writes gl_FragDepth from texelFetch with gl_SampleID,
+  // which forces per-sample shading per the Vulkan spec regardless of
+  // the SetMultisamples per_sample_shading flag below.
+  const bool      msaa     = (m_multisamples > 1);
+  const uint32_t* spv      = msaa ? Vulkan::EmbeddedShaders::k_vram_update_depth_msaa_fs
+                                  : Vulkan::EmbeddedShaders::k_vram_update_depth_fs;
+  const size_t    spv_size = msaa ? Vulkan::EmbeddedShaders::k_vram_update_depth_msaa_fs_size_bytes
+                                  : Vulkan::EmbeddedShaders::k_vram_update_depth_fs_size_bytes;
+
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(spv, spv_size);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
 

@@ -145,6 +145,20 @@ extern const size_t k_vram_readback_fs_size_bytes;
 extern const uint32_t k_vram_readback_msaa_fs[];
 extern const size_t k_vram_readback_msaa_fs_size_bytes;
 
+// VRAM update-depth FS. Rebuilds the depth attachment of the upscaled
+// VRAM render pass from the colour attachment's alpha after a
+// framebuffer recreation (resolution scale / antialiasing / true colour
+// toggle). Trivial body - "copy alpha to depth" - so no spec constants
+// are required on either blob; the only variance is the sampler type.
+// Two blobs for the structural MSAA split.
+//
+// MSAA blob writes gl_FragDepth from texelFetch(samp0, ..., gl_SampleID),
+// which forces per-sample shading per the Vulkan spec.
+extern const uint32_t k_vram_update_depth_fs[];
+extern const size_t k_vram_update_depth_fs_size_bytes;
+extern const uint32_t k_vram_update_depth_msaa_fs[];
+extern const size_t k_vram_update_depth_msaa_fs_size_bytes;
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
