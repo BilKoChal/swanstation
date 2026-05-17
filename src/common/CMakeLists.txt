@@ -73,6 +73,8 @@ add_library(common
   vulkan/builders.h
   vulkan/context.cpp
   vulkan/context.h
+  vulkan/embedded_shaders.cpp
+  vulkan/embedded_shaders.h
   vulkan/shader_cache.cpp
   vulkan/shader_cache.h
   vulkan/shader_compiler.cpp

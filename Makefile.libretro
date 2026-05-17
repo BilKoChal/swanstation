@@ -306,6 +306,7 @@ SOURCES_CXX += \
    $(COMMON_DIR)/gl/texture.cpp \
    $(COMMON_DIR)/vulkan/builders.cpp \
    $(COMMON_DIR)/vulkan/context.cpp \
+   $(COMMON_DIR)/vulkan/embedded_shaders.cpp \
    $(COMMON_DIR)/vulkan/shader_cache.cpp \
    $(COMMON_DIR)/vulkan/shader_compiler.cpp \
    $(COMMON_DIR)/vulkan/staging_buffer.cpp \

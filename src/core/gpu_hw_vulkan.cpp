@@ -5,6 +5,7 @@
 #include "common/timer.h"
 #include "common/vulkan/builders.h"
 #include "common/vulkan/context.h"
+#include "common/vulkan/embedded_shaders.h"
 #include "common/vulkan/shader_cache.h"
 #include "common/vulkan/staging_texture.h"
 #include "common/vulkan/util.h"
@@ -2019,15 +2020,15 @@ VkShaderModule GPU_HW_Vulkan::GetFullscreenQuadVertexShader()
   if (m_fullscreen_quad_vertex_shader != VK_NULL_HANDLE)
     return m_fullscreen_quad_vertex_shader;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetFullscreenQuadVertexShader called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  m_fullscreen_quad_vertex_shader =
-    g_vulkan_shader_cache->GetVertexShader(m_shadergen->GenerateScreenQuadVertexShader());
+  // Pre-baked SPIR-V: no glslang invocation, no shader_cache lookup, no
+  // dependency on m_shadergen existing yet. See
+  // data/shaders/vulkan/screen_quad.vert.glsl for the source of the blob,
+  // and src/common/vulkan/embedded_shaders.h for the loader.
+  m_fullscreen_quad_vertex_shader = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_screen_quad_vs,
+    Vulkan::EmbeddedShaders::k_screen_quad_vs_size_bytes);
   if (m_fullscreen_quad_vertex_shader == VK_NULL_HANDLE)
-    Log_ErrorPrint("Lazy fullscreen-quad vertex shader compile failed");
+    Log_ErrorPrint("Embedded fullscreen-quad vertex shader load failed");
   return m_fullscreen_quad_vertex_shader;
 }
 
