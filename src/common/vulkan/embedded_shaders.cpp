@@ -27,6 +27,8 @@ namespace Vulkan::EmbeddedShaders {
 #include "embedded_spirv/uv_quad_vs.inc"
 #include "embedded_spirv/vram_copy_fs.inc"
 #include "embedded_spirv/vram_fill_fs.inc"
+#include "embedded_spirv/vram_readback_fs.inc"
+#include "embedded_spirv/vram_readback_msaa_fs.inc"
 #include "embedded_spirv/vram_write_ssbo_fs.inc"
 #include "embedded_spirv/vram_write_texbuf_fs.inc"
 

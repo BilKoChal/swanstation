@@ -2209,14 +2209,24 @@ VkPipeline GPU_HW_Vulkan::GetVRAMReadbackPipeline()
   VkShaderModule vs = GetFullscreenQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetVRAMReadbackPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateVRAMReadFragmentShader());
+
+  // Pre-baked path: two blobs handle the structural MSAA split
+  // (sampler2D vs sampler2DMS); RESOLUTION_SCALE / MULTISAMPLES are
+  // session-constant common-knob spec constants.
+  const bool      msaa     = (m_multisamples > 1);
+  const uint32_t* spv      = msaa ? Vulkan::EmbeddedShaders::k_vram_readback_msaa_fs
+                                  : Vulkan::EmbeddedShaders::k_vram_readback_fs;
+  const size_t    spv_size = msaa ? Vulkan::EmbeddedShaders::k_vram_readback_msaa_fs_size_bytes
+                                  : Vulkan::EmbeddedShaders::k_vram_readback_fs_size_bytes;
+
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(spv, spv_size);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddUInt(0, static_cast<uint32_t>(m_resolution_scale));   // RESOLUTION_SCALE
+  if (msaa)
+    fs_spec.AddUInt(1, static_cast<uint32_t>(m_multisamples));     // MULTISAMPLES
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2226,7 +2236,7 @@ VkPipeline GPU_HW_Vulkan::GetVRAMReadbackPipeline()
   gpbuilder.SetPipelineLayout(m_single_sampler_pipeline_layout);
   gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();

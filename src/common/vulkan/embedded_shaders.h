@@ -130,6 +130,21 @@ extern const size_t k_display_fs_size_bytes;
 extern const uint32_t k_display_msaa_fs[];
 extern const size_t k_display_msaa_fs_size_bytes;
 
+// VRAM readback FS. Despite the shadergen name (GenerateVRAMReadFragment-
+// Shader), this is the CPU-readback path: samples upscaled m_vram_texture,
+// downsamples blocks back to PSX-native 16bpp via a box filter, packs two
+// 16-bit pixels into one RGBA8 output texel. Two blobs for the structural
+// MSAA split.
+//
+// Spec constants on both blobs:
+//   id = 0 RESOLUTION_SCALE (uint) - box-filter inner-loop bounds.
+// MSAA blob adds:
+//   id = 1 MULTISAMPLES     (uint) - LoadVRAM averaging loop bound.
+extern const uint32_t k_vram_readback_fs[];
+extern const size_t k_vram_readback_fs_size_bytes;
+extern const uint32_t k_vram_readback_msaa_fs[];
+extern const size_t k_vram_readback_msaa_fs_size_bytes;
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
