@@ -34,6 +34,45 @@ STAGE_FROM_SUFFIX = {
 }
 
 
+# Templates: shader sources that produce more than one .inc output, each
+# with a different combination of -D preprocessor defines. Index ordering
+# below MUST match the helper in src/common/vulkan/embedded_shaders.cpp
+# that picks the right blob at runtime - if you add a variant here, add
+# the matching entry there too.
+#
+# For each entry: filename -> [(variant_suffix, [-D defines]), ...]
+def _batch_vs_variants():
+    out = []
+    # Attribute layout: untextured / textured / textured + UV limits.
+    attr_axes = [
+        ("untextured",       []),
+        ("textured",         ["TEXTURED"]),
+        ("textured_uvlim",   ["TEXTURED", "UV_LIMITS"]),
+    ]
+    # Output interpolation: standard / centroid (MSAA) / sample (SSAA).
+    interp_axes = [
+        ("none",     []),
+        ("centroid", ["INTERP_CENTROID"]),
+        ("sample",   ["INTERP_SAMPLE"]),
+    ]
+    # Color perspective: standard / noperspective.
+    persp_axes = [
+        ("persp",   []),
+        ("noperp",  ["NOPERSP"]),
+    ]
+    for a_name, a_defs in attr_axes:
+        for i_name, i_defs in interp_axes:
+            for p_name, p_defs in persp_axes:
+                suffix = f"{a_name}_{i_name}_{p_name}"
+                out.append((suffix, a_defs + i_defs + p_defs))
+    return out
+
+
+TEMPLATE_VARIANTS = {
+    "batch.vert.glsl": _batch_vs_variants(),
+}
+
+
 def find_glslang(explicit):
     if explicit:
         return explicit
@@ -54,7 +93,7 @@ def sanitize_identifier(stem):
     return name
 
 
-def compile_one(glslang, glsl_path, stage_flag):
+def compile_one(glslang, glsl_path, stage_flag, defines=None):
     # Write SPIR-V to a temp file under INC_DIR so we don't pollute /tmp on
     # restricted-filesystem hosts.
     spv_path = INC_DIR / (glsl_path.stem + ".spv.tmp")
@@ -65,6 +104,8 @@ def compile_one(glslang, glsl_path, stage_flag):
         "-V", str(glsl_path),
         "-o", str(spv_path),
     ]
+    for d in defines or ():
+        cmd.append(f"-D{d}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         sys.stderr.write(f"glslangValidator failed for {glsl_path.name}:\n")
@@ -140,15 +181,31 @@ def main():
 
         # "screen_quad.vert.glsl" -> stem "screen_quad.vert" -> "screen_quad"
         base = glsl_path.name[:-len(suffix)]
-        identifier = sanitize_identifier(base) + "_" + ident_suffix
-        out_path = INC_DIR / (identifier + ".inc")
 
-        words = compile_one(glslang, glsl_path, stage_flag)
-        emit_inc(identifier, glsl_path.name, words, out_path)
-        size_kb = (len(words) * 4) / 1024.0
-        print(f"  {glsl_path.name:<40} -> {out_path.name}  "
-              f"({len(words)} words, {size_kb:.1f} KiB)")
-        total += 1
+        variants = TEMPLATE_VARIANTS.get(glsl_path.name)
+        if variants is None:
+            # Single-variant shader: one .inc, no -D flags.
+            identifier = sanitize_identifier(base) + "_" + ident_suffix
+            out_path = INC_DIR / (identifier + ".inc")
+            words = compile_one(glslang, glsl_path, stage_flag)
+            emit_inc(identifier, glsl_path.name, words, out_path)
+            size_kb = (len(words) * 4) / 1024.0
+            print(f"  {glsl_path.name:<40} -> {out_path.name}  "
+                  f"({len(words)} words, {size_kb:.1f} KiB)")
+            total += 1
+        else:
+            # Template: emit one .inc per variant, named with a suffix
+            # appended after the stage identifier.
+            for variant_suffix, defines in variants:
+                identifier = (sanitize_identifier(base) + "_" + ident_suffix +
+                              "_" + variant_suffix)
+                out_path = INC_DIR / (identifier + ".inc")
+                words = compile_one(glslang, glsl_path, stage_flag, defines)
+                emit_inc(identifier, glsl_path.name, words, out_path)
+                size_kb = (len(words) * 4) / 1024.0
+                print(f"  {glsl_path.name:<40} -> {out_path.name}  "
+                      f"({len(words)} words, {size_kb:.1f} KiB)")
+                total += 1
 
     print(f"regenerated {total} SPIR-V blob(s) in {INC_DIR}")
 

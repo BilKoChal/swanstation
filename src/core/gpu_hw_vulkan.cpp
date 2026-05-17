@@ -1416,7 +1416,6 @@ bool GPU_HW_Vulkan::CompilePipelines()
     m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
     m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
     m_supports_dual_source_blend);
-  GPU_HW_ShaderGen& shadergen = *m_shadergen;
 
   // Three-mode precompile control - see GPUShaderPrecompileMode in
   // core/types.h.
@@ -1456,10 +1455,21 @@ bool GPU_HW_Vulkan::CompilePipelines()
                                         2 + batch_shader_progress_units + batch_pipeline_progress_units +
                                           non_batch_progress_units);
 
+  // Pre-baked batch VS: 18 blobs cover the structural axes (attribute
+  // layout x interpolation x perspective). The per-session state
+  // selects which two (one per 'textured' value) get instantiated.
+  // PGXP_DEPTH and RESOLUTION_SCALE are spec constants applied at
+  // pipeline-create time inside GetBatchPipeline, not at module-create
+  // time here.
+  const bool msaa               = (m_multisamples > 1);
+  const bool per_sample_shading = m_per_sample_shading;
+  const bool noperspective_col  = m_disable_color_perspective;
   for (uint8_t textured = 0; textured < 2; textured++)
   {
-    const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
-    VkShaderModule shader = g_vulkan_shader_cache->GetVertexShader(vs);
+    const Vulkan::EmbeddedShaders::EmbeddedShaderBlob& blob =
+      Vulkan::EmbeddedShaders::GetBatchVertexShaderBlob(textured != 0, m_using_uv_limits, msaa, per_sample_shading,
+                                                        noperspective_col);
+    VkShaderModule shader = Vulkan::EmbeddedShaders::CreateShaderModule(blob.spv, blob.size_bytes);
     if (shader == VK_NULL_HANDLE)
     {
       // DestroyPipelines takes care of partial state from a failed
@@ -1934,7 +1944,15 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   // Vertex shaders are filled at CompilePipelines time before the
   // worker is spawned, so a relaxed load is sufficient - we're
   // strictly after that store in happens-before order.
-  gpbuilder.SetVertexShader(m_batch_vertex_shaders[static_cast<uint8_t>(textured)].load(std::memory_order_relaxed));
+  //
+  // Spec constants on the pre-baked batch VS: id=0 RESOLUTION_SCALE,
+  // id=3 PGXP_DEPTH. Both are per-session, so the values are constant
+  // across every batch pipeline in this session.
+  Vulkan::SpecConstants vs_spec;
+  vs_spec.AddUInt(0, static_cast<uint32_t>(m_resolution_scale));    // RESOLUTION_SCALE
+  vs_spec.AddBool(3, m_pgxp_depth_buffer);                          // PGXP_DEPTH
+  gpbuilder.SetVertexShader(
+    m_batch_vertex_shaders[static_cast<uint8_t>(textured)].load(std::memory_order_relaxed), vs_spec.GetInfo());
   gpbuilder.SetFragmentShader(fs);
 
   gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);

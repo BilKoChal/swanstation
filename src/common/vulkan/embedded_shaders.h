@@ -160,6 +160,47 @@ extern const uint32_t k_vram_update_depth_msaa_fs[];
 extern const size_t k_vram_update_depth_msaa_fs_size_bytes;
 
 
+// Batch VS - the first of the two batch shaders, and the only non-batch
+// pre-baked shader that needs more than two blobs for its structural
+// variance. The state space has three SPIR-V-structural axes that
+// specialisation constants cannot collapse:
+//
+//   1. Vertex attribute layout. 2 inputs (untextured), 4 (textured
+//      without UV limits) or 5 (textured with UV limits). The 'in'
+//      declarations are part of the SPIR-V module interface.
+//   2. Output interpolation qualifier. None / centroid / sample,
+//      compiled to OpMemberDecorate Centroid / Sample on the
+//      VertexData out block. The matching batch FS picks the
+//      corresponding qualifier on its inputs.
+//   3. Color output perspective. Standard / noperspective, compiled
+//      to OpMemberDecorate NoPerspective on v_col0.
+//
+// 3 x 3 x 2 = 18 blobs. Body-level knobs (RESOLUTION_SCALE, PGXP_DEPTH)
+// are common-knob specialisation constants on every blob.
+//
+// The blobs are addressed via the EmbeddedShaderBlob array
+// k_batch_vs_blobs and the helper GetBatchVertexShaderBlob below
+// rather than via 36 individual extern declarations.
+struct EmbeddedShaderBlob
+{
+  const uint32_t* spv;
+  size_t          size_bytes;
+};
+
+extern const EmbeddedShaderBlob k_batch_vs_blobs[18];
+
+// Pick the right batch VS blob from the per-call and per-session state
+// the C++ side already has at pipeline-creation time. The 'textured'
+// argument is the m_batch_vertex_shaders[] index; the rest are direct
+// reads of GPU_HW members (m_uv_limits, derived UsingMSAA() /
+// UsingPerSampleShading(), m_disable_color_perspective).
+const EmbeddedShaderBlob& GetBatchVertexShaderBlob(bool textured,
+                                                   bool uv_limits,
+                                                   bool msaa,
+                                                   bool per_sample_shading,
+                                                   bool noperspective_color);
+
+
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
 // This intentionally bypasses Vulkan::ShaderCache: pre-baked SPIR-V is already
