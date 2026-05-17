@@ -58,6 +58,13 @@ extern const size_t k_present_cursor_fs_size_bytes;
 extern const uint32_t k_adaptive_downsample_blur_fs[];
 extern const size_t k_adaptive_downsample_blur_fs_size_bytes;
 
+// Adaptive-downsample composite FS. Resolves the mip pyramid into the
+// final downsampled output using the per-pixel bias from the blur pass.
+// RESOLUTION_SCALE spec constant at id=0; reads two textures at bindings
+// 1 (samp0, color pyramid) and 2 (samp1, bias).
+extern const uint32_t k_adaptive_downsample_composite_fs[];
+extern const size_t k_adaptive_downsample_composite_fs_size_bytes;
+
 // Adaptive-downsample mip FS. One blob serves both the first-pass
 // (FIRST_PASS=true: samples a vec3 color texture) and the subsequent mid
 // passes (FIRST_PASS=false: feeds back vec4 from a prior mip). FIRST_PASS
@@ -65,6 +72,12 @@ extern const size_t k_adaptive_downsample_blur_fs_size_bytes;
 // creation time via Vulkan::SpecConstants.
 extern const uint32_t k_adaptive_downsample_mip_fs[];
 extern const size_t k_adaptive_downsample_mip_fs_size_bytes;
+
+// Box-sample downsample FS. Averages a RESOLUTION_SCALE x RESOLUTION_SCALE
+// block of upscaled texels back to PSX-native resolution. Single sampler
+// at binding 1. RESOLUTION_SCALE spec constant at id=0.
+extern const uint32_t k_box_sample_downsample_fs[];
+extern const size_t k_box_sample_downsample_fs_size_bytes;
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //

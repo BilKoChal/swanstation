@@ -2270,10 +2270,9 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleFirstPassPipeline()
   if (m_downsample_first_pass_pipeline != VK_NULL_HANDLE)
     return m_downsample_first_pass_pipeline;
 
-  // Note: the m_shadergen null-check used to be at function entry. It is
-  // now per-branch because the Adaptive branch no longer touches
-  // m_shadergen (pre-baked mip FS with FIRST_PASS=true spec constant),
-  // while the Box branch still needs it for GenerateBoxSampleDownsampleFragmentShader.
+  // Both downsample modes are now pre-baked (Adaptive: mip FS with
+  // FIRST_PASS=true at constant_id=100; Box: box-sample FS with
+  // RESOLUTION_SCALE at constant_id=0). m_shadergen is not needed here.
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2311,25 +2310,26 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleFirstPassPipeline()
   }
   else if (m_downsample_mode == GPUDownsampleMode::Box)
   {
-    if (!m_shadergen)
-    {
-      Log_ErrorPrint("GetDownsampleFirstPassPipeline (Box) called before CompilePipelines constructed the shadergen");
-      return VK_NULL_HANDLE;
-    }
+    // Pre-baked path. RESOLUTION_SCALE is supplied as a spec constant
+    // at constant_id=0.
     VkShaderModule vs = GetFullscreenQuadVertexShader();
     if (vs == VK_NULL_HANDLE)
       return VK_NULL_HANDLE;
-    VkShaderModule fs =
-      g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateBoxSampleDownsampleFragmentShader());
+    VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+      Vulkan::EmbeddedShaders::k_box_sample_downsample_fs,
+      Vulkan::EmbeddedShaders::k_box_sample_downsample_fs_size_bytes);
     if (fs == VK_NULL_HANDLE)
       return VK_NULL_HANDLE;
+
+    Vulkan::SpecConstants fs_spec;
+    fs_spec.AddUInt(0, m_resolution_scale);
 
     Vulkan::GraphicsPipelineBuilder gpbuilder;
     gpbuilder.SetRenderPass(m_downsample_render_pass, 0);
     gpbuilder.SetPipelineLayout(m_single_sampler_pipeline_layout);
     gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     gpbuilder.SetVertexShader(vs);
-    gpbuilder.SetFragmentShader(fs);
+    gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
     gpbuilder.SetNoCullRasterizationState();
     gpbuilder.SetNoDepthTestState();
     gpbuilder.SetNoBlendingState();
@@ -2435,18 +2435,19 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleCompositePassPipeline()
   if (m_downsample_mode != GPUDownsampleMode::Adaptive)
     return VK_NULL_HANDLE;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetDownsampleCompositePassPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
+  // Pre-baked path. No m_shadergen needed; RESOLUTION_SCALE is supplied
+  // as a spec constant at constant_id=0.
   VkShaderModule vs = GetUVQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  VkShaderModule fs =
-    g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateAdaptiveDownsampleCompositeFragmentShader());
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_adaptive_downsample_composite_fs,
+    Vulkan::EmbeddedShaders::k_adaptive_downsample_composite_fs_size_bytes);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddUInt(0, m_resolution_scale);
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2456,7 +2457,7 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleCompositePassPipeline()
   gpbuilder.SetPipelineLayout(m_downsample_composite_pipeline_layout);
   gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();

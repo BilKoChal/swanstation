@@ -15,7 +15,9 @@ Log_SetChannel(Vulkan::EmbeddedShaders);
 namespace Vulkan::EmbeddedShaders {
 
 #include "embedded_spirv/adaptive_downsample_blur_fs.inc"
+#include "embedded_spirv/adaptive_downsample_composite_fs.inc"
 #include "embedded_spirv/adaptive_downsample_mip_fs.inc"
+#include "embedded_spirv/box_sample_downsample_fs.inc"
 #include "embedded_spirv/present_cursor_fs.inc"
 #include "embedded_spirv/present_display_fs.inc"
 #include "embedded_spirv/present_fullscreen_vs.inc"
