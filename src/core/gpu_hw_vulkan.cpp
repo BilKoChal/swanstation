@@ -2249,15 +2249,34 @@ VkPipeline GPU_HW_Vulkan::GetDisplayPipeline(uint8_t depth_24, uint8_t interlace
   VkShaderModule vs = GetFullscreenQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetDisplayPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateDisplayFragmentShader(
-    static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
+
+  // Pre-baked path: two blobs handle the structural MSAA split
+  // (sampler2D vs sampler2DMS); the remaining DEPTH_24BIT,
+  // INTERLACED/INTERLEAVED, SMOOTH_CHROMA combinations collapse into
+  // specialisation constants. RESOLUTION_SCALE and MULTISAMPLES are
+  // session-constant common-knob spec constants. The slot lookup
+  // m_display_pipelines[depth_24][interlace_mode] is unchanged, so
+  // each of the 6 entries gets its own spec-const-specialised
+  // pipeline at first touch.
+  const bool         msaa      = (m_multisamples > 1);
+  const uint32_t*    spv       = msaa ? Vulkan::EmbeddedShaders::k_display_msaa_fs
+                                      : Vulkan::EmbeddedShaders::k_display_fs;
+  const size_t       spv_size  = msaa ? Vulkan::EmbeddedShaders::k_display_msaa_fs_size_bytes
+                                      : Vulkan::EmbeddedShaders::k_display_fs_size_bytes;
+
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(spv, spv_size);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  const InterlacedRenderMode irm = static_cast<InterlacedRenderMode>(interlace_mode);
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddUInt(  0, static_cast<uint32_t>(m_resolution_scale));    // RESOLUTION_SCALE
+  if (msaa)
+    fs_spec.AddUInt(1, static_cast<uint32_t>(m_multisamples));        // MULTISAMPLES
+  fs_spec.AddBool(100, depth_24 != 0);                                // DEPTH_24BIT
+  fs_spec.AddBool(101, irm != InterlacedRenderMode::None);            // INTERLACED
+  fs_spec.AddBool(102, irm == InterlacedRenderMode::InterleavedFields);// INTERLEAVED
+  fs_spec.AddBool(103, static_cast<bool>(m_chroma_smoothing));        // SMOOTH_CHROMA
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2267,7 +2286,7 @@ VkPipeline GPU_HW_Vulkan::GetDisplayPipeline(uint8_t depth_24, uint8_t interlace
   gpbuilder.SetPipelineLayout(m_single_sampler_pipeline_layout);
   gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();

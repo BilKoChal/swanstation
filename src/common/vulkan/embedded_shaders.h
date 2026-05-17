@@ -108,6 +108,28 @@ extern const size_t k_vram_write_ssbo_fs_size_bytes;
 extern const uint32_t k_vram_write_texbuf_fs[];
 extern const size_t k_vram_write_texbuf_fs_size_bytes;
 
+// Display FS - the densest shader in the project. Two blobs handle the
+// structural MSAA split (sampler2D vs sampler2DMS); the remaining
+// depth_24bit x interlace_mode (None/Interleaved/Separate) x
+// smooth_chroma combinations collapse into spec constants. The C++ side
+// keeps the existing m_display_pipelines[depth_24][interlace_mode] 2x3
+// slot table (smooth_chroma and MSAA are session-constant) and passes
+// the rest at pipeline-create time.
+//
+// Common spec constants on both blobs:
+//   id =   0 RESOLUTION_SCALE (uint) - drives VRAM_SIZE.
+//   id = 100 DEPTH_24BIT      (bool) - 16bpp vs 24bpp source.
+//   id = 101 INTERLACED       (bool) - field-discard logic.
+//   id = 102 INTERLEAVED      (bool) - meaningful only when INTERLACED.
+//   id = 103 SMOOTH_CHROMA    (bool) - meaningful only when DEPTH_24BIT.
+//
+// MSAA blob adds:
+//   id =   1 MULTISAMPLES     (uint) - LoadVRAM averaging loop bound.
+extern const uint32_t k_display_fs[];
+extern const size_t k_display_fs_size_bytes;
+extern const uint32_t k_display_msaa_fs[];
+extern const size_t k_display_msaa_fs_size_bytes;
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
