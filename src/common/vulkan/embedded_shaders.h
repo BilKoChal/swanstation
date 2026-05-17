@@ -79,6 +79,15 @@ extern const size_t k_adaptive_downsample_mip_fs_size_bytes;
 extern const uint32_t k_box_sample_downsample_fs[];
 extern const size_t k_box_sample_downsample_fs_size_bytes;
 
+// VRAM fill FS. One blob, four-to-eight specialisations:
+//   id =   3 PGXP_DEPTH (bool)  - common-knob convention.
+//   id = 100 INTERLACED (bool)  - shader-specific.
+//   id = 101 WRAPPED    (bool)  - shader-specific.
+// No texture binding; reads only its push constant block.
+extern const uint32_t k_vram_fill_fs[];
+extern const size_t k_vram_fill_fs_size_bytes;
+
+
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
 // This intentionally bypasses Vulkan::ShaderCache: pre-baked SPIR-V is already

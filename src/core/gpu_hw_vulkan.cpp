@@ -2021,15 +2021,19 @@ VkPipeline GPU_HW_Vulkan::GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlace
   VkShaderModule vs = GetFullscreenQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetVRAMFillPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  VkShaderModule fs = g_vulkan_shader_cache->GetFragmentShader(
-    m_shadergen->GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
+
+  // Pre-baked path: single SPIR-V blob, three bool spec constants drive
+  // the four-to-eight specialised pipelines.
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_vram_fill_fs,
+    Vulkan::EmbeddedShaders::k_vram_fill_fs_size_bytes);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddBool(  3, m_pgxp_depth_buffer);            // PGXP_DEPTH
+  fs_spec.AddBool(100, interlaced != 0);                // INTERLACED
+  fs_spec.AddBool(101, wrapped    != 0);                // WRAPPED
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2042,7 +2046,7 @@ VkPipeline GPU_HW_Vulkan::GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlace
   gpbuilder.SetNoBlendingState();
   gpbuilder.SetDynamicViewportAndScissorState();
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetMultisamples(m_multisamples, false);
   gpbuilder.SetDepthState(true, true, VK_COMPARE_OP_ALWAYS);
 
