@@ -56,9 +56,16 @@ public:
 
   VkPipeline Create(VkDevice device, VkPipelineCache pipeline_cache = VK_NULL_HANDLE, bool clear = true);
 
-  void SetShaderStage(VkShaderStageFlagBits stage, VkShaderModule module, const char* entry_point);
-  void SetVertexShader(VkShaderModule module) { SetShaderStage(VK_SHADER_STAGE_VERTEX_BIT, module, "main"); }
-  void SetFragmentShader(VkShaderModule module) { SetShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, module, "main"); }
+  void SetShaderStage(VkShaderStageFlagBits stage, VkShaderModule module, const char* entry_point,
+                      const VkSpecializationInfo* spec_info = nullptr);
+  void SetVertexShader(VkShaderModule module, const VkSpecializationInfo* spec_info = nullptr)
+  {
+    SetShaderStage(VK_SHADER_STAGE_VERTEX_BIT, module, "main", spec_info);
+  }
+  void SetFragmentShader(VkShaderModule module, const VkSpecializationInfo* spec_info = nullptr)
+  {
+    SetShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, module, "main", spec_info);
+  }
 
   void AddVertexBuffer(uint32_t binding, uint32_t stride, VkVertexInputRate input_rate = VK_VERTEX_INPUT_RATE_VERTEX);
   void AddVertexAttribute(uint32_t location, uint32_t binding, VkFormat format, uint32_t offset);
@@ -205,6 +212,57 @@ public:
 
 private:
   VkBufferViewCreateInfo m_ci;
+};
+
+// Builder for VkSpecializationInfo passed to a pipeline shader stage.
+//
+// Specialization constants let a single SPIR-V blob serve multiple runtime
+// configurations by baking integer / bool / float values at pipeline-
+// creation time. This is what lets us pre-bake shaders whose source used
+// to vary by emulator settings (RESOLUTION_SCALE, PGXP_DEPTH, FIRST_PASS,
+// etc.) without exploding the on-disk blob count.
+//
+// Lifetime: GetInfo() returns a pointer into this object's storage, so the
+// SpecConstants instance must outlive the vkCreateGraphicsPipelines call
+// that consumes the VkSpecializationInfo. The typical pattern is a local
+// SpecConstants variable on the same stack frame as the GraphicsPipelineBuilder.
+//
+// Each entry occupies exactly 4 bytes of payload; supports up to MAX_ENTRIES
+// constants per stage. uint, int, float, and bool fit; double / vector
+// constants do not and would need a wider payload type.
+//
+// Constant-id allocation convention (used across the Vulkan backend):
+//   0-99   reserved for common knobs shared across shaders (RESOLUTION_SCALE,
+//          MULTISAMPLES, PER_SAMPLE_SHADING, PGXP_DEPTH).
+//   100+   shader-specific (e.g. FIRST_PASS for the adaptive-downsample
+//          mip FS).
+class SpecConstants
+{
+public:
+  static constexpr uint32_t MAX_ENTRIES = 16;
+  static constexpr uint32_t SLOT_SIZE = 4u;
+
+  SpecConstants() = default;
+
+  void Clear();
+
+  void AddBool(uint32_t constant_id, bool value);
+  void AddUInt(uint32_t constant_id, uint32_t value);
+  void AddInt(uint32_t constant_id, int32_t value);
+  void AddFloat(uint32_t constant_id, float value);
+
+  // Returns nullptr if no entries have been added. Otherwise returns a
+  // pointer to an internal VkSpecializationInfo whose lifetime is tied to
+  // this object.
+  const VkSpecializationInfo* GetInfo();
+
+private:
+  void Add(uint32_t constant_id, uint32_t bits);
+
+  std::array<VkSpecializationMapEntry, MAX_ENTRIES> m_entries{};
+  std::array<uint32_t, MAX_ENTRIES> m_data{};
+  uint32_t m_count = 0;
+  VkSpecializationInfo m_info{};
 };
 
 } // namespace Vulkan

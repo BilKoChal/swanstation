@@ -53,6 +53,19 @@ extern const size_t k_present_display_fs_size_bytes;
 extern const uint32_t k_present_cursor_fs[];
 extern const size_t k_present_cursor_fs_size_bytes;
 
+// Adaptive-downsample blur FS. Single-channel 3x3-ish smoothing of the
+// energy texture produced by the mip FS. No specialization constants.
+extern const uint32_t k_adaptive_downsample_blur_fs[];
+extern const size_t k_adaptive_downsample_blur_fs_size_bytes;
+
+// Adaptive-downsample mip FS. One blob serves both the first-pass
+// (FIRST_PASS=true: samples a vec3 color texture) and the subsequent mid
+// passes (FIRST_PASS=false: feeds back vec4 from a prior mip). FIRST_PASS
+// is a bool specialization constant at id=100 supplied at pipeline-
+// creation time via Vulkan::SpecConstants.
+extern const uint32_t k_adaptive_downsample_mip_fs[];
+extern const size_t k_adaptive_downsample_mip_fs_size_bytes;
+
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
 // This intentionally bypasses Vulkan::ShaderCache: pre-baked SPIR-V is already

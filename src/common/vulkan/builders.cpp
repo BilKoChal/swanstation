@@ -1,5 +1,6 @@
 #include "builders.h"
 #include "util.h"
+#include <cstring>
 #include <limits>
 
 namespace Vulkan {
@@ -165,7 +166,8 @@ VkPipeline GraphicsPipelineBuilder::Create(VkDevice device, VkPipelineCache pipe
 }
 
 void GraphicsPipelineBuilder::SetShaderStage(VkShaderStageFlagBits stage, VkShaderModule module,
-                                             const char* entry_point)
+                                             const char* entry_point,
+                                             const VkSpecializationInfo* spec_info /* = nullptr */)
 {
   uint32_t index = 0;
   for (; index < m_ci.stageCount; index++)
@@ -181,9 +183,17 @@ void GraphicsPipelineBuilder::SetShaderStage(VkShaderStageFlagBits stage, VkShad
 
   VkPipelineShaderStageCreateInfo& s = m_shader_stages[index];
   s.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  // Always clear pNext / flags / pSpecializationInfo here. The slot may
+  // already hold values from a previous Set* call on this stage (callers
+  // sometimes reuse the builder across pipelines without an intervening
+  // Clear()), so without explicit reset a stale spec_info pointer or flags
+  // bit could leak into the next vkCreateGraphicsPipelines call.
+  s.pNext = nullptr;
+  s.flags = 0;
   s.stage = stage;
   s.module = module;
   s.pName = entry_point;
+  s.pSpecializationInfo = spec_info;
 }
 
 void GraphicsPipelineBuilder::AddVertexBuffer(uint32_t binding, uint32_t stride,
@@ -568,6 +578,69 @@ void BufferViewBuilder::Set(VkBuffer buffer, VkFormat format, uint32_t offset, u
   m_ci.format = format;
   m_ci.offset = offset;
   m_ci.range = size;
+}
+
+void SpecConstants::Clear()
+{
+  m_entries = {};
+  m_data = {};
+  m_count = 0;
+  m_info = {};
+}
+
+void SpecConstants::Add(uint32_t constant_id, uint32_t bits)
+{
+  if (m_count >= MAX_ENTRIES)
+  {
+    // Bumping MAX_ENTRIES is safe; this only triggers if a shader uses
+    // more spec constants than any existing consumer (16 today). Silent
+    // no-op rather than log spam - the resulting pipeline will visibly
+    // misbehave and lead the developer to this check.
+    return;
+  }
+  m_data[m_count] = bits;
+  VkSpecializationMapEntry& e = m_entries[m_count];
+  e.constantID = constant_id;
+  e.offset = m_count * SLOT_SIZE;
+  e.size = SLOT_SIZE;
+  m_count++;
+}
+
+void SpecConstants::AddBool(uint32_t constant_id, bool value)
+{
+  // SPIR-V represents OpSpecConstantTrue/False but the matching client API
+  // payload for a 'bool' spec constant is a 4-byte word, zero == false.
+  Add(constant_id, value ? 1u : 0u);
+}
+
+void SpecConstants::AddUInt(uint32_t constant_id, uint32_t value)
+{
+  Add(constant_id, value);
+}
+
+void SpecConstants::AddInt(uint32_t constant_id, int32_t value)
+{
+  uint32_t bits;
+  std::memcpy(&bits, &value, sizeof(bits));
+  Add(constant_id, bits);
+}
+
+void SpecConstants::AddFloat(uint32_t constant_id, float value)
+{
+  uint32_t bits;
+  std::memcpy(&bits, &value, sizeof(bits));
+  Add(constant_id, bits);
+}
+
+const VkSpecializationInfo* SpecConstants::GetInfo()
+{
+  if (m_count == 0)
+    return nullptr;
+  m_info.mapEntryCount = m_count;
+  m_info.pMapEntries = m_entries.data();
+  m_info.dataSize = static_cast<size_t>(m_count) * SLOT_SIZE;
+  m_info.pData = m_data.data();
+  return &m_info;
 }
 
 } // namespace Vulkan

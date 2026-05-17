@@ -2270,11 +2270,10 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleFirstPassPipeline()
   if (m_downsample_first_pass_pipeline != VK_NULL_HANDLE)
     return m_downsample_first_pass_pipeline;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetDownsampleFirstPassPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
+  // Note: the m_shadergen null-check used to be at function entry. It is
+  // now per-branch because the Adaptive branch no longer touches
+  // m_shadergen (pre-baked mip FS with FIRST_PASS=true spec constant),
+  // while the Box branch still needs it for GenerateBoxSampleDownsampleFragmentShader.
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2284,17 +2283,21 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleFirstPassPipeline()
     VkShaderModule vs = GetUVQuadVertexShader();
     if (vs == VK_NULL_HANDLE)
       return VK_NULL_HANDLE;
-    VkShaderModule fs =
-      g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateAdaptiveDownsampleMipFragmentShader(true));
+    VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+      Vulkan::EmbeddedShaders::k_adaptive_downsample_mip_fs,
+      Vulkan::EmbeddedShaders::k_adaptive_downsample_mip_fs_size_bytes);
     if (fs == VK_NULL_HANDLE)
       return VK_NULL_HANDLE;
+
+    Vulkan::SpecConstants fs_spec;
+    fs_spec.AddBool(100, /*FIRST_PASS=*/true);
 
     Vulkan::GraphicsPipelineBuilder gpbuilder;
     gpbuilder.SetRenderPass(m_downsample_render_pass, 0);
     gpbuilder.SetPipelineLayout(m_downsample_pipeline_layout);
     gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     gpbuilder.SetVertexShader(vs);
-    gpbuilder.SetFragmentShader(fs);
+    gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
     gpbuilder.SetNoCullRasterizationState();
     gpbuilder.SetNoDepthTestState();
     gpbuilder.SetNoBlendingState();
@@ -2308,6 +2311,11 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleFirstPassPipeline()
   }
   else if (m_downsample_mode == GPUDownsampleMode::Box)
   {
+    if (!m_shadergen)
+    {
+      Log_ErrorPrint("GetDownsampleFirstPassPipeline (Box) called before CompilePipelines constructed the shadergen");
+      return VK_NULL_HANDLE;
+    }
     VkShaderModule vs = GetFullscreenQuadVertexShader();
     if (vs == VK_NULL_HANDLE)
       return VK_NULL_HANDLE;
@@ -2344,18 +2352,20 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleMidPassPipeline()
   if (m_downsample_mode != GPUDownsampleMode::Adaptive)
     return VK_NULL_HANDLE;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetDownsampleMidPassPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
+  // Pre-baked path: same SPIR-V blob as the Adaptive first-pass, but with
+  // FIRST_PASS=false plumbed through VkSpecializationInfo. No m_shadergen
+  // dependency.
   VkShaderModule vs = GetUVQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  VkShaderModule fs =
-    g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateAdaptiveDownsampleMipFragmentShader(false));
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_adaptive_downsample_mip_fs,
+    Vulkan::EmbeddedShaders::k_adaptive_downsample_mip_fs_size_bytes);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddBool(100, /*FIRST_PASS=*/false);
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2365,7 +2375,7 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleMidPassPipeline()
   gpbuilder.SetPipelineLayout(m_downsample_pipeline_layout);
   gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();
@@ -2386,16 +2396,13 @@ VkPipeline GPU_HW_Vulkan::GetDownsampleBlurPassPipeline()
   if (m_downsample_mode != GPUDownsampleMode::Adaptive)
     return VK_NULL_HANDLE;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetDownsampleBlurPassPipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
+  // Pre-baked path: no m_shadergen needed.
   VkShaderModule vs = GetUVQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  VkShaderModule fs =
-    g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateAdaptiveDownsampleBlurFragmentShader());
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_adaptive_downsample_blur_fs,
+    Vulkan::EmbeddedShaders::k_adaptive_downsample_blur_fs_size_bytes);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
 
