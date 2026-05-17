@@ -1851,30 +1851,44 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   // both produce equivalent SPIR-V; the publish step picks one and
   // the loser destroys its VkShaderModule.
   VkShaderModule fresh = VK_NULL_HANDLE;
-  if (lookup_mode == static_cast<uint8_t>(GPUTextureMode::Disabled))
+  const bool textured_embedded =
+    (lookup_mode != static_cast<uint8_t>(GPUTextureMode::Disabled)) &&
+    (m_texture_filtering == GPUTextureFilter::Nearest);
+  if (lookup_mode == static_cast<uint8_t>(GPUTextureMode::Disabled) || textured_embedded)
   {
-    // Untextured slice is pre-baked. Pick the structural blob from the
-    // per-call and per-session state and instantiate it directly; per-
-    // call spec constants (TRANSPARENCY, DITHERING, INTERLACING, ...)
-    // are applied at pipeline-create time in GetBatchPipeline below.
+    // Pre-baked path: untextured (texture_mode == Disabled) and the
+    // textured-Nearest slice both land here. Per-call spec constants
+    // (TRANSPARENCY, DITHERING, INTERLACING, PALETTE_*, RAW_TEXTURE,
+    // ...) are applied at pipeline-create time in GetBatchPipeline.
     //
-    // use_dual_source matches the shadergen-side derivation - the
-    // texture-filter half of the condition cannot trigger here
-    // (untextured == no texture sampling).
+    // use_dual_source matches the shadergen-side derivation:
+    //   supports && ((render_mode is transparent) || filter != Nearest)
+    // For both branches here we are nearest-or-untextured, so the
+    // filter half evaluates false and we drop to the render_mode test.
     const bool dual_source = m_supports_dual_source_blend &&
       (render_mode == static_cast<uint8_t>(BatchRenderMode::TransparentAndOpaque) ||
        render_mode == static_cast<uint8_t>(BatchRenderMode::OnlyTransparent));
-    const Vulkan::EmbeddedShaders::EmbeddedShaderBlob& blob =
-      Vulkan::EmbeddedShaders::GetBatchUntexturedFragmentShaderBlob(
+    const Vulkan::EmbeddedShaders::EmbeddedShaderBlob* blob_ptr;
+    if (textured_embedded)
+    {
+      blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedNearestFragmentShaderBlob(
+        m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+        dual_source, m_pgxp_depth_buffer, m_using_uv_limits);
+    }
+    else
+    {
+      blob_ptr = &Vulkan::EmbeddedShaders::GetBatchUntexturedFragmentShaderBlob(
         m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
         dual_source, m_pgxp_depth_buffer);
-    fresh = Vulkan::EmbeddedShaders::CreateShaderModule(blob.spv, blob.size_bytes);
+    }
+    fresh = Vulkan::EmbeddedShaders::CreateShaderModule(blob_ptr->spv, blob_ptr->size_bytes);
   }
   else
   {
-    // Textured slices still go through the runtime shadergen + glslang
-    // path; conversion lands in subsequent patches, one or two texture
-    // filter values at a time.
+    // Textured non-Nearest slices still go through shadergen + glslang;
+    // conversion lands in subsequent patches, one filter family at a
+    // time (Bilinear / BilinearBinAlpha, JINC2 / JINC2BinAlpha, xBR /
+    // xBRBinAlpha).
     if (!m_shadergen)
     {
       Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
@@ -1980,10 +1994,9 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   gpbuilder.SetVertexShader(
     m_batch_vertex_shaders[static_cast<uint8_t>(textured)].load(std::memory_order_relaxed), vs_spec.GetInfo());
 
-  // Spec constants on the pre-baked batch FS (untextured slice currently
-  // - textured slices still go through shadergen and ignore these
-  // entries per Vulkan spec, which says unrecognised spec const IDs are
-  // silently dropped).
+  // Spec constants on the pre-baked batch FS (untextured slice and
+  // textured-Nearest slice; textured non-Nearest slices still go
+  // through shadergen and ignore these entries per Vulkan spec).
   //
   //   id =   0  RESOLUTION_SCALE              (uint, per-session)
   //   id = 100  TRANSPARENCY                  (bool, per-call)
@@ -1993,7 +2006,25 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   //   id = 104  INTERLACING                   (bool, per-call)
   //   id = 105  DITHERING_SCALED              (bool, per-session)
   //   id = 106  TRUE_COLOR                    (bool, per-session)
+  //   id = 107  PALETTE_4_BIT                 (bool, per-call -
+  //                                            actual_texture_mode == 0)
+  //   id = 108  PALETTE_8_BIT                 (bool, per-call -
+  //                                            actual_texture_mode == 1)
+  //   id = 109  RAW_TEXTURE                   (bool, per-call -
+  //                                            texture_mode has
+  //                                            RawTextureBit set)
+  //
+  // 107-109 are meaningful only on the textured Nearest blobs; the
+  // untextured blobs do not declare them. Passing them is harmless -
+  // unrecognised spec const IDs are silently dropped.
   const BatchRenderMode brm = static_cast<BatchRenderMode>(render_mode);
+  const uint8_t actual_tex_mode =
+    static_cast<uint8_t>(lookup_mode) &
+    ~static_cast<uint8_t>(GPUTextureMode::RawTextureBit);
+  const bool palette_4_bit = (actual_tex_mode == static_cast<uint8_t>(GPUTextureMode::Palette4Bit));
+  const bool palette_8_bit = (actual_tex_mode == static_cast<uint8_t>(GPUTextureMode::Palette8Bit));
+  const bool raw_texture   = (static_cast<uint8_t>(lookup_mode) &
+                              static_cast<uint8_t>(GPUTextureMode::RawTextureBit)) != 0;
   Vulkan::SpecConstants fs_spec;
   fs_spec.AddUInt(  0, static_cast<uint32_t>(m_resolution_scale));
   fs_spec.AddBool(100, brm != BatchRenderMode::TransparencyDisabled);
@@ -2003,6 +2034,9 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   fs_spec.AddBool(104, interlacing);
   fs_spec.AddBool(105, m_scaled_dithering);
   fs_spec.AddBool(106, m_true_color);
+  fs_spec.AddBool(107, palette_4_bit);
+  fs_spec.AddBool(108, palette_8_bit);
+  fs_spec.AddBool(109, raw_texture);
   gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
 
   gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);

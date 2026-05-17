@@ -17,6 +17,54 @@ namespace Vulkan::EmbeddedShaders {
 #include "embedded_spirv/adaptive_downsample_blur_fs.inc"
 #include "embedded_spirv/adaptive_downsample_composite_fs.inc"
 #include "embedded_spirv/adaptive_downsample_mip_fs.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_dual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_dual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_dual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_dual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_nodual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_nodual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_nodual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_noperp_nodual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_dual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_dual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_dual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_dual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_nodual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_nodual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_nodual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_centroid_persp_nodual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_dual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_dual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_dual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_dual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_nodual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_nodual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_nodual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_noperp_nodual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_dual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_dual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_dual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_dual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_nodual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_nodual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_nodual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_none_persp_nodual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_dual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_dual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_dual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_dual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_nodual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_nodual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_nodual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_noperp_nodual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_dual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_dual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_dual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_dual_pgxpon_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_nodual_pgxpoff_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_nodual_pgxpoff_uv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_nodual_pgxpon_nouv.inc"
+#include "embedded_spirv/batch_textured_nearest_fs_sample_persp_nodual_pgxpon_uv.inc"
 #include "embedded_spirv/batch_untextured_fs_centroid_noperp_dual_pgxpoff.inc"
 #include "embedded_spirv/batch_untextured_fs_centroid_noperp_dual_pgxpon.inc"
 #include "embedded_spirv/batch_untextured_fs_centroid_noperp_nodual_pgxpoff.inc"
@@ -181,6 +229,85 @@ const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
   return k_batch_untextured_fs_blobs[index];
 }
 
+
+// Batch FS textured-Nearest blob table. Index encoding (must match
+// GetBatchTexturedNearestFragmentShaderBlob below):
+//
+//   interp = per_sample_shading ? 2 : (msaa ? 1 : 0)        (0..2)
+//   persp  = noperspective_color ? 1 : 0                    (0..1)
+//   dual   = dual_source ? 1 : 0                            (0..1)
+//   pgxp   = pgxp_depth ? 1 : 0                             (0..1)
+//   uv     = uv_limits ? 1 : 0                              (0..1)
+//
+//   index  = interp*16 + persp*8 + dual*4 + pgxp*2 + uv     (0..47)
+#define BLOB(name) { k_##name, k_##name##_size_bytes }
+const EmbeddedShaderBlob k_batch_textured_nearest_fs_blobs[48] = {
+  BLOB(batch_textured_nearest_fs_none_persp_nodual_pgxpoff_nouv), // [ 0]
+  BLOB(batch_textured_nearest_fs_none_persp_nodual_pgxpoff_uv), // [ 1]
+  BLOB(batch_textured_nearest_fs_none_persp_nodual_pgxpon_nouv), // [ 2]
+  BLOB(batch_textured_nearest_fs_none_persp_nodual_pgxpon_uv), // [ 3]
+  BLOB(batch_textured_nearest_fs_none_persp_dual_pgxpoff_nouv), // [ 4]
+  BLOB(batch_textured_nearest_fs_none_persp_dual_pgxpoff_uv), // [ 5]
+  BLOB(batch_textured_nearest_fs_none_persp_dual_pgxpon_nouv), // [ 6]
+  BLOB(batch_textured_nearest_fs_none_persp_dual_pgxpon_uv), // [ 7]
+  BLOB(batch_textured_nearest_fs_none_noperp_nodual_pgxpoff_nouv), // [ 8]
+  BLOB(batch_textured_nearest_fs_none_noperp_nodual_pgxpoff_uv), // [ 9]
+  BLOB(batch_textured_nearest_fs_none_noperp_nodual_pgxpon_nouv), // [10]
+  BLOB(batch_textured_nearest_fs_none_noperp_nodual_pgxpon_uv), // [11]
+  BLOB(batch_textured_nearest_fs_none_noperp_dual_pgxpoff_nouv), // [12]
+  BLOB(batch_textured_nearest_fs_none_noperp_dual_pgxpoff_uv), // [13]
+  BLOB(batch_textured_nearest_fs_none_noperp_dual_pgxpon_nouv), // [14]
+  BLOB(batch_textured_nearest_fs_none_noperp_dual_pgxpon_uv), // [15]
+  BLOB(batch_textured_nearest_fs_centroid_persp_nodual_pgxpoff_nouv), // [16]
+  BLOB(batch_textured_nearest_fs_centroid_persp_nodual_pgxpoff_uv), // [17]
+  BLOB(batch_textured_nearest_fs_centroid_persp_nodual_pgxpon_nouv), // [18]
+  BLOB(batch_textured_nearest_fs_centroid_persp_nodual_pgxpon_uv), // [19]
+  BLOB(batch_textured_nearest_fs_centroid_persp_dual_pgxpoff_nouv), // [20]
+  BLOB(batch_textured_nearest_fs_centroid_persp_dual_pgxpoff_uv), // [21]
+  BLOB(batch_textured_nearest_fs_centroid_persp_dual_pgxpon_nouv), // [22]
+  BLOB(batch_textured_nearest_fs_centroid_persp_dual_pgxpon_uv), // [23]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_nodual_pgxpoff_nouv), // [24]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_nodual_pgxpoff_uv), // [25]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_nodual_pgxpon_nouv), // [26]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_nodual_pgxpon_uv), // [27]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_dual_pgxpoff_nouv), // [28]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_dual_pgxpoff_uv), // [29]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_dual_pgxpon_nouv), // [30]
+  BLOB(batch_textured_nearest_fs_centroid_noperp_dual_pgxpon_uv), // [31]
+  BLOB(batch_textured_nearest_fs_sample_persp_nodual_pgxpoff_nouv), // [32]
+  BLOB(batch_textured_nearest_fs_sample_persp_nodual_pgxpoff_uv), // [33]
+  BLOB(batch_textured_nearest_fs_sample_persp_nodual_pgxpon_nouv), // [34]
+  BLOB(batch_textured_nearest_fs_sample_persp_nodual_pgxpon_uv), // [35]
+  BLOB(batch_textured_nearest_fs_sample_persp_dual_pgxpoff_nouv), // [36]
+  BLOB(batch_textured_nearest_fs_sample_persp_dual_pgxpoff_uv), // [37]
+  BLOB(batch_textured_nearest_fs_sample_persp_dual_pgxpon_nouv), // [38]
+  BLOB(batch_textured_nearest_fs_sample_persp_dual_pgxpon_uv), // [39]
+  BLOB(batch_textured_nearest_fs_sample_noperp_nodual_pgxpoff_nouv), // [40]
+  BLOB(batch_textured_nearest_fs_sample_noperp_nodual_pgxpoff_uv), // [41]
+  BLOB(batch_textured_nearest_fs_sample_noperp_nodual_pgxpon_nouv), // [42]
+  BLOB(batch_textured_nearest_fs_sample_noperp_nodual_pgxpon_uv), // [43]
+  BLOB(batch_textured_nearest_fs_sample_noperp_dual_pgxpoff_nouv), // [44]
+  BLOB(batch_textured_nearest_fs_sample_noperp_dual_pgxpoff_uv), // [45]
+  BLOB(batch_textured_nearest_fs_sample_noperp_dual_pgxpon_nouv), // [46]
+  BLOB(batch_textured_nearest_fs_sample_noperp_dual_pgxpon_uv), // [47]
+};
+#undef BLOB
+
+const EmbeddedShaderBlob& GetBatchTexturedNearestFragmentShaderBlob(bool msaa,
+                                                                    bool per_sample_shading,
+                                                                    bool noperspective_color,
+                                                                    bool dual_source,
+                                                                    bool pgxp_depth,
+                                                                    bool uv_limits)
+{
+  const unsigned interp = per_sample_shading ? 2u : (msaa ? 1u : 0u);
+  const unsigned persp  = noperspective_color ? 1u : 0u;
+  const unsigned dual   = dual_source ? 1u : 0u;
+  const unsigned pgxp   = pgxp_depth ? 1u : 0u;
+  const unsigned uv     = uv_limits ? 1u : 0u;
+  const unsigned index  = interp * 16u + persp * 8u + dual * 4u + pgxp * 2u + uv;
+  return k_batch_textured_nearest_fs_blobs[index];
+}
 
 VkShaderModule CreateShaderModule(const uint32_t* spv, size_t spv_size_bytes)
 {

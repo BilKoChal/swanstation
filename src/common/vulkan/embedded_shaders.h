@@ -230,6 +230,38 @@ const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
                                                                bool dual_source,
                                                                bool pgxp_depth);
 
+// Batch FS, textured-with-Nearest-filter slice. Five SPIR-V-structural
+// axes (m_texture_filter == GPUTextureFilter::Nearest sessions only;
+// the four other filters land in subsequent patches with their own
+// blob arrays):
+//
+//   - Input interpolation qualifier (none / centroid / sample). 3.
+//   - Color input perspective (standard / noperspective). 2.
+//   - Dual-source output (1 vs 2 outputs). 2.
+//   - PGXP depth output (writes gl_FragDepth or omits it). 2.
+//   - UV limits (without / with v_uv_limits flat input). 2.
+//
+// 3 x 2 x 2 x 2 x 2 = 48 blobs. New per-call specialisation
+// constants relative to the untextured slice:
+//
+//   id = 107 PALETTE_4_BIT  (bool, actual_texture_mode == 0)
+//   id = 108 PALETTE_8_BIT  (bool, actual_texture_mode == 1)
+//   id = 109 RAW_TEXTURE    (bool, RawTextureBit set in texture_mode)
+//
+// PALETTE is derived inside the shader as PALETTE_4_BIT ||
+// PALETTE_8_BIT.
+extern const EmbeddedShaderBlob k_batch_textured_nearest_fs_blobs[48];
+
+// Pick the right textured-Nearest blob. The 'uv_limits' axis follows
+// m_using_uv_limits (per-session); the rest mirror the untextured
+// helper.
+const EmbeddedShaderBlob& GetBatchTexturedNearestFragmentShaderBlob(bool msaa,
+                                                                    bool per_sample_shading,
+                                                                    bool noperspective_color,
+                                                                    bool dual_source,
+                                                                    bool pgxp_depth,
+                                                                    bool uv_limits);
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
