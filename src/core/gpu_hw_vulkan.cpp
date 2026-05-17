@@ -2112,15 +2112,30 @@ VkPipeline GPU_HW_Vulkan::GetVRAMWritePipeline(uint8_t depth_test)
   VkShaderModule vs = GetFullscreenQuadVertexShader();
   if (vs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
-  if (!m_shadergen)
+
+  // Pre-baked path: two blobs, structurally split by descriptor type at
+  // binding 0 (storage buffer vs uniform texel buffer). The per-session
+  // m_use_ssbos_for_vram_writes decision picks which blob to use; both
+  // share the same RESOLUTION_SCALE + PGXP_DEPTH spec constants.
+  const uint32_t* spv;
+  size_t spv_size;
+  if (m_use_ssbos_for_vram_writes)
   {
-    Log_ErrorPrint("GetVRAMWritePipeline called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
+    spv      = Vulkan::EmbeddedShaders::k_vram_write_ssbo_fs;
+    spv_size = Vulkan::EmbeddedShaders::k_vram_write_ssbo_fs_size_bytes;
   }
-  VkShaderModule fs =
-    g_vulkan_shader_cache->GetFragmentShader(m_shadergen->GenerateVRAMWriteFragmentShader(m_use_ssbos_for_vram_writes));
+  else
+  {
+    spv      = Vulkan::EmbeddedShaders::k_vram_write_texbuf_fs;
+    spv_size = Vulkan::EmbeddedShaders::k_vram_write_texbuf_fs_size_bytes;
+  }
+  VkShaderModule fs = Vulkan::EmbeddedShaders::CreateShaderModule(spv, spv_size);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
+
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddUInt(0, static_cast<uint32_t>(m_resolution_scale));  // RESOLUTION_SCALE
+  fs_spec.AddBool(3, m_pgxp_depth_buffer);                        // PGXP_DEPTH
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -2133,7 +2148,7 @@ VkPipeline GPU_HW_Vulkan::GetVRAMWritePipeline(uint8_t depth_test)
   gpbuilder.SetNoBlendingState();
   gpbuilder.SetDynamicViewportAndScissorState();
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetFragmentShader(fs);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
   gpbuilder.SetMultisamples(m_multisamples, false);
   gpbuilder.SetDepthState(true, true, (depth_test != 0) ? VK_COMPARE_OP_GREATER_OR_EQUAL : VK_COMPARE_OP_ALWAYS);
 

@@ -95,6 +95,19 @@ extern const size_t k_vram_fill_fs_size_bytes;
 extern const uint32_t k_vram_copy_fs[];
 extern const size_t k_vram_copy_fs_size_bytes;
 
+// VRAM write FS. Two blobs - the SSBO vs uniform-texel-buffer split is a
+// structural variant (different descriptor type at binding 0:
+// STORAGE_BUFFER vs UNIFORM_TEXEL_BUFFER) so it cannot fold into a spec
+// constant. The C++ side selects between them based on
+// GPU_HW::m_use_ssbos_for_vram_writes. Both blobs share the same spec
+// constants:
+//   id = 0 RESOLUTION_SCALE (uint) - native-coord downscale + VRAM_SIZE.
+//   id = 3 PGXP_DEPTH       (bool) - depth source selection.
+extern const uint32_t k_vram_write_ssbo_fs[];
+extern const size_t k_vram_write_ssbo_fs_size_bytes;
+extern const uint32_t k_vram_write_texbuf_fs[];
+extern const size_t k_vram_write_texbuf_fs_size_bytes;
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
