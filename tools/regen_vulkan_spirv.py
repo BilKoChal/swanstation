@@ -68,8 +68,47 @@ def _batch_vs_variants():
     return out
 
 
+def _batch_fs_untextured_variants():
+    out = []
+    # Output interpolation: standard / centroid (MSAA) / sample (SSAA).
+    # MUST match the batch VS chosen by the C++ side.
+    interp_axes = [
+        ("none",     []),
+        ("centroid", ["INTERP_CENTROID"]),
+        ("sample",   ["INTERP_SAMPLE"]),
+    ]
+    # Color perspective: standard / noperspective. MUST match batch VS.
+    persp_axes = [
+        ("persp",   []),
+        ("noperp",  ["NOPERSP"]),
+    ]
+    # Dual-source colour output: 1 attachment vs 2 (location 0
+    # index 0/1). Pipeline blend state references SRC1_* or it does
+    # not - per-call decision driven by transparency_mode AND
+    # m_supports_dual_source_blend.
+    dual_axes = [
+        ("nodual",  []),
+        ("dual",    ["DUAL_SOURCE"]),
+    ]
+    # PGXP depth axis: when set, the FS omits gl_FragDepth so the
+    # rasterizer-interpolated VS depth (a_pos.w under PGXP) is used
+    # directly and early-Z stays available. Per-session.
+    pgxp_axes = [
+        ("pgxpoff", []),
+        ("pgxpon",  ["PGXP_DEPTH"]),
+    ]
+    for i_name, i_defs in interp_axes:
+        for p_name, p_defs in persp_axes:
+            for d_name, d_defs in dual_axes:
+                for x_name, x_defs in pgxp_axes:
+                    suffix = f"{i_name}_{p_name}_{d_name}_{x_name}"
+                    out.append((suffix, i_defs + p_defs + d_defs + x_defs))
+    return out
+
+
 TEMPLATE_VARIANTS = {
-    "batch.vert.glsl": _batch_vs_variants(),
+    "batch.vert.glsl":             _batch_vs_variants(),
+    "batch_untextured.frag.glsl":  _batch_fs_untextured_variants(),
 }
 
 

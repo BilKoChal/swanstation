@@ -1850,14 +1850,40 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   // parallel. Two threads compiling the SAME shader is harmless:
   // both produce equivalent SPIR-V; the publish step picks one and
   // the loser destroys its VkShaderModule.
-  if (!m_shadergen)
+  VkShaderModule fresh = VK_NULL_HANDLE;
+  if (lookup_mode == static_cast<uint8_t>(GPUTextureMode::Disabled))
   {
-    Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
+    // Untextured slice is pre-baked. Pick the structural blob from the
+    // per-call and per-session state and instantiate it directly; per-
+    // call spec constants (TRANSPARENCY, DITHERING, INTERLACING, ...)
+    // are applied at pipeline-create time in GetBatchPipeline below.
+    //
+    // use_dual_source matches the shadergen-side derivation - the
+    // texture-filter half of the condition cannot trigger here
+    // (untextured == no texture sampling).
+    const bool dual_source = m_supports_dual_source_blend &&
+      (render_mode == static_cast<uint8_t>(BatchRenderMode::TransparentAndOpaque) ||
+       render_mode == static_cast<uint8_t>(BatchRenderMode::OnlyTransparent));
+    const Vulkan::EmbeddedShaders::EmbeddedShaderBlob& blob =
+      Vulkan::EmbeddedShaders::GetBatchUntexturedFragmentShaderBlob(
+        m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+        dual_source, m_pgxp_depth_buffer);
+    fresh = Vulkan::EmbeddedShaders::CreateShaderModule(blob.spv, blob.size_bytes);
   }
-  const std::string fs = m_shadergen->GenerateBatchFragmentShader(
-    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-  VkShaderModule fresh = g_vulkan_shader_cache->GetFragmentShader(fs);
+  else
+  {
+    // Textured slices still go through the runtime shadergen + glslang
+    // path; conversion lands in subsequent patches, one or two texture
+    // filter values at a time.
+    if (!m_shadergen)
+    {
+      Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
+      return VK_NULL_HANDLE;
+    }
+    const std::string fs = m_shadergen->GenerateBatchFragmentShader(
+      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+    fresh = g_vulkan_shader_cache->GetFragmentShader(fs);
+  }
   if (fresh == VK_NULL_HANDLE)
   {
     Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
@@ -1953,7 +1979,31 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   vs_spec.AddBool(3, m_pgxp_depth_buffer);                          // PGXP_DEPTH
   gpbuilder.SetVertexShader(
     m_batch_vertex_shaders[static_cast<uint8_t>(textured)].load(std::memory_order_relaxed), vs_spec.GetInfo());
-  gpbuilder.SetFragmentShader(fs);
+
+  // Spec constants on the pre-baked batch FS (untextured slice currently
+  // - textured slices still go through shadergen and ignore these
+  // entries per Vulkan spec, which says unrecognised spec const IDs are
+  // silently dropped).
+  //
+  //   id =   0  RESOLUTION_SCALE              (uint, per-session)
+  //   id = 100  TRANSPARENCY                  (bool, per-call)
+  //   id = 101  TRANSPARENCY_ONLY_OPAQUE      (bool, per-call)
+  //   id = 102  TRANSPARENCY_ONLY_TRANSPARENT (bool, per-call)
+  //   id = 103  DITHERING                     (bool, per-call)
+  //   id = 104  INTERLACING                   (bool, per-call)
+  //   id = 105  DITHERING_SCALED              (bool, per-session)
+  //   id = 106  TRUE_COLOR                    (bool, per-session)
+  const BatchRenderMode brm = static_cast<BatchRenderMode>(render_mode);
+  Vulkan::SpecConstants fs_spec;
+  fs_spec.AddUInt(  0, static_cast<uint32_t>(m_resolution_scale));
+  fs_spec.AddBool(100, brm != BatchRenderMode::TransparencyDisabled);
+  fs_spec.AddBool(101, brm == BatchRenderMode::OnlyOpaque);
+  fs_spec.AddBool(102, brm == BatchRenderMode::OnlyTransparent);
+  fs_spec.AddBool(103, dithering);
+  fs_spec.AddBool(104, interlacing);
+  fs_spec.AddBool(105, m_scaled_dithering);
+  fs_spec.AddBool(106, m_true_color);
+  gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
 
   gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
   gpbuilder.SetDepthState(true, true, depth_test_values[depth_test]);

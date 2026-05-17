@@ -17,6 +17,30 @@ namespace Vulkan::EmbeddedShaders {
 #include "embedded_spirv/adaptive_downsample_blur_fs.inc"
 #include "embedded_spirv/adaptive_downsample_composite_fs.inc"
 #include "embedded_spirv/adaptive_downsample_mip_fs.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_noperp_dual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_noperp_dual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_noperp_nodual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_noperp_nodual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_persp_dual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_persp_dual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_persp_nodual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_centroid_persp_nodual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_none_noperp_dual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_none_noperp_dual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_none_noperp_nodual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_none_noperp_nodual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_none_persp_dual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_none_persp_dual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_none_persp_nodual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_none_persp_nodual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_noperp_dual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_noperp_dual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_noperp_nodual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_noperp_nodual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_persp_dual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_persp_dual_pgxpon.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_persp_nodual_pgxpoff.inc"
+#include "embedded_spirv/batch_untextured_fs_sample_persp_nodual_pgxpon.inc"
 #include "embedded_spirv/batch_vs_textured_centroid_noperp.inc"
 #include "embedded_spirv/batch_vs_textured_centroid_persp.inc"
 #include "embedded_spirv/batch_vs_textured_none_noperp.inc"
@@ -100,6 +124,61 @@ const EmbeddedShaderBlob& GetBatchVertexShaderBlob(bool textured,
   const unsigned persp  = noperspective_color ? 1u : 0u;
   const unsigned index  = attr * 6u + interp * 2u + persp;
   return k_batch_vs_blobs[index];
+}
+
+// Batch FS untextured blob table. Index encoding (must match
+// GetBatchUntexturedFragmentShaderBlob below):
+//
+//   interp = per_sample_shading ? 2 : (msaa ? 1 : 0)   (0..2)
+//   persp  = noperspective_color ? 1 : 0               (0..1)
+//   dual   = dual_source ? 1 : 0                       (0..1)
+//   pgxp   = pgxp_depth ? 1 : 0                        (0..1)
+//
+//   index  = interp * 8 + persp * 4 + dual * 2 + pgxp  (0..23)
+#define BLOB(name) { k_##name, k_##name##_size_bytes }
+const EmbeddedShaderBlob k_batch_untextured_fs_blobs[24] = {
+  // interp = 0 (none)
+  BLOB(batch_untextured_fs_none_persp_nodual_pgxpoff),    // [ 0]
+  BLOB(batch_untextured_fs_none_persp_nodual_pgxpon),     // [ 1]
+  BLOB(batch_untextured_fs_none_persp_dual_pgxpoff),      // [ 2]
+  BLOB(batch_untextured_fs_none_persp_dual_pgxpon),       // [ 3]
+  BLOB(batch_untextured_fs_none_noperp_nodual_pgxpoff),   // [ 4]
+  BLOB(batch_untextured_fs_none_noperp_nodual_pgxpon),    // [ 5]
+  BLOB(batch_untextured_fs_none_noperp_dual_pgxpoff),     // [ 6]
+  BLOB(batch_untextured_fs_none_noperp_dual_pgxpon),      // [ 7]
+  // interp = 1 (centroid)
+  BLOB(batch_untextured_fs_centroid_persp_nodual_pgxpoff),  // [ 8]
+  BLOB(batch_untextured_fs_centroid_persp_nodual_pgxpon),   // [ 9]
+  BLOB(batch_untextured_fs_centroid_persp_dual_pgxpoff),    // [10]
+  BLOB(batch_untextured_fs_centroid_persp_dual_pgxpon),     // [11]
+  BLOB(batch_untextured_fs_centroid_noperp_nodual_pgxpoff), // [12]
+  BLOB(batch_untextured_fs_centroid_noperp_nodual_pgxpon),  // [13]
+  BLOB(batch_untextured_fs_centroid_noperp_dual_pgxpoff),   // [14]
+  BLOB(batch_untextured_fs_centroid_noperp_dual_pgxpon),    // [15]
+  // interp = 2 (sample)
+  BLOB(batch_untextured_fs_sample_persp_nodual_pgxpoff),  // [16]
+  BLOB(batch_untextured_fs_sample_persp_nodual_pgxpon),   // [17]
+  BLOB(batch_untextured_fs_sample_persp_dual_pgxpoff),    // [18]
+  BLOB(batch_untextured_fs_sample_persp_dual_pgxpon),     // [19]
+  BLOB(batch_untextured_fs_sample_noperp_nodual_pgxpoff), // [20]
+  BLOB(batch_untextured_fs_sample_noperp_nodual_pgxpon),  // [21]
+  BLOB(batch_untextured_fs_sample_noperp_dual_pgxpoff),   // [22]
+  BLOB(batch_untextured_fs_sample_noperp_dual_pgxpon),    // [23]
+};
+#undef BLOB
+
+const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
+                                                               bool per_sample_shading,
+                                                               bool noperspective_color,
+                                                               bool dual_source,
+                                                               bool pgxp_depth)
+{
+  const unsigned interp = per_sample_shading ? 2u : (msaa ? 1u : 0u);
+  const unsigned persp  = noperspective_color ? 1u : 0u;
+  const unsigned dual   = dual_source ? 1u : 0u;
+  const unsigned pgxp   = pgxp_depth ? 1u : 0u;
+  const unsigned index  = interp * 8u + persp * 4u + dual * 2u + pgxp;
+  return k_batch_untextured_fs_blobs[index];
 }
 
 

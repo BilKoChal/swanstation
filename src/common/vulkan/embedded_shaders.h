@@ -200,6 +200,36 @@ const EmbeddedShaderBlob& GetBatchVertexShaderBlob(bool textured,
                                                    bool per_sample_shading,
                                                    bool noperspective_color);
 
+// Batch FS, untextured slice (texture_mode == GPUTextureMode::Disabled).
+// Four SPIR-V-structural axes:
+//
+//   - Input interpolation qualifier (must match the batch VS this FS
+//     is bound with): none / centroid / sample. 3 variants.
+//   - Color input perspective: standard / noperspective. 2 variants.
+//   - Dual-source colour output: 1 location-0 output, or 2 outputs at
+//     (location 0 index 0) and (location 0 index 1). 2 variants.
+//   - PGXP depth output: present (writes gl_FragDepth) vs absent
+//     (rasterizer-interpolated depth from a_pos.w under PGXP). Split
+//     structurally to preserve early-Z on the PGXP path. 2 variants.
+//
+// 3 x 2 x 2 x 2 = 24 blobs. All per-call knobs (TRANSPARENCY tri-
+// state, DITHERING, INTERLACING) and the remaining per-session knobs
+// (TRUE_COLOR, DITHERING_SCALED, RESOLUTION_SCALE) collapse into
+// specialisation constants on every blob.
+//
+// Textured FS slices (one per texture filter) will land in subsequent
+// patches with their own k_batch_textured_*_fs_blobs arrays.
+extern const EmbeddedShaderBlob k_batch_untextured_fs_blobs[24];
+
+// Pick the right untextured batch FS blob. dual_source is derived per-
+// call from m_supports_dual_source_blend AND render_mode (specifically
+// TransparentAndOpaque or OnlyTransparent); the rest are per-session.
+const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
+                                                               bool per_sample_shading,
+                                                               bool noperspective_color,
+                                                               bool dual_source,
+                                                               bool pgxp_depth);
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
