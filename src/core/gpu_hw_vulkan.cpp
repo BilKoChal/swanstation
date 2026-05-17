@@ -293,51 +293,11 @@ void LibretroVulkanHostDisplay::DestroyRenderDevice()
 
 bool LibretroVulkanHostDisplay::CreateResources()
 {
-  static constexpr char fullscreen_quad_vertex_shader[] = R"(
-#version 450 core
-
-layout(push_constant) uniform PushConstants {
-  uniform vec4 u_src_rect;
-};
-
-layout(location = 0) out vec2 v_tex0;
-
-void main()
-{
-  vec2 pos = vec2(float((gl_VertexIndex << 1) & 2), float(gl_VertexIndex & 2));
-  v_tex0 = u_src_rect.xy + pos * u_src_rect.zw;
-  gl_Position = vec4(pos * vec2(2.0f, -2.0f) + vec2(-1.0f, 1.0f), 0.0f, 1.0f);
-  gl_Position.y = -gl_Position.y;
-}
-)";
-
-  static constexpr char display_fragment_shader_src[] = R"(
-#version 450 core
-
-layout(set = 0, binding = 0) uniform sampler2D samp0;
-
-layout(location = 0) in vec2 v_tex0;
-layout(location = 0) out vec4 o_col0;
-
-void main()
-{
-  o_col0 = vec4(texture(samp0, v_tex0).rgb, 1.0);
-}
-)";
-
-  static constexpr char cursor_fragment_shader_src[] = R"(
-#version 450 core
-
-layout(set = 0, binding = 0) uniform sampler2D samp0;
-
-layout(location = 0) in vec2 v_tex0;
-layout(location = 0) out vec4 o_col0;
-
-void main()
-{
-  o_col0 = texture(samp0, v_tex0);
-}
-)";
+  // The presentation-stage shaders that used to live as inline R"()" string
+  // literals here have moved out to data/shaders/vulkan/present_*.glsl with
+  // pre-baked SPIR-V under src/common/vulkan/embedded_spirv/. The C++-side
+  // pipeline layout (16-byte u_src_rect push constant, single combined
+  // image sampler at set 0 / binding 0) is unchanged.
 
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
@@ -360,12 +320,18 @@ void main()
   if (m_pipeline_layout == VK_NULL_HANDLE)
     return false;
 
-  VkShaderModule vertex_shader = g_vulkan_shader_cache->GetVertexShader(fullscreen_quad_vertex_shader);
+  VkShaderModule vertex_shader = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_present_fullscreen_vs,
+    Vulkan::EmbeddedShaders::k_present_fullscreen_vs_size_bytes);
   if (vertex_shader == VK_NULL_HANDLE)
     return false;
 
-  VkShaderModule display_fragment_shader = g_vulkan_shader_cache->GetFragmentShader(display_fragment_shader_src);
-  VkShaderModule cursor_fragment_shader = g_vulkan_shader_cache->GetFragmentShader(cursor_fragment_shader_src);
+  VkShaderModule display_fragment_shader = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_present_display_fs,
+    Vulkan::EmbeddedShaders::k_present_display_fs_size_bytes);
+  VkShaderModule cursor_fragment_shader = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_present_cursor_fs,
+    Vulkan::EmbeddedShaders::k_present_cursor_fs_size_bytes);
   if (display_fragment_shader == VK_NULL_HANDLE || cursor_fragment_shader == VK_NULL_HANDLE)
     return false;
 
@@ -2037,14 +2003,12 @@ VkShaderModule GPU_HW_Vulkan::GetUVQuadVertexShader()
   if (m_uv_quad_vertex_shader != VK_NULL_HANDLE)
     return m_uv_quad_vertex_shader;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetUVQuadVertexShader called before CompilePipelines constructed the shadergen");
-    return VK_NULL_HANDLE;
-  }
-  m_uv_quad_vertex_shader = g_vulkan_shader_cache->GetVertexShader(m_shadergen->GenerateUVQuadVertexShader());
+  // Pre-baked SPIR-V; see GetFullscreenQuadVertexShader for rationale.
+  m_uv_quad_vertex_shader = Vulkan::EmbeddedShaders::CreateShaderModule(
+    Vulkan::EmbeddedShaders::k_uv_quad_vs,
+    Vulkan::EmbeddedShaders::k_uv_quad_vs_size_bytes);
   if (m_uv_quad_vertex_shader == VK_NULL_HANDLE)
-    Log_ErrorPrint("Lazy UV-quad vertex shader compile failed");
+    Log_ErrorPrint("Embedded UV-quad vertex shader load failed");
   return m_uv_quad_vertex_shader;
 }
 

@@ -31,6 +31,28 @@ namespace Vulkan::EmbeddedShaders {
 extern const uint32_t k_screen_quad_vs[];
 extern const size_t k_screen_quad_vs_size_bytes;
 
+// UV-quad vertex shader. Variant of the screen-quad that maps the swept
+// triangle into a configurable [u_uv_min..u_uv_max] UV rect via push
+// constants. Equivalent to ShaderGen::GenerateUVQuadVertexShader() in
+// Vulkan mode.
+extern const uint32_t k_uv_quad_vs[];
+extern const size_t k_uv_quad_vs_size_bytes;
+
+// Presentation-stage fullscreen-quad VS. Distinct from the GPU_HW screen
+// quad above - has a u_src_rect push constant. Used only by
+// LibretroVulkanHostDisplay to blit the rendered frame (and the software
+// cursor) into the libretro framebuffer.
+extern const uint32_t k_present_fullscreen_vs[];
+extern const size_t k_present_fullscreen_vs_size_bytes;
+
+// Presentation-stage display FS. Writes the source texture opaque.
+extern const uint32_t k_present_display_fs[];
+extern const size_t k_present_display_fs_size_bytes;
+
+// Presentation-stage cursor FS. Preserves source alpha for blending.
+extern const uint32_t k_present_cursor_fs[];
+extern const size_t k_present_cursor_fs_size_bytes;
+
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
 // This intentionally bypasses Vulkan::ShaderCache: pre-baked SPIR-V is already
