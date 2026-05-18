@@ -165,7 +165,23 @@ private:
   // ID3D11PixelShader* itself is free-threaded for the consumer
   // side (PSSetShader), so DrawBatchVertices can use the raw
   // pointer returned here without further locking.
-  ID3D11PixelShader* GetBatchPixelShader(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
+  //
+  // filter is the outermost cache dimension. With the cbuffer-
+  // refactor patch (7b575a3) the HLSL is invariant under
+  // resolution_scale / true_color / scaled_dithering, but it is
+  // STILL dependent on texture filter - the FilteredSampleFromVRAM
+  // helper is emitted differently for Nearest / Bilinear / JINC2 /
+  // xBR / the BinAlpha variants. Dimensioning the cache over filter
+  // lets a filter toggle skip the DestroyShaders round trip in
+  // UpdateSettings: the previous filter's sub-cube remains valid
+  // and reachable, switching back to it later is an atomic load on
+  // an already-filled slot. Mirrors the D3D12 dim cache landed in
+  // 10c53b8 and the Vulkan dim cache from the glslang-elimination
+  // series. The slow-path shadergen is rebuilt per-call against
+  // the requested filter so a worker / main-thread fault for a
+  // non-current filter's sub-cube generates HLSL for that filter,
+  // not for m_texture_filtering.
+  ID3D11PixelShader* GetBatchPixelShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
 
   // Background-thread worker for 'Lazy' mode: walks the entire
   // (render_mode, texture_mode, dithering, interlacing) matrix and
@@ -227,9 +243,10 @@ private:
   ComPtr<ID3D11InputLayout> m_batch_input_layout;
   std::array<ComPtr<ID3D11VertexShader>, 2> m_batch_vertex_shaders; // [textured]
 
-  // Batch pixel shader matrix. The ComPtr array owns the
-  // reference; the parallel atomic-raw-pointer array exists so
-  // DrawBatchVertices can sample a slot without taking any lock.
+  // Batch pixel shader matrix. Filter is the outermost dimension -
+  // see the comment on GetBatchPixelShader above for why.
+  //
+  // [filter][render_mode][texture_mode][dithering][interlacing]
   //
   // m_batch_pixel_shaders holds the COM ownership and is only
   // written under m_batch_shader_mutex (in GetBatchPixelShader's
@@ -255,10 +272,10 @@ private:
   // first run. With this design DrawBatchVertices is lock-free on
   // cache-hit AND on race the slow path doesn't block the worker
   // either; the worker can compile in the background unmolested.
-  std::array<std::array<std::array<std::array<ComPtr<ID3D11PixelShader>, 2>, 2>, 9>, 4>
-    m_batch_pixel_shaders; // [render_mode][texture_mode][dithering][interlacing]
-  std::array<std::array<std::array<std::array<std::atomic<ID3D11PixelShader*>, 2>, 2>, 9>, 4>
-    m_batch_pixel_shader_fastpath{}; // [render_mode][texture_mode][dithering][interlacing]
+  std::array<std::array<std::array<std::array<std::array<ComPtr<ID3D11PixelShader>, 2>, 2>, 9>, 4>, 7>
+    m_batch_pixel_shaders; // [filter][render_mode][texture_mode][dithering][interlacing]
+  std::array<std::array<std::array<std::array<std::array<std::atomic<ID3D11PixelShader*>, 2>, 2>, 9>, 4>, 7>
+    m_batch_pixel_shader_fastpath{}; // [filter][render_mode][texture_mode][dithering][interlacing]
 
   // Persistent shader cache and shadergen instances for the lazy
   // / background-thread compile path. Both used to be locals in
