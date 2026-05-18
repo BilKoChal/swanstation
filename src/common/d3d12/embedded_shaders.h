@@ -126,4 +126,24 @@ extern const size_t k_vram_fill_ps_p1w1i0_size_bytes;
 extern const uint8_t k_vram_fill_ps_p1w1i1[];
 extern const size_t k_vram_fill_ps_p1w1i1_size_bytes;
 
+// VRAM update-depth pixel shader. Equivalent to
+// GPU_HW_ShaderGen::GenerateVRAMUpdateDepthFragmentShader() in D3D12
+// mode. Used by GPU_HW_D3D12::GetVRAMUpdateDepthPipeline for the
+// depth-only pass that propagates colour-texture alpha (the PSX
+// mask bit) into the depth buffer after every CPU->VRAM upload.
+//
+// First MSAA texture-binding variant. The msaa0 / msaa1 blobs
+// differ in the binding type (Texture2D vs Texture2DMS<float4>),
+// the body Load form, and the presence of SV_SampleIndex in the
+// entry-point signature. Runtime selection uses m_multisamples > 1
+// (same predicate as the shadergen UsingMSAA() helper) so the
+// shader's per-sample-shading expectation matches the PSO's MSAA
+// configuration.
+//
+// Source: data/shaders/d3d12/vram_update_depth.ps.hlsl
+extern const uint8_t k_vram_update_depth_ps_msaa0[];
+extern const size_t k_vram_update_depth_ps_msaa0_size_bytes;
+extern const uint8_t k_vram_update_depth_ps_msaa1[];
+extern const size_t k_vram_update_depth_ps_msaa1_size_bytes;
+
 } // namespace D3D12::EmbeddedShaders

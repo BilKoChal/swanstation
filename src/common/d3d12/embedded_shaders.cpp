@@ -31,5 +31,7 @@ namespace D3D12::EmbeddedShaders {
 #include "embedded_dxbc/vram_fill_ps_p1w0i1.inc"
 #include "embedded_dxbc/vram_fill_ps_p1w1i0.inc"
 #include "embedded_dxbc/vram_fill_ps_p1w1i1.inc"
+#include "embedded_dxbc/vram_update_depth_ps_msaa0.inc"
+#include "embedded_dxbc/vram_update_depth_ps_msaa1.inc"
 
 } // namespace D3D12::EmbeddedShaders

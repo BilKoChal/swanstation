@@ -90,6 +90,18 @@ TEMPLATE_VARIANTS = {
         ("p1w1i0", ["PGXP_DEPTH=1", "WRAPPED=1", "INTERLACED=0"]),
         ("p1w1i1", ["PGXP_DEPTH=1", "WRAPPED=1", "INTERLACED=1"]),
     ],
+    # vram_update_depth_ps: first MSAA texture-binding variant. Two
+    # variants on MULTISAMPLING; unlike the body-branch variants
+    # above, the two blobs have different texture *binding* types
+    # (Texture2D vs Texture2DMS<float4>) plus a conditional
+    # SV_SampleIndex input on the MSAA path. Runtime selection in
+    # GetVRAMUpdateDepthPipeline picks between them via
+    # m_multisamples > 1 (same predicate as the shadergen
+    # UsingMSAA() helper).
+    "vram_update_depth.ps.hlsl": [
+        ("msaa0", ["MULTISAMPLING=0"]),
+        ("msaa1", ["MULTISAMPLING=1"]),
+    ],
 }
 
 

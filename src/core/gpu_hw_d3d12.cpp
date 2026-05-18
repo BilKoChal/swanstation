@@ -1664,14 +1664,22 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeli
 
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetVRAMUpdateDepthPipeline called before CompilePipelines constructed the shadergen");
-    return {};
-  }
-  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMUpdateDepthFragmentShader());
-  if (!fs)
-    return {};
+  // Pre-baked DXBC blob - 2 variants on MULTISAMPLING. Unlike the
+  // PGXP / WRAPPED / INTERLACED axes on the other VRAM ops, MSAA
+  // here means the two blobs have different *binding* types
+  // (Texture2D vs Texture2DMS<float4>) plus a conditional
+  // SV_SampleIndex input. The PSO's MSAA configuration must match
+  // the shader's expectation - we pick the msaa1 blob when
+  // m_multisamples > 1 (the same predicate the shadergen path's
+  // UsingMSAA() helper uses). gpbuilder.SetMultisamples below
+  // continues to drive the PSO MSAA state from m_multisamples
+  // unchanged.
+  const D3D12_SHADER_BYTECODE fs =
+    (m_multisamples > 1)
+      ? D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa1,
+                              D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa1_size_bytes}
+      : D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa0,
+                              D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa0_size_bytes};
 
   // VRAM update depth differs from the other VRAM ops in three
   // ways: it uses m_batch_root_signature (the regular ops use the
@@ -1687,7 +1695,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeli
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetPixelShader(fs);
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
   gpbuilder.SetBlendState(0, false, D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE,
