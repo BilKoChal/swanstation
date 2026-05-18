@@ -64,6 +64,15 @@ TEMPLATE_VARIANTS = {
         ("pgxp0", ["PGXP_DEPTH=0"]),
         ("pgxp1", ["PGXP_DEPTH=1"]),
     ],
+    # vram_write_ps: same PGXP_DEPTH on/off split as vram_copy. The
+    # shadergen's `use_ssbo` parameter is GLSL/Vulkan-only - the D3D12
+    # call site at GPU_HW_D3D12::GetVRAMWritePipeline always passes
+    # false, so the use_ssbo dimension collapses to a single value
+    # and doesn't show up here.
+    "vram_write.ps.hlsl": [
+        ("pgxp0", ["PGXP_DEPTH=0"]),
+        ("pgxp1", ["PGXP_DEPTH=1"]),
+    ],
 }
 
 

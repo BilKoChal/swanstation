@@ -77,4 +77,20 @@ extern const size_t k_vram_copy_ps_pgxp0_size_bytes;
 extern const uint8_t k_vram_copy_ps_pgxp1[];
 extern const size_t k_vram_copy_ps_pgxp1_size_bytes;
 
+// VRAM write pixel shader. Equivalent to
+// GPU_HW_ShaderGen::GenerateVRAMWriteFragmentShader(false) in D3D12
+// mode. Used by GPU_HW_D3D12::GetVRAMWritePipeline for the CPU->VRAM
+// upload path - hit constantly on every game's framebuffer streaming
+// path (pre-rendered backgrounds, FMV staging, sprite-page reloads).
+// Two variants on PGXP_DEPTH; the shadergen's `use_ssbo` parameter is
+// GLSL/Vulkan-only, so for D3D12 only the texture-buffer source path
+// gets pre-baked. u_resolution_scale lives in the cbuffer (post-
+// 9d2b49d), so one blob per PGXP value serves every resolution scale.
+//
+// Source: data/shaders/d3d12/vram_write.ps.hlsl
+extern const uint8_t k_vram_write_ps_pgxp0[];
+extern const size_t k_vram_write_ps_pgxp0_size_bytes;
+extern const uint8_t k_vram_write_ps_pgxp1[];
+extern const size_t k_vram_write_ps_pgxp1_size_bytes;
+
 } // namespace D3D12::EmbeddedShaders
