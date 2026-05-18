@@ -109,6 +109,15 @@ public:
   void SetGeometryShader(ID3DBlob* blob);
   void SetPixelShader(ID3DBlob* blob);
 
+  // Convenience overloads for D3D12_SHADER_BYTECODE - the natural form
+  // for pre-baked DXBC blobs from src/common/d3d12/embedded_dxbc/, which
+  // are returned as { data, size } aggregates by the
+  // D3D12::EmbeddedShaders helpers and by GPU_HW_D3D12's pre-bake
+  // accessors. Just unwraps to the (data, size) overload above.
+  void SetVertexShader(const D3D12_SHADER_BYTECODE& bc);
+  void SetGeometryShader(const D3D12_SHADER_BYTECODE& bc);
+  void SetPixelShader(const D3D12_SHADER_BYTECODE& bc);
+
   void AddVertexAttribute(const char* semantic_name, uint32_t semantic_index, DXGI_FORMAT format, uint32_t buffer, uint32_t offset);
 
   void SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE type);

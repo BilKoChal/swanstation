@@ -154,6 +154,21 @@ void GraphicsPipelineBuilder::SetPixelShader(const void* data, uint32_t data_siz
   m_desc.PS.BytecodeLength = data_size;
 }
 
+void GraphicsPipelineBuilder::SetVertexShader(const D3D12_SHADER_BYTECODE& bc)
+{
+  SetVertexShader(bc.pShaderBytecode, static_cast<uint32_t>(bc.BytecodeLength));
+}
+
+void GraphicsPipelineBuilder::SetGeometryShader(const D3D12_SHADER_BYTECODE& bc)
+{
+  SetGeometryShader(bc.pShaderBytecode, static_cast<uint32_t>(bc.BytecodeLength));
+}
+
+void GraphicsPipelineBuilder::SetPixelShader(const D3D12_SHADER_BYTECODE& bc)
+{
+  SetPixelShader(bc.pShaderBytecode, static_cast<uint32_t>(bc.BytecodeLength));
+}
+
 void GraphicsPipelineBuilder::AddVertexAttribute(const char* semantic_name, uint32_t semantic_index, DXGI_FORMAT format,
                                                  uint32_t buffer, uint32_t offset)
 {

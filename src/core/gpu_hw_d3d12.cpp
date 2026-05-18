@@ -1466,7 +1466,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
@@ -1525,7 +1525,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState((depth_test != 0), true,
@@ -1584,7 +1584,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMWritePipeline(uin
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true,
@@ -1648,7 +1648,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeli
   gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
@@ -1703,7 +1703,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline(
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
@@ -1760,7 +1760,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
@@ -1815,8 +1815,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
-  gpbuilder.SetPixelShader(fs.pShaderBytecode, static_cast<uint32_t>(fs.BytecodeLength));
+  gpbuilder.SetVertexShader(vs);
+  gpbuilder.SetPixelShader(fs);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();
