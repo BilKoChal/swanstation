@@ -892,17 +892,13 @@ bool GPU_HW_D3D12::CompilePipelines()
         if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
           continue;
 
-        for (uint8_t dithering = 0; dithering < 2; dithering++)
+        for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
         {
-          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
-          {
-            ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode,
-                                                          static_cast<bool>(dithering),
-                                                          static_cast<bool>(interlacing));
-            if (!blob)
-              return false;
-            progress.Increment();
-          }
+          ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode,
+                                                        static_cast<bool>(interlacing));
+          if (!blob)
+            return false;
+          progress.Increment();
         }
       }
     }
@@ -918,17 +914,14 @@ bool GPU_HW_D3D12::CompilePipelines()
             if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
               continue;
 
-            for (uint8_t dithering = 0; dithering < 2; dithering++)
+            for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
             {
-              for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
-              {
-                ComPtr<ID3D12PipelineState> pso =
-                  GetBatchPipeline(cur_filter, depth_test, render_mode, texture_mode, transparency_mode,
-                                   static_cast<bool>(dithering), static_cast<bool>(interlacing));
-                if (!pso)
-                  return false;
-                progress.Increment();
-              }
+              ComPtr<ID3D12PipelineState> pso =
+                GetBatchPipeline(cur_filter, depth_test, render_mode, texture_mode, transparency_mode,
+                                 static_cast<bool>(interlacing));
+              if (!pso)
+                return false;
+              progress.Increment();
             }
           }
         }
@@ -1063,12 +1056,12 @@ bool GPU_HW_D3D12::CompilePipelines()
     // Kick off the background batch / PSO fill so gameplay can start
     // immediately. The worker walks the full PSO matrix in
     // (depth_test, render_mode, transparency_mode, texture_mode,
-    // dithering, interlacing) order, calling the same
-    // GetBatchPipeline the draw path uses; the main thread can race
-    // ahead and pre-fill any slot it actually needs at draw time, and
-    // the worker's recheck-under-lock pattern just observes the
-    // filled slot and moves on. DestroyPipelines signals
-    // m_shader_compile_thread_quit and joins.
+    // interlacing) order, calling the same GetBatchPipeline the draw
+    // path uses; the main thread can race ahead and pre-fill any slot
+    // it actually needs at draw time, and the worker's
+    // recheck-under-lock pattern just observes the filled slot and
+    // moves on. DestroyPipelines signals m_shader_compile_thread_quit
+    // and joins.
     m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
     m_shader_compile_thread = std::thread(&GPU_HW_D3D12::ShaderCompileThreadEntryPoint, this);
   }
@@ -1101,7 +1094,7 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   // there for why. The worker only walks the batch matrix.
   //
   // Walks the PSO matrix in (depth_test, render_mode,
-  // transparency_mode, texture_mode, dithering, interlacing) order
+  // transparency_mode, texture_mode, interlacing) order
   // - the same order CompilePipelines uses for the Enabled precompile
   // loop - and calls GetBatchPipeline on each cell. GetBatchPipeline
   // internally calls GetBatchFragmentShader for the bound shader, so
@@ -1138,16 +1131,13 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
           if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
             continue;
 
-          for (uint8_t dithering = 0; dithering < 2; dithering++)
+          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
           {
-            for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
-            {
-              if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
-                return;
+            if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
+              return;
 
-              GetBatchPipeline(cur_filter, depth_test, render_mode, texture_mode, transparency_mode,
-                               static_cast<bool>(dithering), static_cast<bool>(interlacing));
-            }
+            GetBatchPipeline(cur_filter, depth_test, render_mode, texture_mode, transparency_mode,
+                             static_cast<bool>(interlacing));
           }
         }
       }
@@ -1155,7 +1145,7 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   }
 }
 
-GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering,
+GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode,
                                                                     bool interlacing)
 {
   // Reserved_*Direct16Bit shader-source dedup is applied at the
@@ -1175,7 +1165,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFi
   // a slot concurrently without serialising against each other or
   // each other's slow-path compiles.
   std::atomic<ID3DBlob*>& fast_slot =
-    m_batch_fragment_shader_blobs_fastpath[filter_idx][render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
+    m_batch_fragment_shader_blobs_fastpath[filter_idx][render_mode][texture_mode][static_cast<uint8_t>(interlacing)];
   ID3DBlob* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
   {
@@ -1205,14 +1195,19 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFi
     m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
     m_scaled_dithering, filter, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
     m_supports_dual_source_blend);
+  // dithering passes false to GenerateBatchFragmentShader for source
+  // stability across backends. The shadergen's `dithering` parameter
+  // is a no-op as of 3af8e02 (the FS body now reads u_dithering from
+  // the batch UBO); passing any value yields identical DXBC. Picking
+  // false consistently keeps the disk shader cache hash stable.
   const std::string fs = tmp_shadergen.GenerateBatchFragmentShader(
-    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), false, interlacing);
   ComPtr<ID3DBlob> fresh_blob = m_shader_cache.GetPixelShader(fs);
   if (!fresh_blob)
   {
-    Log_ErrorPrintf("Lazy batch fragment shader compile failed for (f=%u, rm=%u, tm=%u, d=%u, i=%u)",
+    Log_ErrorPrintf("Lazy batch fragment shader compile failed for (f=%u, rm=%u, tm=%u, i=%u)",
                     static_cast<uint8_t>(filter), render_mode, texture_mode,
-                    static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
+                    static_cast<uint8_t>(interlacing));
     return {};
   }
 
@@ -1232,19 +1227,19 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFi
   }
 
   ComPtr<ID3DBlob>& canonical_slot =
-    m_batch_fragment_shader_blobs[filter_idx][render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
+    m_batch_fragment_shader_blobs[filter_idx][render_mode][lookup_mode][static_cast<uint8_t>(interlacing)];
 
   if (!canonical_slot)
   {
     canonical_slot = fresh_blob;
-    m_batch_fragment_shader_blobs_fastpath[filter_idx][render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)]
+    m_batch_fragment_shader_blobs_fastpath[filter_idx][render_mode][lookup_mode][static_cast<uint8_t>(interlacing)]
       .store(canonical_slot.Get(), std::memory_order_release);
   }
 
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3DBlob>& dup_slot =
-      m_batch_fragment_shader_blobs[filter_idx][render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
+      m_batch_fragment_shader_blobs[filter_idx][render_mode][texture_mode][static_cast<uint8_t>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
   }
@@ -1256,7 +1251,7 @@ GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFi
 
 GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode,
                                                                          uint8_t texture_mode, uint8_t transparency_mode,
-                                                                         bool dithering, bool interlacing)
+                                                                         bool interlacing)
 {
   // Reserved_*Direct16Bit PSO dedup. Because the only texture_mode-
   // dependent input to the PSO is the bound fragment shader (which
@@ -1275,7 +1270,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   // an earlier main-thread fault-in). No mutex, no contention
   // against the worker.
   std::atomic<ID3D12PipelineState*>& fast_slot =
-    m_batch_pipelines_fastpath[filter_idx][depth_test][render_mode][texture_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+    m_batch_pipelines_fastpath[filter_idx][depth_test][render_mode][texture_mode][transparency_mode]
                               [static_cast<uint8_t>(interlacing)];
   ID3D12PipelineState* existing = fast_slot.load(std::memory_order_acquire);
   if (existing)
@@ -1295,7 +1290,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   // slot B. Two threads racing to compile the SAME slot is
   // wasteful but harmless - both produce equivalent PSOs and the
   // double-check below picks the winner.
-  ComPtr<ID3DBlob> fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode, dithering, interlacing);
+  ComPtr<ID3DBlob> fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode, interlacing);
   if (!fs_blob)
     return {};
 
@@ -1356,9 +1351,9 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   ComPtr<ID3D12PipelineState> fresh_pso = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache);
   if (!fresh_pso)
   {
-    Log_ErrorPrintf("Lazy batch PSO compile failed for (f=%u, dt=%u, rm=%u, tm=%u, tr=%u, d=%u, i=%u)",
+    Log_ErrorPrintf("Lazy batch PSO compile failed for (f=%u, dt=%u, rm=%u, tm=%u, tr=%u, i=%u)",
                     static_cast<uint8_t>(filter), depth_test, render_mode, texture_mode, transparency_mode,
-                    static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
+                    static_cast<uint8_t>(interlacing));
     return {};
   }
 
@@ -1379,18 +1374,18 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   }
 
   ComPtr<ID3D12PipelineState>& canonical_slot =
-    m_batch_pipelines[filter_idx][depth_test][render_mode][lookup_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+    m_batch_pipelines[filter_idx][depth_test][render_mode][lookup_mode][transparency_mode]
                      [static_cast<uint8_t>(interlacing)];
 
   if (!canonical_slot)
   {
     canonical_slot = fresh_pso;
-    D3D12::SetObjectNameFormatted(canonical_slot.Get(), "Batch Pipeline f%u,%u,%u,%u,%u,%u,%u", filter_idx, depth_test, render_mode,
-                                  lookup_mode, transparency_mode, static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
+    D3D12::SetObjectNameFormatted(canonical_slot.Get(), "Batch Pipeline f%u,%u,%u,%u,%u,%u", filter_idx, depth_test, render_mode,
+                                  lookup_mode, transparency_mode, static_cast<uint8_t>(interlacing));
 
     // Publish the canonical raw pointer for future fast-path
     // readers of the canonical slot.
-    m_batch_pipelines_fastpath[filter_idx][depth_test][render_mode][lookup_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+    m_batch_pipelines_fastpath[filter_idx][depth_test][render_mode][lookup_mode][transparency_mode]
                               [static_cast<uint8_t>(interlacing)]
                                 .store(canonical_slot.Get(), std::memory_order_release);
   }
@@ -1398,7 +1393,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   if (lookup_mode != texture_mode)
   {
     ComPtr<ID3D12PipelineState>& dup_slot =
-      m_batch_pipelines[filter_idx][depth_test][render_mode][texture_mode][transparency_mode][static_cast<uint8_t>(dithering)]
+      m_batch_pipelines[filter_idx][depth_test][render_mode][texture_mode][transparency_mode]
                        [static_cast<uint8_t>(interlacing)];
     if (!dup_slot)
       dup_slot = canonical_slot;
@@ -2268,16 +2263,19 @@ void GPU_HW_D3D12::DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_
   // The mutex serialises both the PSO matrix and the shader-cache
   // mutation; cost is ~20 ns uncontended per modern std::mutex impl.
   //
-  // [filter][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  // [filter][depth_test][render_mode][texture_mode][transparency_mode][interlacing]
   // m_texture_filtering selects the active filter's sub-cube. Filter
   // is the outermost dim so a filter toggle in UpdateSettings can
   // skip DestroyPipelines - the other filters' sub-cubes remain
   // valid and reachable, switching back to a previously-visited
   // filter is an atomic load on an already-filled slot.
+  // The dithering bit (m_batch.dithering) reaches the PSO through
+  // u_dithering on the batch UBO; the [dithering] dim was dropped
+  // in the matrix-collapse commit after the cbuffer routing landed.
   const uint8_t depth_test = static_cast<uint8_t>(m_batch.check_mask_before_draw || m_batch.use_depth_buffer);
   ComPtr<ID3D12PipelineState> pipeline =
     GetBatchPipeline(m_texture_filtering, depth_test, static_cast<uint8_t>(render_mode), static_cast<uint8_t>(m_batch.texture_mode),
-                     static_cast<uint8_t>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
+                     static_cast<uint8_t>(m_batch.transparency_mode), m_batch.interlacing);
 
   cmdlist->SetPipelineState(pipeline.Get());
   cmdlist->DrawInstanced(num_vertices, 1, base_vertex, 0);
