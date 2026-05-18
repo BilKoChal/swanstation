@@ -23,5 +23,13 @@ namespace D3D12::EmbeddedShaders {
 #include "embedded_dxbc/vram_copy_ps_pgxp1.inc"
 #include "embedded_dxbc/vram_write_ps_pgxp0.inc"
 #include "embedded_dxbc/vram_write_ps_pgxp1.inc"
+#include "embedded_dxbc/vram_fill_ps_p0w0i0.inc"
+#include "embedded_dxbc/vram_fill_ps_p0w0i1.inc"
+#include "embedded_dxbc/vram_fill_ps_p0w1i0.inc"
+#include "embedded_dxbc/vram_fill_ps_p0w1i1.inc"
+#include "embedded_dxbc/vram_fill_ps_p1w0i0.inc"
+#include "embedded_dxbc/vram_fill_ps_p1w0i1.inc"
+#include "embedded_dxbc/vram_fill_ps_p1w1i0.inc"
+#include "embedded_dxbc/vram_fill_ps_p1w1i1.inc"
 
 } // namespace D3D12::EmbeddedShaders

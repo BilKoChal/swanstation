@@ -73,6 +73,23 @@ TEMPLATE_VARIANTS = {
         ("pgxp0", ["PGXP_DEPTH=0"]),
         ("pgxp1", ["PGXP_DEPTH=1"]),
     ],
+    # vram_fill_ps: first multi-axis variant entry. 3 axes
+    # (PGXP_DEPTH, WRAPPED, INTERLACED) = 8 blobs. Variant suffix
+    # encodes the three flags as p{0,1}w{0,1}i{0,1} so the
+    # alphabetical ordering of the .inc files matches the natural
+    # nested-loop iteration order; the embedded_shaders.{h,cpp}
+    # extern declarations and the GetVRAMFillPipeline call site
+    # mirror this naming convention.
+    "vram_fill.ps.hlsl": [
+        ("p0w0i0", ["PGXP_DEPTH=0", "WRAPPED=0", "INTERLACED=0"]),
+        ("p0w0i1", ["PGXP_DEPTH=0", "WRAPPED=0", "INTERLACED=1"]),
+        ("p0w1i0", ["PGXP_DEPTH=0", "WRAPPED=1", "INTERLACED=0"]),
+        ("p0w1i1", ["PGXP_DEPTH=0", "WRAPPED=1", "INTERLACED=1"]),
+        ("p1w0i0", ["PGXP_DEPTH=1", "WRAPPED=0", "INTERLACED=0"]),
+        ("p1w0i1", ["PGXP_DEPTH=1", "WRAPPED=0", "INTERLACED=1"]),
+        ("p1w1i0", ["PGXP_DEPTH=1", "WRAPPED=1", "INTERLACED=0"]),
+        ("p1w1i1", ["PGXP_DEPTH=1", "WRAPPED=1", "INTERLACED=1"]),
+    ],
 }
 
 

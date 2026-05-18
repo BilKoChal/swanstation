@@ -1449,15 +1449,43 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint
 
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetVRAMFillPipeline called before CompilePipelines constructed the shadergen");
-    return {};
-  }
-  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(
-    m_shadergen->GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced)));
-  if (!fs)
-    return {};
+  // Pre-baked DXBC blob - 8 variants on [pgxp][wrapped][interlaced].
+  // m_pgxp_depth_buffer is the runtime PGXP state; wrapped and
+  // interlaced come in as function parameters. The 3-bit composite
+  // selects one of 8 .inc blobs. Same selection pattern as
+  // GetVRAMCopyPipeline / GetVRAMWritePipeline, just with two more
+  // axes. No D3DCompile / disk-shader-cache lookup needed; the .inc
+  // files ARE the cache.
+  static const D3D12_SHADER_BYTECODE k_vram_fill_blobs[2][2][2] = {
+    // pgxp = 0
+    {
+      // wrapped = 0
+      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i0,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i0_size_bytes},
+       {D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i1,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i1_size_bytes}},
+      // wrapped = 1
+      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i0,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i0_size_bytes},
+       {D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i1,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i1_size_bytes}},
+    },
+    // pgxp = 1
+    {
+      // wrapped = 0
+      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i0,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i0_size_bytes},
+       {D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i1,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i1_size_bytes}},
+      // wrapped = 1
+      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i0,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i0_size_bytes},
+       {D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i1,
+        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i1_size_bytes}},
+    },
+  };
+  const D3D12_SHADER_BYTECODE fs =
+    k_vram_fill_blobs[m_pgxp_depth_buffer ? 1 : 0][wrapped & 1][interlaced & 1];
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
@@ -1467,7 +1495,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetPixelShader(fs);
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
 

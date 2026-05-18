@@ -93,4 +93,37 @@ extern const size_t k_vram_write_ps_pgxp0_size_bytes;
 extern const uint8_t k_vram_write_ps_pgxp1[];
 extern const size_t k_vram_write_ps_pgxp1_size_bytes;
 
+// VRAM fill pixel shader. Equivalent to
+// GPU_HW_ShaderGen::GenerateVRAMFillFragmentShader(wrapped, interlaced)
+// in D3D12 mode. Used by GPU_HW_D3D12::GetVRAMFillPipeline for the
+// screen-clear / FillVRAM path. 8 variants total, indexed by the
+// product of PGXP_DEPTH x WRAPPED x INTERLACED at PSO selection time;
+// the variant suffix encodes those three bits as p{0,1}w{0,1}i{0,1}.
+// The runtime call site builds a 2 x 2 x 2 indexed lookup table
+// from these externs and picks the right blob using
+// (m_pgxp_depth_buffer, wrapped, interlaced).
+//
+// No u_resolution_scale dependency in the shader body for D3D12
+// (fixYCoord is identity on HLSL; only the OpenGL backend's
+// shadergen body references VRAM_SIZE here for the y-flip). So no
+// scale-refactor was needed before pre-baking.
+//
+// Source: data/shaders/d3d12/vram_fill.ps.hlsl
+extern const uint8_t k_vram_fill_ps_p0w0i0[];
+extern const size_t k_vram_fill_ps_p0w0i0_size_bytes;
+extern const uint8_t k_vram_fill_ps_p0w0i1[];
+extern const size_t k_vram_fill_ps_p0w0i1_size_bytes;
+extern const uint8_t k_vram_fill_ps_p0w1i0[];
+extern const size_t k_vram_fill_ps_p0w1i0_size_bytes;
+extern const uint8_t k_vram_fill_ps_p0w1i1[];
+extern const size_t k_vram_fill_ps_p0w1i1_size_bytes;
+extern const uint8_t k_vram_fill_ps_p1w0i0[];
+extern const size_t k_vram_fill_ps_p1w0i0_size_bytes;
+extern const uint8_t k_vram_fill_ps_p1w0i1[];
+extern const size_t k_vram_fill_ps_p1w0i1_size_bytes;
+extern const uint8_t k_vram_fill_ps_p1w1i0[];
+extern const size_t k_vram_fill_ps_p1w1i0_size_bytes;
+extern const uint8_t k_vram_fill_ps_p1w1i1[];
+extern const size_t k_vram_fill_ps_p1w1i1_size_bytes;
+
 } // namespace D3D12::EmbeddedShaders
