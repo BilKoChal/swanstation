@@ -579,8 +579,18 @@ void GPU_HW_D3D11::UpdateSettings()
 {
   GPU_HW::UpdateSettings();
 
-  bool framebuffer_changed, shaders_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed);
+  // See GPU_HW_D3D12::UpdateSettings for the rationale on
+  // shader_source_changed vs shaders_changed: the cbuffer-refactor
+  // patch made true_color / scaled_dithering / resolution_scale
+  // invariant under HLSL source, so toggling them no longer requires
+  // DestroyShaders + CompileShaders. The DXBC blobs, state objects,
+  // and Direct3D11 shader handles all stay valid; the new values
+  // ride the per-batch UBO upload on the next FlushRender. State
+  // objects also stay valid through those toggles because their
+  // descriptions key on MSAA / dual-source / depth-test / blend
+  // mode - none of which are in the cbuffer-only set.
+  bool framebuffer_changed, shaders_changed, shader_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, nullptr, nullptr, &shader_source_changed);
 
   if (framebuffer_changed)
   {
@@ -591,7 +601,7 @@ void GPU_HW_D3D11::UpdateSettings()
     CreateFramebuffer();
   }
 
-  if (shaders_changed)
+  if (shader_source_changed)
   {
     DestroyShaders();
     DestroyStateObjects();

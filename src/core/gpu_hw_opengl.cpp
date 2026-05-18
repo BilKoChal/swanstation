@@ -791,8 +791,15 @@ void GPU_HW_OpenGL::UpdateSettings()
 {
   GPU_HW::UpdateSettings();
 
-  bool framebuffer_changed, shaders_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed);
+  // See GPU_HW_D3D12::UpdateSettings for the rationale on
+  // shader_source_changed vs shaders_changed: post-7b575a3 the
+  // batch GLSL is invariant under resolution_scale / true_color /
+  // scaled_dithering, so toggling them no longer requires
+  // CompilePrograms (which would otherwise relink every program in
+  // the batch matrix). The new values ride the per-batch UBO
+  // upload on the next FlushRender.
+  bool framebuffer_changed, shaders_changed, shader_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, nullptr, nullptr, &shader_source_changed);
 
   if (framebuffer_changed)
   {
@@ -802,7 +809,7 @@ void GPU_HW_OpenGL::UpdateSettings()
     m_host_display->ClearDisplayTexture();
     CreateFramebuffer();
   }
-  if (shaders_changed)
+  if (shader_source_changed)
     CompilePrograms();
 
   if (framebuffer_changed)

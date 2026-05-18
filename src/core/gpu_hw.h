@@ -219,7 +219,8 @@ protected:
   // round-trip.
   void UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
                         bool* only_dim_changed = nullptr,
-                        bool* downsample_changed = nullptr);
+                        bool* downsample_changed = nullptr,
+                        bool* shader_source_changed = nullptr);
 
   virtual void UpdateVRAMReadTexture();
   virtual void UpdateDepthBufferFromMaskBit() = 0;

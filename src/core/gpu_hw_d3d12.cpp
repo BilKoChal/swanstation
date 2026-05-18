@@ -396,8 +396,19 @@ void GPU_HW_D3D12::UpdateSettings()
 {
   GPU_HW::UpdateSettings();
 
-  bool framebuffer_changed, shaders_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed);
+  // shader_source_changed is the narrower signal added by the
+  // cbuffer-refactor follow-up - it fires only when a setting that
+  // the shader generator bakes into the HLSL string has flipped.
+  // Toggling resolution_scale / true_color / scaled_dithering now
+  // costs no DXBC compile and no PSO rebuild: the HLSL is invariant
+  // under those three, and the new values ride the per-batch UBO
+  // upload on the next FlushRender. Without checking this signal,
+  // every option toggle would still walk the whole 1164-PSO batch
+  // matrix synchronously when shader_precompile_mode = Enabled,
+  // exactly the multi-tens-of-seconds pause this patch series is
+  // meant to remove.
+  bool framebuffer_changed, shaders_changed, shader_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, nullptr, nullptr, &shader_source_changed);
 
   if (framebuffer_changed)
   {
@@ -413,7 +424,7 @@ void GPU_HW_D3D12::UpdateSettings()
   if (framebuffer_changed)
     CreateFramebuffer();
 
-  if (shaders_changed)
+  if (shader_source_changed)
   {
     // clear it since we draw a loading screen and it's not in the correct state
     DestroyPipelines();

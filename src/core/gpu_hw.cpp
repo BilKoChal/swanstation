@@ -159,7 +159,8 @@ bool GPU_HW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool u
 }
 
 void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
-                              bool* only_dim_changed, bool* downsample_changed)
+                              bool* only_dim_changed, bool* downsample_changed,
+                              bool* shader_source_changed)
 {
   const uint32_t resolution_scale = CalculateResolutionScale();
   const uint32_t multisamples = std::min(m_max_multisamples, g_settings.gpu_multisamples);
@@ -223,6 +224,40 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
     *only_dim_changed = dim_diff && !non_dim_diff;
   if (downsample_changed)
     *downsample_changed = (m_downsample_mode != downsample_mode);
+
+  // shader_source_changed: the narrower "HLSL / GLSL source string
+  // actually changed" signal. Set true only when a setting that the
+  // shader generator bakes into the emitted source has flipped.
+  // Excludes the three per-session settings routed through the batch
+  // UBO by 7b575a3 (resolution_scale, true_color, scaled_dithering) -
+  // toggling those is a single 4-byte cbuffer write on the next
+  // FlushRender and costs zero shader compilation on D3D11 / D3D12 /
+  // OpenGL. Backends that don't carry the Vulkan-style per-spec-const
+  // pipeline dim cache check this signal to gate the
+  // DestroyPipelines + CompilePipelines round trip; the broader
+  // shaders_changed above remains for Vulkan's spec-const-aware path.
+  //
+  // chroma_smoothing stays in here because it does change the display
+  // FS source string on those backends (D3D12 passes it to
+  // GenerateDisplayFragmentShader at gpu_hw_d3d12.cpp:~1639, D3D11 at
+  // gpu_hw_d3d11.cpp:~1118, OpenGL at gpu_hw_opengl.cpp:~1145).
+  // shader_precompile_mode stays in here because flipping from
+  // Disabled to Enabled is the request to walk the whole matrix
+  // synchronously now - the work is in CompilePipelines, not in
+  // shader source, so the existing destroy-and-rebuild path is the
+  // right hook even though no source actually changed.
+  if (shader_source_changed)
+  {
+    *shader_source_changed =
+      (m_texture_filtering != g_settings.gpu_texture_filter) ||
+      (m_multisamples != multisamples) ||
+      (m_per_sample_shading != per_sample_shading) ||
+      (m_using_uv_limits != use_uv_limits) ||
+      (m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing) ||
+      (m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer()) ||
+      (m_disable_color_perspective != disable_color_perspective) ||
+      (m_shader_precompile_mode != g_settings.gpu_shader_precompile_mode);
+  }
 
   m_resolution_scale = resolution_scale;
   m_multisamples = multisamples;
