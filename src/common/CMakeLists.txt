@@ -117,6 +117,8 @@ if(WIN32)
       d3d12/context.h
       d3d12/descriptor_heap_manager.cpp
       d3d12/descriptor_heap_manager.h
+      d3d12/embedded_shaders.cpp
+      d3d12/embedded_shaders.h
       d3d12/shader_cache.cpp
       d3d12/shader_cache.h
       d3d12/staging_texture.cpp

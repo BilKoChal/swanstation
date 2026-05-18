@@ -331,6 +331,7 @@ LDFLAGS  += -ld3d12
 SOURCES_CXX += \
    $(COMMON_DIR)/d3d12/context.cpp \
    $(COMMON_DIR)/d3d12/descriptor_heap_manager.cpp \
+   $(COMMON_DIR)/d3d12/embedded_shaders.cpp \
    $(COMMON_DIR)/d3d12/shader_cache.cpp \
    $(COMMON_DIR)/d3d12/staging_texture.cpp \
    $(COMMON_DIR)/d3d12/stream_buffer.cpp \
