@@ -781,8 +781,24 @@ void GPU_HW_Vulkan::UpdateSettings()
 {
   GPU_HW::UpdateSettings();
 
-  bool framebuffer_changed, shaders_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed);
+  // Stop the background batch-compile worker BEFORE UpdateHWSettings
+  // writes m_texture_filtering. With B's filter-dimensioned batch
+  // cache the worker reads m_texture_filtering implicitly on every
+  // call to GetBatchPipeline / GetBatchFragmentShader (it determines
+  // both the slot index AND the SPIR-V blob selection). An
+  // unsynchronised write here while the worker is still iterating
+  // could split those two reads across old / new filter values,
+  // installing a FS module for one filter into a slot indexed by
+  // another - which then persists indefinitely because the filter-
+  // only path skips DestroyPipelines. Joining first eliminates the
+  // race entirely; CompilePipelines below will restart the worker
+  // for the new filter as appropriate. (StopShaderCompileThread is
+  // idempotent - the call inside CompilePipelines at line ~1406
+  // becomes a no-op for paths that pre-stop here.)
+  StopShaderCompileThread();
+
+  bool framebuffer_changed, shaders_changed, only_filter_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_filter_changed);
 
   if (framebuffer_changed)
   {
@@ -800,9 +816,34 @@ void GPU_HW_Vulkan::UpdateSettings()
 
   if (shaders_changed)
   {
-    // clear it since we draw a loading screen and it's not in the correct state
-    DestroyPipelines();
-    CompilePipelines();
+    if (only_filter_changed)
+    {
+      // Filter is the only shader-affecting setting that changed.
+      // m_batch_pipelines / m_batch_fragment_shaders are filter-
+      // dimensioned, the previous filter's sub-cube is still valid
+      // and stays populated. CompilePipelines just lazy-populates
+      // the new filter's sub-cube on top: in Enabled mode the
+      // precompile_sync loop walks the matrix calling GetBatchPipeline
+      // which now indexes by the new m_texture_filtering, so the
+      // OTHER filter sub-cubes are untouched. In Lazy / Disabled the
+      // new sub-cube stays empty until first draw / the worker
+      // reaches each cell.
+      //
+      // Cycling back to a previously-visited filter is instant - no
+      // vkCreateGraphicsPipelines call, no destroy/recreate, just an
+      // atomic load of an already-filled slot.
+      CompilePipelines();
+    }
+    else
+    {
+      // Full flush: any non-filter shader-affecting change
+      // (resolution scale, MSAA, true colour, PGXP depth, ...)
+      // invalidates every filter's sub-cube because per-session
+      // spec constants and structural SPIR-V choice apply
+      // identically to all of them.
+      DestroyPipelines();
+      CompilePipelines();
+    }
   }
 
   // this has to be done here, because otherwise we're using destroyed pipelines in the same cmdbuffer
@@ -1452,11 +1493,24 @@ bool GPU_HW_Vulkan::CompilePipelines()
   // PGXP_DEPTH and RESOLUTION_SCALE are spec constants applied at
   // pipeline-create time inside GetBatchPipeline, not at module-create
   // time here.
+  //
+  // The slot-populated guard makes this loop idempotent. On a filter-
+  // only setting change UpdateSettings skips DestroyPipelines and
+  // re-enters CompilePipelines; the existing VS modules are still
+  // valid (filter is FS-only), so we skip the create. On a fresh
+  // call (initial init or post-DestroyPipelines) every slot is
+  // VK_NULL_HANDLE and the bake proceeds normally.
   const bool msaa               = (m_multisamples > 1);
   const bool per_sample_shading = m_per_sample_shading;
   const bool noperspective_col  = m_disable_color_perspective;
   for (uint8_t textured = 0; textured < 2; textured++)
   {
+    if (m_batch_vertex_shaders[textured].load(std::memory_order_acquire) != VK_NULL_HANDLE)
+    {
+      progress.Increment();
+      continue;
+    }
+
     const Vulkan::EmbeddedShaders::EmbeddedShaderBlob& blob =
       Vulkan::EmbeddedShaders::GetBatchVertexShaderBlob(textured != 0, m_using_uv_limits, msaa, per_sample_shading,
                                                         noperspective_col);
@@ -1827,8 +1881,13 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   // Fast path: lock-free load. Both the precompile worker and the
   // main thread can read a slot concurrently without contending
   // with each other or with each other's slow-path compiles.
+  // Filter is indexed by current m_texture_filtering - other filter
+  // sub-cubes are populated independently and stay valid across a
+  // filter-only setting change (UpdateSettings skips
+  // DestroyPipelines in that case).
   std::atomic<VkShaderModule>& slot =
-    m_batch_fragment_shaders[render_mode][lookup_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
+    m_batch_fragment_shaders[static_cast<uint8_t>(m_texture_filtering)][render_mode][lookup_mode]
+                            [static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
   VkShaderModule existing = slot.load(std::memory_order_acquire);
   if (existing != VK_NULL_HANDLE)
     return existing;
@@ -1923,8 +1982,8 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
                                                                                                       texture_mode;
 
   std::atomic<VkPipeline>& slot =
-    m_batch_pipelines[depth_test][render_mode][lookup_mode][transparency_mode][static_cast<uint8_t>(dithering)]
-                     [static_cast<uint8_t>(interlacing)];
+    m_batch_pipelines[static_cast<uint8_t>(m_texture_filtering)][depth_test][render_mode][lookup_mode]
+                     [transparency_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
 
   // Fast path: lock-free atomic load. This is what DrawBatchVertices
   // hits once a slot is filled (either by the precompile worker or

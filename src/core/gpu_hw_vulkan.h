@@ -258,28 +258,43 @@ private:
   uint32_t m_current_uniform_buffer_offset = 0;
   VkBufferView m_texture_stream_buffer_view = VK_NULL_HANDLE;
 
-  // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  // [filter][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  //
+  // Filter is the outermost dimension - one sub-cube per
+  // GPUTextureFilter value (Nearest, Bilinear / BilinearBinAlpha,
+  // JINC2 / JINC2BinAlpha, xBR / xBRBinAlpha = 7 entries). Filter
+  // selects which pre-baked batch FS SPIR-V blob backs every PSO in
+  // its sub-cube; the other 6 dimensions are the structural axes
+  // shared across all filters. Indexing by current m_texture_filtering
+  // means filter-only setting changes do NOT need to flush the cache:
+  // the previous filter's sub-cube remains valid, populated, and
+  // instantly addressable when the user cycles back to it.
+  // CompilePipelines on a filter-only change populates the new
+  // sub-cube (in Enabled mode) or leaves it empty for lazy fault-in
+  // (in Lazy / Disabled). DestroyPipelines still does a full sweep
+  // - it is reached only on a non-filter shader-affecting change
+  // (resolution scale, MSAA, true colour, ...), which flips per-
+  // session state applied to every sub-cube and therefore invalidates
+  // all of them at once.
   //
   // std::atomic<VkPipeline> rather than a plain VkPipeline so the
   // draw path can sample a slot without taking any lock. The slow
-  // path (slot still null after the atomic load) compiles glslang
-  // + vkCreateGraphicsPipelines lock-free, then takes
-  // m_batch_shader_mutex briefly to publish into the slot under a
-  // double-check. The fast path - which is what DrawBatchVertices
-  // hits once a slot has been filled either by the precompile worker
-  // or by an earlier main-thread fault-in - is a single
-  // memory_order_acquire load with no kernel calls and no
-  // serialisation against the worker.
+  // path (slot still null after the atomic load) compiles the PSO
+  // lock-free, then takes m_batch_shader_mutex briefly to publish
+  // into the slot under a double-check. The fast path - which is
+  // what DrawBatchVertices hits once a slot has been filled either
+  // by the precompile worker or by an earlier main-thread fault-in
+  // - is a single memory_order_acquire load with no kernel calls
+  // and no serialisation against the worker.
   //
-  // Without this, the user-visible experience after a texture-filter
-  // change was a multi-second hang: the precompile worker held
-  // m_batch_shader_mutex for the duration of each glslang ->
-  // SPIR-V compile (~hundreds of ms on the heavier shaders), so
+  // Without the lock-free fast path the user-visible experience
+  // after a texture-filter change was a multi-second hang: the
+  // precompile worker held m_batch_shader_mutex for the duration of
+  // each PSO compile (~hundreds of ms on the heavier shaders), so
   // every concurrent main-thread DrawBatchVertices stalled behind
   // it for at least one full compile, and the runloop never made
-  // forward progress until the worker finished the entire 2160-entry
-  // matrix.
-  DimensionalArray<std::atomic<VkPipeline>, 2, 2, 5, 9, 4, 3> m_batch_pipelines{};
+  // forward progress until the worker finished the entire matrix.
+  DimensionalArray<std::atomic<VkPipeline>, 2, 2, 5, 9, 4, 3, 7> m_batch_pipelines{};
 
   // Persistent vertex / fragment shader modules and shadergen for
   // the lazy and background-thread compile paths. These used to be
@@ -314,7 +329,7 @@ private:
   std::atomic<bool> m_shader_compile_thread_quit{false};
 
   DimensionalArray<std::atomic<VkShaderModule>, 2> m_batch_vertex_shaders{};              // [textured]
-  DimensionalArray<std::atomic<VkShaderModule>, 2, 2, 9, 4> m_batch_fragment_shaders{};   // [render][texture][dither][interlace]
+  DimensionalArray<std::atomic<VkShaderModule>, 2, 2, 9, 4, 7> m_batch_fragment_shaders{};   // [filter][render][texture][dither][interlace]
 
   // Shared vertex shaders used by all non-batch pipelines. Cached
   // here so the lazy non-batch helpers don't run glslang +

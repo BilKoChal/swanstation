@@ -128,7 +128,8 @@ bool GPU_HW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool u
   return true;
 }
 
-void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed)
+void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
+                              bool* only_filter_changed)
 {
   const uint32_t resolution_scale = CalculateResolutionScale();
   const uint32_t multisamples = std::min(m_max_multisamples, g_settings.gpu_multisamples);
@@ -139,14 +140,30 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed)
 
   *framebuffer_changed =
     (m_resolution_scale != resolution_scale || m_multisamples != multisamples || m_downsample_mode != downsample_mode);
-  *shaders_changed =
+
+  // Split the shader-affecting setting comparison into "filter
+  // changed" and "anything else changed". A filter-only change can
+  // be served by a backend that keeps a per-filter sub-cube of
+  // batch pipelines populated across swaps - the previous filter's
+  // PSOs are still valid and reachable, so DestroyPipelines can be
+  // skipped and CompilePipelines just lazy-populates the new
+  // filter's sub-cube on top of whatever was already there. Any
+  // non-filter change (resolution, MSAA, true colour, PGXP depth,
+  // dithering, precompile mode, ...) flips the per-session spec
+  // constants or the structural SPIR-V blob choice applied to
+  // EVERY filter sub-cube and therefore requires a full flush.
+  const bool filter_diff = (m_texture_filtering != g_settings.gpu_texture_filter);
+  const bool non_filter_diff =
     (m_resolution_scale != resolution_scale || m_multisamples != multisamples ||
      m_true_color != g_settings.gpu_true_color || m_per_sample_shading != per_sample_shading ||
-     m_scaled_dithering != g_settings.gpu_scaled_dithering || m_texture_filtering != g_settings.gpu_texture_filter ||
+     m_scaled_dithering != g_settings.gpu_scaled_dithering ||
      m_using_uv_limits != use_uv_limits || m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing ||
      m_downsample_mode != downsample_mode || m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer() ||
      m_disable_color_perspective != disable_color_perspective ||
      m_shader_precompile_mode != g_settings.gpu_shader_precompile_mode);
+  *shaders_changed = filter_diff || non_filter_diff;
+  if (only_filter_changed)
+    *only_filter_changed = filter_diff && !non_filter_diff;
 
   m_resolution_scale = resolution_scale;
   m_multisamples = multisamples;
