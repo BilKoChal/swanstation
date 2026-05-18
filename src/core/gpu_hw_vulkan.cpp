@@ -9,7 +9,6 @@
 #include "common/vulkan/shader_cache.h"
 #include "common/vulkan/staging_texture.h"
 #include "common/vulkan/util.h"
-#include "core/shader_cache_version.h"
 #include "host_display.h"
 #include "host_interface.h"
 #include "core/host_interface.h"
@@ -269,7 +268,7 @@ bool LibretroVulkanHostDisplay::CreateRenderDevice(const WindowInfo& wi, std::st
 bool LibretroVulkanHostDisplay::InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device,
                                                        bool threaded_presentation)
 {
-  Vulkan::ShaderCache::Create(shader_cache_directory, SHADER_CACHE_VERSION, debug_device);
+  Vulkan::ShaderCache::Create(shader_cache_directory, debug_device);
   if (!CreateResources())
     return false;
   return true;
