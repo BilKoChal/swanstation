@@ -803,9 +803,12 @@ void GPU_HW_OpenGL::UpdateSettings()
   // scaled_dithering) changed and nothing in non_dim_diff. With
   // the dim cache (filter outermost) this means "filter sub-cube
   // can be lazy-populated, other filters' sub-cubes stay valid".
-  // CompilePrograms takes a clear_existing_render_programs flag so
-  // this path can call through without throwing away the previous
-  // filter's compiled programs. Mirrors the D3D11 / D3D12 / Vulkan
+  // This path routes around CompilePrograms entirely and calls
+  // PrecompileBatchPrograms directly, so the filter-independent
+  // non-batch programs (display / vram_fill / vram_read /
+  // vram_write / vram_copy / vram_update_depth / downsample)
+  // aren't churned through the disk-backed program cache for
+  // no functional benefit. Mirrors the D3D11 / D3D12 / Vulkan
   // dim-cache fast paths.
   //
   // display_only_source_changed: chroma_smoothing flipped and
@@ -842,17 +845,52 @@ void GPU_HW_OpenGL::UpdateSettings()
       // the entire batch matrix.
       (void)RebuildDisplayPrograms();
     }
+    else if (only_dim_changed)
+    {
+      // Filter (and/or cbuffer-only members) changed but nothing in
+      // non_dim_diff. m_render_programs is filter-dimensioned so the
+      // previous filter's sub-cube remains valid; cycling back to a
+      // previously-visited filter is a slot-validity check inside
+      // GetBatchProgram with no glCompileShader / glLinkProgram.
+      //
+      // The non-batch programs (display / vram_fill / vram_read /
+      // vram_write / vram_copy / vram_update_depth / downsample)
+      // are all filter-independent - none of them read
+      // m_texture_filter inside shadergen (see gpu_hw_shadergen.cpp
+      // where m_texture_filter is only ever referenced from
+      // GenerateBatchFragmentShader and the WriteBatchTextureFilter
+      // helper it calls). They keep working with the GL::Programs
+      // they already have, so calling CompilePrograms here would
+      // rebuild them via the disk-backed program cache (which hits
+      // as glProgramBinary reloads on the same GLSL hashes) for
+      // ~10-100ms of pure GL::Program churn per filter toggle with
+      // no functional benefit.
+      //
+      // Instead, reconstruct m_shadergen so future calls into it
+      // see current settings, build a progress tracker sized for
+      // the batch matrix only, and call PrecompileBatchPrograms
+      // directly. PrecompileBatchPrograms walks the new filter sub-
+      // cube via GetBatchProgram (which is dim-cache aware -
+      // already-populated cells from a previous visit short-circuit
+      // on the IsValid() check).
+      m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
+        m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+        m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+        m_supports_dual_source_blend);
+
+      const uint32_t batch_progress_units =
+        (g_settings.gpu_shader_precompile_mode == GPUShaderPrecompileMode::Enabled)
+          ? CountReachableBatchShaders(m_supports_dual_source_blend)
+          : 0u;
+      ShaderCompileProgressTracker progress("Compiling Programs", batch_progress_units);
+      (void)PrecompileBatchPrograms(progress);
+    }
     else
     {
-      // only_dim_changed: filter (and/or cbuffer-only members) changed
-      // but nothing in non_dim_diff. Preserve previously-visited
-      // filter sub-cubes so the user can cycle filters without paying
-      // the recompile cost more than once per filter.
-      //
-      // Otherwise (non-dim, non-display-only source change): wipe all
-      // sub-cubes via clear_existing_render_programs=true, full
-      // rebuild walks the current filter's sub-cube.
-      CompilePrograms(/*clear_existing_render_programs=*/!only_dim_changed);
+      // Non-dim, non-display-only source change: full rebuild walks
+      // the current filter's sub-cube via CompilePrograms's clear +
+      // build pass.
+      CompilePrograms();
     }
   }
 
@@ -1102,7 +1140,7 @@ bool GPU_HW_OpenGL::CreateTextureBuffer()
   return true;
 }
 
-bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
+bool GPU_HW_OpenGL::CompilePrograms()
 {
   // Reset every program object so the new compile starts from a
   // clean slate. Without this, on an UpdateSettings round-trip
@@ -1118,27 +1156,24 @@ bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
   // GL::Program's move-assign operator calls Destroy() on the
   // destination before taking the source's state, so default-
   // assigning each slot to a temporary {} both glDeleteProgram's
-  // the old handle and rewinds the slot to id = 0.
-  //
-  // clear_existing_render_programs=false is the dim-cache fast
-  // path: UpdateSettings on a filter-only flip passes false so
-  // the previous filter's sub-cube (and any other filter sub-
-  // cubes the user has visited this session) keep their compiled
-  // programs. The precompile_sync loop below walks only the new
-  // filter's sub-cube; slots that were already populated by a
-  // previous visit short-circuit on IsValid() in GetBatchProgram,
-  // empty slots get compiled. 5-level nesting matches the
+  // the old handle and rewinds the slot to id = 0. 5-level
+  // nesting matches the
   // [filter][render_mode][texture_mode][dithering][interlacing]
   // shape of m_render_programs added in the dim cache port.
-  if (clear_existing_render_programs)
-  {
-    for (auto& a : m_render_programs)
-      for (auto& b : a)
-        for (auto& c : b)
-          for (auto& d : c)
-            for (auto& slot : d)
-              slot = GL::Program{};
-  }
+  //
+  // The dim-cache filter-only fast path doesn't go through here -
+  // see UpdateSettings's only_dim_changed branch which calls
+  // PrecompileBatchPrograms directly, preserving every existing
+  // filter sub-cube. CompilePrograms is now only called from
+  // Initialize and from UpdateSettings' full-rebuild branch (any
+  // non-dim, non-display-only shader source change), both of
+  // which want a clean-slate rebuild.
+  for (auto& a : m_render_programs)
+    for (auto& b : a)
+      for (auto& c : b)
+        for (auto& d : c)
+          for (auto& slot : d)
+            slot = GL::Program{};
 
   // Open the disk-backed program cache once. On subsequent calls
   // (UpdateSettings -> CompilePrograms) the instance still holds
@@ -1167,62 +1202,25 @@ bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
   // CompilePrograms time, fault each combo in on the runloop the
   // first time the game dispatches a draw using it.
   //
-  // 'Enabled' still does the full synchronous walk via the
-  // GetBatchProgram helper, mirroring the D3D11/D3D12/Vulkan
+  // 'Enabled' still does the full synchronous walk via
+  // PrecompileBatchPrograms below, mirroring the D3D11/D3D12/Vulkan
   // commits.
-  const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
-  const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+  //
   // Structurally unreachable cells (reserved texture modes, two-pass
   // fallback modes for untextured polys, single-pass dual-source on
   // hardware that lacks it) are skipped via IsBatchShaderReachable.
   // batch_progress_units is sized to the same reachable count so the
-  // progress bar lands at 100%. Mirrors the D3D11 / D3D12 / Vulkan
-  // precompile loops; previously OpenGL walked the full 4 * 9 * 2 *
-  // 2 = 144 cells and burned a glLinkProgram on each of the ~40
-  // unreachable ones (the disk-backed program cache makes them
-  // cheap relink hits, but cheap is not free - the Reserved_*Direct
-  // 16Bit alias still glCompileShader + glLinkProgram on its first
-  // visit because GetBatchProgram doesn't dedup via slot-aliasing
-  // the way the D3D / Vulkan backends do, see the helper's comment).
-  const bool dual_source = m_supports_dual_source_blend;
+  // progress bar lands at 100%.
   const uint32_t batch_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? CountReachableBatchShaders(dual_source) : 0u;
+    (g_settings.gpu_shader_precompile_mode == GPUShaderPrecompileMode::Enabled)
+      ? CountReachableBatchShaders(m_supports_dual_source_blend)
+      : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Programs",
                                         batch_progress_units + (2 * 3) + (2 * 2) + 1 + 1 + 1 + 1 + 1);
 
-  if (precompile_sync)
-  {
-    // The dim cache makes m_render_programs filter-dimensioned.
-    // precompile_sync walks ONLY the current m_texture_filtering
-    // sub-cube, not the full 7-filter matrix - pre-filling six
-    // unused sub-cubes would multiply the cold-cache GLSL compile
-    // pass by 7x for no gain (the game can only be running under
-    // one filter at a time, and the other sub-cubes get faulted
-    // in on demand if the user later flips the filter setting and
-    // UpdateSettings calls CompilePrograms again).
-    const GPUTextureFilter cur_filter = m_texture_filtering;
-    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
-    {
-      for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
-      {
-        if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
-          continue;
-
-        for (uint8_t dithering = 0; dithering < 2; dithering++)
-        {
-          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
-          {
-            const GL::Program* prog = GetBatchProgram(cur_filter, render_mode, texture_mode, static_cast<bool>(dithering),
-                                                      static_cast<bool>(interlacing));
-            if (!prog)
-              return false;
-            progress.Increment();
-          }
-        }
-      }
-    }
-  }
+  if (!PrecompileBatchPrograms(progress))
+    return false;
   // For Lazy and Disabled: m_render_programs stays default-
   // constructed (program id 0); each cell is filled on first draw
   // by GetBatchProgram on the runloop thread.
@@ -1402,7 +1400,65 @@ bool GPU_HW_OpenGL::RebuildDisplayPrograms()
   return true;
 }
 
-const GL::Program* GPU_HW_OpenGL::GetBatchProgram(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing)
+bool GPU_HW_OpenGL::PrecompileBatchPrograms(ShaderCompileProgressTracker& progress)
+{
+  // Walk the current m_texture_filtering sub-cube of m_render_programs
+  // synchronously in Enabled mode; do nothing in Lazy / Disabled
+  // (OpenGL has no background-compile worker - the libretro
+  // hardware-renderer protocol gives one GL context bound to the
+  // runloop, so 'Lazy' degrades to the same shape as 'Disabled':
+  // fault each combo in on the runloop the first time the game
+  // dispatches a draw using it).
+  //
+  // Extracted from CompilePrograms so the only_dim_changed fast
+  // path in UpdateSettings can call just this helper without
+  // paying the ~10-100ms of cache-hit-but-still-wasted GL::Program
+  // churn that CompilePrograms' non-batch program rebuild block
+  // incurs on every filter flip. None of the non-batch programs
+  // (display / vram_fill / vram_read / vram_write / vram_copy /
+  // vram_update_depth / downsample) depend on filter, so the
+  // existing linked program objects in those slots stay valid
+  // across a filter toggle - replacing them via the disk-backed
+  // program cache (which hits as glProgramBinary reloads on the
+  // same GLSL hashes) is pure overhead. See gpu_hw_shadergen.cpp -
+  // GenerateBatchFragmentShader and WriteBatchTextureFilter
+  // (lines ~706, ~728, ~839) are the only callers that read
+  // m_texture_filter from shadergen state.
+  //
+  // Structurally unreachable cells (reserved texture modes, two-
+  // pass fallback modes for untextured polys, single-pass dual-
+  // source on hardware that lacks it) are skipped via
+  // IsBatchShaderReachable. Progress is ticked once per reachable
+  // cell so the bar lands at batch_progress_units =
+  // CountReachableBatchShaders(dual_source).
+  const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+  if (precompile_mode != GPUShaderPrecompileMode::Enabled)
+    return true;
+
+  const bool dual_source = m_supports_dual_source_blend;
+  const GPUTextureFilter cur_filter = m_texture_filtering;
+  for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
+  {
+    for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
+    {
+      if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+        continue;
+
+      for (uint8_t dithering = 0; dithering < 2; dithering++)
+      {
+        for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
+        {
+          const GL::Program* prog = GetBatchProgram(cur_filter, render_mode, texture_mode, static_cast<bool>(dithering),
+                                                    static_cast<bool>(interlacing));
+          if (!prog)
+            return false;
+          progress.Increment();
+        }
+      }
+    }
+  }
+  return true;
+}
 {
   // Reserved_*Direct16Bit dedup. The fragment shader source for
   // texture_mode 3 / 7 is byte-for-byte identical to 2 / 6 after

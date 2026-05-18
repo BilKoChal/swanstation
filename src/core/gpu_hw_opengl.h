@@ -138,8 +138,24 @@ private:
   bool CreateUniformBuffer();
   bool CreateTextureBuffer();
 
-  bool CompilePrograms(bool clear_existing_render_programs = true);
+  bool CompilePrograms();
   bool RebuildDisplayPrograms();
+
+  // Fast-path companion to CompilePrograms for the dim-cache
+  // filter-only flip in UpdateSettings: walks just the current
+  // m_texture_filtering sub-cube of m_render_programs, without
+  // rebuilding the filter-independent non-batch programs
+  // (display / vram_fill / vram_read / vram_write / vram_copy /
+  // vram_update_depth / downsample) or the m_use_binding_layout
+  // flag. All those stay valid through a filter toggle because
+  // none of them bake filter into their GLSL source - filter
+  // only affects the batch FS via FilteredSampleFromVRAM. Caller
+  // must have already populated m_shader_cache and m_shadergen.
+  // Called from CompilePrograms itself for the initial / full-
+  // rebuild path, and directly from UpdateSettings's
+  // only_dim_changed branch to bypass the non-batch rebuild on
+  // warm filter cycling.
+  bool PrecompileBatchPrograms(ShaderCompileProgressTracker& progress);
 
   // Lazy batch-program compile path. The libretro hardware-renderer
   // protocol gives us a single GL context bound to the runloop
