@@ -77,8 +77,6 @@ add_library(common
   vulkan/embedded_shaders.h
   vulkan/shader_cache.cpp
   vulkan/shader_cache.h
-  vulkan/shader_compiler.cpp
-  vulkan/shader_compiler.h
   vulkan/staging_buffer.cpp
   vulkan/staging_buffer.h
   vulkan/staging_texture.cpp
@@ -95,7 +93,7 @@ add_library(common
 target_include_directories(common PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_include_directories(common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_include_directories(common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../dep/libretro-common/include")
-target_link_libraries(common PRIVATE glad stb Threads::Threads chdr-static glslang vulkan-loader miniz)
+target_link_libraries(common PRIVATE glad stb Threads::Threads chdr-static vulkan-loader miniz)
 target_compile_definitions(common PRIVATE -D__LIBRETRO__)
 
 if(WIN32)

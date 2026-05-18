@@ -212,7 +212,6 @@ SRC_DIR      := $(CORE_DIR)/src
 LIBRETRO_COMM_DIR := $(DEPS_DIR)/libretro-common
 LIBCHDR_DIR       := $(DEPS_DIR)/libchdr
 GLAD_DIR          := $(DEPS_DIR)/glad
-GLSLANG_DIR       := $(DEPS_DIR)/glslang
 VULKAN_LOADER_DIR := $(DEPS_DIR)/vulkan-loader
 STB_DIR           := $(DEPS_DIR)/stb
 XXHASH_DIR        := $(DEPS_DIR)/xxhash
@@ -236,7 +235,6 @@ INCFLAGS := \
    -I$(LIBCHDR_DIR)/deps/miniz-3.1.1 \
    -I$(LIBCHDR_DIR)/deps/zstd-1.5.7 \
    -I$(GLAD_DIR)/include \
-   -I$(GLSLANG_DIR) \
    -I$(VULKAN_LOADER_DIR)/include \
    -I$(STB_DIR)/include \
    -I$(XXHASH_DIR)/include \
@@ -308,7 +306,6 @@ SOURCES_CXX += \
    $(COMMON_DIR)/vulkan/context.cpp \
    $(COMMON_DIR)/vulkan/embedded_shaders.cpp \
    $(COMMON_DIR)/vulkan/shader_cache.cpp \
-   $(COMMON_DIR)/vulkan/shader_compiler.cpp \
    $(COMMON_DIR)/vulkan/staging_buffer.cpp \
    $(COMMON_DIR)/vulkan/staging_texture.cpp \
    $(COMMON_DIR)/vulkan/stream_buffer.cpp \
@@ -497,60 +494,6 @@ SOURCES_C += \
 # dep/vulkan-loader
 # ---------------------------------------------------------------------
 SOURCES_CXX += $(VULKAN_LOADER_DIR)/src/vulkan_loader.cpp
-
-# ---------------------------------------------------------------------
-# dep/glslang
-# ---------------------------------------------------------------------
-SOURCES_CXX += \
-   $(GLSLANG_DIR)/glslang/CInterface/glslang_c_interface.cpp \
-   $(GLSLANG_DIR)/glslang/GenericCodeGen/CodeGen.cpp \
-   $(GLSLANG_DIR)/glslang/GenericCodeGen/Link.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/attribute.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/Constant.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/glslang_tab.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/InfoSink.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/Initialize.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/Intermediate.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/intermOut.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/IntermTraverse.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/iomapper.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/limits.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/linkValidate.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/parseConst.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/ParseContextBase.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/ParseHelper.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/PoolAlloc.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/preprocessor/Pp.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/preprocessor/PpAtom.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/preprocessor/PpContext.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/preprocessor/PpScanner.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/preprocessor/PpTokens.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/propagateNoContraction.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/reflection.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/RemoveTree.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/Scan.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/ShaderLang.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/SymbolTable.cpp \
-   $(GLSLANG_DIR)/glslang/MachineIndependent/Versions.cpp \
-   $(GLSLANG_DIR)/OGLCompilersDLL/InitializeDll.cpp \
-   $(GLSLANG_DIR)/SPIRV/disassemble.cpp \
-   $(GLSLANG_DIR)/SPIRV/doc.cpp \
-   $(GLSLANG_DIR)/SPIRV/GlslangToSpv.cpp \
-   $(GLSLANG_DIR)/SPIRV/InReadableOrder.cpp \
-   $(GLSLANG_DIR)/SPIRV/Logger.cpp \
-   $(GLSLANG_DIR)/SPIRV/SpvBuilder.cpp \
-   $(GLSLANG_DIR)/SPIRV/SpvPostProcess.cpp \
-   $(GLSLANG_DIR)/SPIRV/SPVRemapper.cpp \
-   $(GLSLANG_DIR)/SPIRV/SpvTools.cpp \
-   $(GLSLANG_DIR)/StandAlone/ResourceLimits.cpp \
-   $(GLSLANG_DIR)/StandAlone/resource_limits_c.cpp
-
-# OS-specific glslang OS abstraction.
-ifeq ($(IS_WINDOWS),1)
-SOURCES_CXX += $(GLSLANG_DIR)/glslang/OSDependent/Windows/ossource.cpp
-else
-SOURCES_CXX += $(GLSLANG_DIR)/glslang/OSDependent/Unix/ossource.cpp
-endif
 
 # ---------------------------------------------------------------------
 # dep/vixl - aarch32 / aarch64 only

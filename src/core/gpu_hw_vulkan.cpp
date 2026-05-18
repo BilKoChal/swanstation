@@ -391,8 +391,6 @@ void LibretroVulkanHostDisplay::DestroyResources()
   Vulkan::Util::SafeDestroySampler(m_linear_sampler);
 
   m_frame_render_pass = VK_NULL_HANDLE;
-
-  Vulkan::ShaderCompiler::DeinitializeGlslang();
 }
 
 void LibretroVulkanHostDisplay::RenderSoftwareCursor(int32_t left, int32_t top, int32_t width, int32_t height, HostDisplayTexture* texture)
@@ -1835,19 +1833,14 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   if (existing != VK_NULL_HANDLE)
     return existing;
 
-  // Slow path: compile WITHOUT m_batch_shader_mutex held. The shader
-  // cache itself is thread-safe (it has its own internal locking
-  // that does NOT span the glslang -> SPIR-V compile), and
-  // vkCreateShaderModule is documented thread-safe by the Vulkan
-  // spec, so multiple threads can compile different shaders here in
-  // parallel. Two threads compiling the SAME shader is harmless:
-  // both produce equivalent SPIR-V; the publish step picks one and
-  // the loser destroys its VkShaderModule.
-  // All texture filters and the untextured path are pre-baked. Pick
-  // the structural blob from per-call and per-session state; per-call
-  // spec constants (TRANSPARENCY, DITHERING, INTERLACING, PALETTE_*,
-  // RAW_TEXTURE, BINALPHA, ...) are applied at pipeline-create time in
-  // GetBatchPipeline.
+  // Slow path. All texture filters and the untextured path are pre-
+  // baked; pick the structural blob from per-call and per-session
+  // state. Per-call spec constants (TRANSPARENCY, DITHERING,
+  // INTERLACING, PALETTE_*, RAW_TEXTURE, BINALPHA, ...) are applied at
+  // pipeline-create time in GetBatchPipeline. vkCreateShaderModule is
+  // documented thread-safe by the Vulkan spec, so two threads racing
+  // to instantiate the SAME blob is harmless - the publish step picks
+  // one VkShaderModule and the loser destroys its.
   //
   // use_dual_source matches the original shadergen-side derivation:
   //   supports && ((render_mode is transparent) || filter != Nearest)
@@ -1944,13 +1937,13 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   // Slow path. Compile the PSO WITHOUT m_batch_shader_mutex held -
   // that mutex was the head-of-line blocking culprit in the pre-
   // fix design. GetBatchFragmentShader is internally thread-safe
-  // (it runs glslang lock-free, takes m_batch_shader_mutex only
-  // for the slot publish). vkCreateGraphicsPipelines is the
-  // remaining slow operation; per Vulkan 1.0 spec the
-  // pipelineCache parameter is host-synchronised, so we serialise
-  // on g_vulkan_shader_cache->PipelineCacheMutex() around that one
-  // call (window is one driver-side PSO compile, typically tens of
-  // ms for these simple PSOs).
+  // (it instantiates a pre-baked VkShaderModule lock-free, takes
+  // m_batch_shader_mutex only for the slot publish).
+  // vkCreateGraphicsPipelines is the remaining slow operation; per
+  // Vulkan 1.0 spec the pipelineCache parameter is host-synchronised,
+  // so we serialise on g_vulkan_shader_cache->PipelineCacheMutex()
+  // around that one call (window is one driver-side PSO compile,
+  // typically tens of ms for these simple PSOs).
   //
   // Two threads racing to compile the SAME slot both compile and
   // both reach the publish step; the loser destroys its pipeline
