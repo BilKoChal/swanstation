@@ -1172,8 +1172,21 @@ bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
   // commits.
   const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
   const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+  // Structurally unreachable cells (reserved texture modes, two-pass
+  // fallback modes for untextured polys, single-pass dual-source on
+  // hardware that lacks it) are skipped via IsBatchShaderReachable.
+  // batch_progress_units is sized to the same reachable count so the
+  // progress bar lands at 100%. Mirrors the D3D11 / D3D12 / Vulkan
+  // precompile loops; previously OpenGL walked the full 4 * 9 * 2 *
+  // 2 = 144 cells and burned a glLinkProgram on each of the ~40
+  // unreachable ones (the disk-backed program cache makes them
+  // cheap relink hits, but cheap is not free - the Reserved_*Direct
+  // 16Bit alias still glCompileShader + glLinkProgram on its first
+  // visit because GetBatchProgram doesn't dedup via slot-aliasing
+  // the way the D3D / Vulkan backends do, see the helper's comment).
+  const bool dual_source = m_supports_dual_source_blend;
   const uint32_t batch_progress_units =
-    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? static_cast<uint32_t>(4 * 9 * 2 * 2) : 0u;
+    (precompile_mode == GPUShaderPrecompileMode::Enabled) ? CountReachableBatchShaders(dual_source) : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Programs",
                                         batch_progress_units + (2 * 3) + (2 * 2) + 1 + 1 + 1 + 1 + 1);
@@ -1193,6 +1206,9 @@ bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
     {
       for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
       {
+        if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+          continue;
+
         for (uint8_t dithering = 0; dithering < 2; dithering++)
         {
           for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
