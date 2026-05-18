@@ -1756,8 +1756,15 @@ void GPU_HW_OpenGL::UpdateDisplay()
                                                reinterpret_field_offset - (scaled_display_height >> height_div2);
       const uint32_t reinterpret_start_x = m_crtc_state.regs.X * resolution_scale;
       const uint32_t reinterpret_crop_left = (m_crtc_state.display_vram_left - m_crtc_state.regs.X) * resolution_scale;
-      const uint32_t uniforms[4] = {reinterpret_start_x, scaled_flipped_vram_offset_y, reinterpret_crop_left,
-                               reinterpret_field_offset};
+      // 6 DWORDs to match the post-RESOLUTION_SCALE-refactor display_ps
+      // cbuffer (u_vram_offset.xy, u_crop_left, u_field_offset,
+      // u_resolution_scale, u_pad0). m_resolution_scale is pushed,
+      // NOT the local resolution_scale (forced to 1 in 24-bit mode)
+      // since the shader's RESOLUTION_SCALE has always been the
+      // session m_resolution_scale. scaled_flipped_vram_offset_y
+      // preserves OpenGL's lower-left origin y-flip.
+      const uint32_t uniforms[6] = {reinterpret_start_x, scaled_flipped_vram_offset_y, reinterpret_crop_left,
+                               reinterpret_field_offset, m_resolution_scale, 0u /* u_pad0 */};
       UploadUniformBuffer(uniforms, sizeof(uniforms));
       m_batch_ubo_dirty = true;
 

@@ -1773,8 +1773,15 @@ void GPU_HW_D3D11::UpdateDisplay()
       const uint32_t reinterpret_field_offset = (interlaced != InterlacedRenderMode::None) ? GetInterlacedDisplayField() : 0;
       const uint32_t reinterpret_start_x = m_crtc_state.regs.X * resolution_scale;
       const uint32_t reinterpret_crop_left = (m_crtc_state.display_vram_left - m_crtc_state.regs.X) * resolution_scale;
-      const uint32_t uniforms[4] = {reinterpret_start_x, scaled_vram_offset_y + reinterpret_field_offset,
-                               reinterpret_crop_left, reinterpret_field_offset};
+      // 6 DWORDs to match the post-RESOLUTION_SCALE-refactor display_ps
+      // cbuffer (u_vram_offset.xy, u_crop_left, u_field_offset,
+      // u_resolution_scale, u_pad0). m_resolution_scale is pushed,
+      // NOT the local resolution_scale (which is forced to 1 in
+      // 24-bit mode for coord scaling) - the shader's RESOLUTION_SCALE
+      // macro has always been the session m_resolution_scale.
+      const uint32_t uniforms[6] = {reinterpret_start_x, scaled_vram_offset_y + reinterpret_field_offset,
+                               reinterpret_crop_left, reinterpret_field_offset,
+                               m_resolution_scale, 0u /* u_pad0 */};
       ID3D11PixelShader* display_pixel_shader =
         m_display_pixel_shaders[static_cast<uint8_t>(m_GPUSTAT.display_area_color_depth_24)][static_cast<uint8_t>(interlaced)].Get();
 

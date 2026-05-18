@@ -1070,8 +1070,28 @@ std::string GPU_HW_ShaderGen::GenerateDisplayFragmentShader(bool depth_24bit,
   DefineMacro(ss, "INTERLEAVED", interlace_mode == GPU_HW::InterlacedRenderMode::InterleavedFields);
   DefineMacro(ss, "SMOOTH_CHROMA", smooth_chroma);
 
-  WriteCommonFunctions(ss);
-  DeclareUniformBuffer(ss, {"uint2 u_vram_offset", "uint u_crop_left", "uint u_field_offset"}, true);
+  // u_resolution_scale appended; u_pad0 keeps the cbuffer 16-byte-
+  // aligned. The 4 callers (D3D11 / D3D12 / OpenGL / Vulkan
+  // GPU_HW_*::UpdateDisplay) must push uniforms in this exact
+  // order: u_vram_offset.x, u_vram_offset.y, u_crop_left,
+  // u_field_offset, u_resolution_scale, u_pad0.
+  DeclareUniformBuffer(ss,
+                       {"uint2 u_vram_offset", "uint u_crop_left", "uint u_field_offset", "uint u_resolution_scale",
+                        "uint u_pad0"},
+                       true);
+
+  // Route RESOLUTION_SCALE / VRAM_SIZE / RCP_VRAM_SIZE through the
+  // cbuffer above. Same pattern as e56d4d4 / 9d2b49d / 2980961.
+  // display_ps body uses RESOLUTION_SCALE in SampleVRAM24 (24-bit
+  // colour mode coord scaling) and VRAM_SIZE in the 16-bit path's
+  // modulo wrap. The 24-bit path is hit during FMV playback and any
+  // game that uses true-colour mode for the framebuffer; the 16-bit
+  // path is the common case (every game's standard framebuffer
+  // present). Both expand to the same #define aliases as
+  // u_resolution_scale-derived arithmetic.
+  WriteCBufferResolutionScaleAliases(ss);
+  WriteCommonFunctions(ss, true);
+
   DeclareTexture(ss, "samp0", 0, UsingMSAA());
 
   ss << R"(
