@@ -62,19 +62,4 @@ extern const size_t k_fullscreen_quad_vs_size_bytes;
 extern const uint8_t k_copy_ps[];
 extern const size_t k_copy_ps_size_bytes;
 
-// VRAM-to-VRAM copy pixel shader. Equivalent to
-// GPU_HW_ShaderGen::GenerateVRAMCopyFragmentShader() in D3D12 mode.
-// Used by GPU_HW_D3D12::GetVRAMCopyPipeline for the VRAM-to-VRAM
-// copy fast path (sprite caching, text rendering, menu-system blits).
-// Two variants on the PGXP_DEPTH on/off axis - select between them
-// based on the runtime m_pgxp_depth_buffer state. The cbuffer carries
-// u_resolution_scale (post-e56d4d4 refactor), so the same DXBC serves
-// every resolution-scale value.
-//
-// Source: data/shaders/d3d12/vram_copy.ps.hlsl
-extern const uint8_t k_vram_copy_ps_pgxp0[];
-extern const size_t k_vram_copy_ps_pgxp0_size_bytes;
-extern const uint8_t k_vram_copy_ps_pgxp1[];
-extern const size_t k_vram_copy_ps_pgxp1_size_bytes;
-
 } // namespace D3D12::EmbeddedShaders

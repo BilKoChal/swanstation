@@ -56,15 +56,7 @@ STAGE_FROM_SUFFIX = {
 # Empty for now - this dict grows as batch / per-filter / per-pgxp variants
 # get pre-baked. Foundation patches lay the infrastructure; subsequent
 # patches add HLSL sources and the corresponding variant tables alongside.
-TEMPLATE_VARIANTS = {
-    # vram_copy_ps: two variants for the PGXP_DEPTH on/off branch. See
-    # GPU_HW_D3D12::GetVRAMCopyPipeline at the runtime call site -
-    # `m_pgxp_depth_buffer` picks between blob[0] and blob[1].
-    "vram_copy.ps.hlsl": [
-        ("pgxp0", ["PGXP_DEPTH=0"]),
-        ("pgxp1", ["PGXP_DEPTH=1"]),
-    ],
-}
+TEMPLATE_VARIANTS = {}
 
 
 def find_fxc(explicit_fxc, explicit_wine):

@@ -1509,19 +1509,14 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint
 
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
-  // Pre-baked DXBC blob - one per PGXP_DEPTH on/off. m_pgxp_depth_buffer
-  // is the runtime PGXP state that determines which o_depth path the
-  // shader takes (the legacy shadergen took m_pgxp_depth from the
-  // shadergen ctor, which is m_pgxp_depth_buffer for non-batch shaders).
-  // No D3DCompile / disk-shader-cache lookup needed; the .inc file IS
-  // the cache. RESOLUTION_SCALE is cbuffer-routed (e56d4d4), so one
-  // blob per PGXP value serves every resolution scale.
-  const D3D12_SHADER_BYTECODE fs =
-    m_pgxp_depth_buffer
-      ? D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp1,
-                              D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp1_size_bytes}
-      : D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp0,
-                              D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp0_size_bytes};
+  if (!m_shadergen)
+  {
+    Log_ErrorPrint("GetVRAMCopyPipeline called before CompilePipelines constructed the shadergen");
+    return {};
+  }
+  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMCopyFragmentShader());
+  if (!fs)
+    return {};
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
@@ -1531,7 +1526,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetPixelShader(fs);
+  gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState((depth_test != 0), true,
                           (depth_test != 0) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_ALWAYS);
