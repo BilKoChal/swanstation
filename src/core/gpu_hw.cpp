@@ -232,10 +232,23 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
   // UBO by 7b575a3 (resolution_scale, true_color, scaled_dithering) -
   // toggling those is a single 4-byte cbuffer write on the next
   // FlushRender and costs zero shader compilation on D3D11 / D3D12 /
-  // OpenGL. Backends that don't carry the Vulkan-style per-spec-const
-  // pipeline dim cache check this signal to gate the
-  // DestroyPipelines + CompilePipelines round trip; the broader
-  // shaders_changed above remains for Vulkan's spec-const-aware path.
+  // OpenGL. Those three backends gate their DestroyShaders /
+  // CompileShaders (D3D11) / DestroyPipelines / CompilePipelines
+  // (D3D12) / CompilePrograms (OpenGL) round trip on this signal so
+  // a cbuffer-only flip becomes a no-op for shader state. Vulkan
+  // dimensions its batch pipeline cache over (filter, true_color,
+  // scaled_dithering) via spec consts and gates on the broader
+  // shaders_changed above instead - those three settings flip
+  // shaders_changed without flipping shader_source_changed, and
+  // Vulkan's only_dim_changed branch handles them via the dim cache
+  // lazy-populate path.
+  //
+  // Even on D3D11 / D3D12 / OpenGL, where the three cbuffer-routed
+  // settings cost zero, only_dim_changed inside shader_source_changed
+  // still picks out the filter-only case (the three D3D / GL
+  // backends added their own filter dim cache as 00cf11f / 10c53b8 /
+  // f8b4a41) so a filter toggle preserves the previous filter's sub-
+  // cube of batch shaders / pipelines instead of throwing it away.
   //
   // chroma_smoothing stays in here because it does change the display
   // FS source string on those backends (D3D12 passes it to
