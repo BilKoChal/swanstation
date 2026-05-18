@@ -1563,8 +1563,8 @@ bool GPU_HW_Vulkan::CompilePipelines()
           for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
           {
             VkShaderModule shader =
-              GetBatchFragmentShader(render_mode, texture_mode, static_cast<bool>(dithering),
-                                     static_cast<bool>(interlacing));
+              GetBatchFragmentShader(m_texture_filtering, render_mode, texture_mode,
+                                     static_cast<bool>(dithering), static_cast<bool>(interlacing));
             if (shader == VK_NULL_HANDLE)
               return false;
             progress.Increment();
@@ -1589,7 +1589,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
               for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
               {
                 VkPipeline pipeline =
-                  GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
+                  GetBatchPipeline(m_texture_filtering, depth_test, render_mode, texture_mode, transparency_mode,
                                    static_cast<bool>(dithering), static_cast<bool>(interlacing));
                 if (pipeline == VK_NULL_HANDLE)
                   return false;
@@ -1749,18 +1749,6 @@ bool GPU_HW_Vulkan::CompilePipelines()
       if (GetDownsampleFirstPassPipeline() == VK_NULL_HANDLE)
         return false;
     }
-
-    // Kick off the background batch / PSO fill so gameplay can start
-    // immediately. The worker walks the full PSO matrix in
-    // (depth_test, render_mode, transparency_mode, texture_mode,
-    // dithering, interlacing) order, calling the same
-    // GetBatchPipeline the draw path uses; the main thread can race
-    // ahead and pre-fill any slot it actually needs at draw time, and
-    // the worker's recheck-under-lock pattern just observes the
-    // filled slot and moves on. DestroyPipelines signals
-    // m_shader_compile_thread_quit and joins.
-    m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
-    m_shader_compile_thread = std::thread(&GPU_HW_Vulkan::ShaderCompileThreadEntryPoint, this);
   }
   else if (precompile_mode == GPUShaderPrecompileMode::Disabled)
   {
@@ -1810,6 +1798,43 @@ bool GPU_HW_Vulkan::CompilePipelines()
       return false;
   }
 
+  // Background batch warm-up worker. Started for both Lazy and
+  // Enabled modes; not for Disabled (whose contract is "no compile
+  // at init, no background compile - fault in on first use").
+  //
+  // The worker walks every reachable cell across all 7 filter
+  // sub-cubes of m_batch_pipelines, calling GetBatchPipeline (which
+  // is the same lazy-fault-in helper the draw path uses) with each
+  // filter value in turn. Ordering inside ShaderCompileThreadEntry-
+  // Point puts the current m_texture_filtering first so the runloop's
+  // first draws hit populated slots ASAP; the other six filter
+  // values follow in numeric order.
+  //
+  // In Enabled mode the precompile_sync block above already
+  // populated the current filter's sub-cube synchronously, so the
+  // worker's first pass over it hits the lock-free fast-return on
+  // every cell - effectively a free walk that confirms the cache
+  // and then moves on. The real work is populating the OTHER six
+  // sub-cubes so any later filter swap is instant (no progress bar,
+  // no driver compile, no destroy / recreate).
+  //
+  // In Lazy mode the worker is also responsible for the current
+  // filter's sub-cube; nothing has populated it yet. The main
+  // thread can race ahead and lazy-fault any slot it actually
+  // needs at draw time - the worker's recheck-under-lock pattern
+  // observes the filled slot and moves on.
+  //
+  // DestroyPipelines (or the UpdateSettings-level
+  // StopShaderCompileThread we added in Option B) signals
+  // m_shader_compile_thread_quit and joins; the worker checks the
+  // flag between cells and can exit within ~one PSO compile.
+  if (precompile_mode == GPUShaderPrecompileMode::Lazy ||
+      precompile_mode == GPUShaderPrecompileMode::Enabled)
+  {
+    m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+    m_shader_compile_thread = std::thread(&GPU_HW_Vulkan::ShaderCompileThreadEntryPoint, this);
+  }
+
   return true;
 }
 
@@ -1832,34 +1857,63 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
   // common/thread_priority.h for the per-platform mechanics.
   ThreadPriority::LowerCurrentThreadPriority();
 
-  // Same nesting as the Enabled-mode precompile loop above. The quit
-  // flag is checked between cells so DestroyPipelines can stop the
-  // worker within at most one PSO compile of latency (Vulkan PSO
-  // compiles can be ~50-200 ms with the heavier texture filters).
+  // Filter is the outermost loop. Order: current m_texture_filtering
+  // first (so a Lazy-mode launch from a cold cache starts populating
+  // the slots the runloop will actually hit ASAP), then the remaining
+  // six filter values in numeric order. In Enabled mode the current
+  // filter's sub-cube was already filled synchronously by the
+  // precompile_sync block in CompilePipelines, so the worker's
+  // first pass over it hits the lock-free fast-return path on every
+  // cell - effectively a free walk that just verifies the cache and
+  // then moves on to populate the other six.
+  //
+  // GPUTextureFilter::Count is 7 (Nearest, Bilinear, BilinearBinAlpha,
+  // JINC2, JINC2BinAlpha, xBR, xBRBinAlpha). On hardware that lacks
+  // dual-source blend the *BinAlpha and non-Nearest filters cannot
+  // actually be used at runtime (UpdateHWSettings forces
+  // m_texture_filtering back to Nearest), so skip warming those
+  // sub-cubes - they would never be looked up at draw time and the
+  // PSOs would just sit unused.
+  //
+  // The quit flag is checked between cells so DestroyPipelines can
+  // stop the worker within at most one PSO compile of latency
+  // (Vulkan PSO compiles can be ~50-200 ms with the heavier texture
+  // filters).
   //
   // Structurally unreachable cells are skipped via
   // IsBatchShaderReachable.
   const bool dual_source = m_supports_dual_source_blend;
-  for (uint8_t depth_test = 0; depth_test < 3; depth_test++)
+  const uint8_t current_filter = static_cast<uint8_t>(m_texture_filtering);
+  for (uint8_t f_offset = 0; f_offset < static_cast<uint8_t>(GPUTextureFilter::Count); f_offset++)
   {
-    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
+    const uint8_t filter_idx =
+      (current_filter + f_offset) % static_cast<uint8_t>(GPUTextureFilter::Count);
+    const GPUTextureFilter filter = static_cast<GPUTextureFilter>(filter_idx);
+
+    if (!dual_source && TextureFilterRequiresDualSourceBlend(filter))
+      continue;
+
+    for (uint8_t depth_test = 0; depth_test < 3; depth_test++)
     {
-      for (uint8_t transparency_mode = 0; transparency_mode < 5; transparency_mode++)
+      for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
       {
-        for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
+        for (uint8_t transparency_mode = 0; transparency_mode < 5; transparency_mode++)
         {
-          if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
-            continue;
-
-          for (uint8_t dithering = 0; dithering < 2; dithering++)
+          for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
           {
-            for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
-            {
-              if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
-                return;
+            if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+              continue;
 
-              GetBatchPipeline(depth_test, render_mode, texture_mode, transparency_mode,
-                               static_cast<bool>(dithering), static_cast<bool>(interlacing));
+            for (uint8_t dithering = 0; dithering < 2; dithering++)
+            {
+              for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
+              {
+                if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
+                  return;
+
+                GetBatchPipeline(filter, depth_test, render_mode, texture_mode, transparency_mode,
+                                 static_cast<bool>(dithering), static_cast<bool>(interlacing));
+              }
             }
           }
         }
@@ -1868,7 +1922,8 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
   }
 }
 
-VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing)
+VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode,
+                                                     bool dithering, bool interlacing)
 {
   // Reserved_*Direct16Bit shader-source dedup, applied at the helper
   // entry. Slots for texture_mode 3 / 7 are never written; all
@@ -1880,26 +1935,28 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
 
   // Fast path: lock-free load. Both the precompile worker and the
   // main thread can read a slot concurrently without contending
-  // with each other or with each other's slow-path compiles.
-  // Filter is indexed by current m_texture_filtering - other filter
-  // sub-cubes are populated independently and stay valid across a
-  // filter-only setting change (UpdateSettings skips
-  // DestroyPipelines in that case).
+  // with each other or with each other's slow-path compiles. The
+  // filter param routes slot indexing AND blob selection - the
+  // worker passes the filter it is currently warming, the draw path
+  // passes m_texture_filtering. Other filter sub-cubes are populated
+  // independently and stay valid across a filter-only setting
+  // change (UpdateSettings skips DestroyPipelines in that case).
   std::atomic<VkShaderModule>& slot =
-    m_batch_fragment_shaders[static_cast<uint8_t>(m_texture_filtering)][render_mode][lookup_mode]
+    m_batch_fragment_shaders[static_cast<uint8_t>(filter)][render_mode][lookup_mode]
                             [static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
   VkShaderModule existing = slot.load(std::memory_order_acquire);
   if (existing != VK_NULL_HANDLE)
     return existing;
 
   // Slow path. All texture filters and the untextured path are pre-
-  // baked; pick the structural blob from per-call and per-session
-  // state. Per-call spec constants (TRANSPARENCY, DITHERING,
-  // INTERLACING, PALETTE_*, RAW_TEXTURE, BINALPHA, ...) are applied at
-  // pipeline-create time in GetBatchPipeline. vkCreateShaderModule is
-  // documented thread-safe by the Vulkan spec, so two threads racing
-  // to instantiate the SAME blob is harmless - the publish step picks
-  // one VkShaderModule and the loser destroys its.
+  // baked; pick the structural blob from the (filter, render_mode,
+  // texture_mode) tuple plus per-session structural state.  Per-call
+  // spec constants (TRANSPARENCY, DITHERING, INTERLACING, PALETTE_*,
+  // RAW_TEXTURE, BINALPHA, ...) are applied at pipeline-create time
+  // in GetBatchPipeline. vkCreateShaderModule is documented thread-
+  // safe by the Vulkan spec, so two threads racing to instantiate
+  // the SAME blob is harmless - the publish step picks one
+  // VkShaderModule and the loser destroys its.
   //
   // use_dual_source matches the original shadergen-side derivation:
   //   supports && ((render_mode is transparent) || filter != Nearest)
@@ -1907,7 +1964,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   const bool dual_source = m_supports_dual_source_blend &&
     ((render_mode == static_cast<uint8_t>(BatchRenderMode::TransparentAndOpaque) ||
       render_mode == static_cast<uint8_t>(BatchRenderMode::OnlyTransparent)) ||
-     (m_texture_filtering != GPUTextureFilter::Nearest));
+     (filter != GPUTextureFilter::Nearest));
   const Vulkan::EmbeddedShaders::EmbeddedShaderBlob* blob_ptr;
   if (!is_textured)
   {
@@ -1917,7 +1974,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   }
   else
   {
-    switch (m_texture_filtering)
+    switch (filter)
     {
       case GPUTextureFilter::Nearest:
         blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedNearestFragmentShaderBlob(
@@ -1944,7 +2001,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
         break;
       default:
         Log_ErrorPrintf("GetBatchFragmentShader: unknown texture filter %u",
-                        static_cast<unsigned>(m_texture_filtering));
+                        static_cast<unsigned>(filter));
         return VK_NULL_HANDLE;
     }
   }
@@ -1971,7 +2028,8 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   return fresh;
 }
 
-VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode,
+VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode,
+                                           uint8_t texture_mode, uint8_t transparency_mode,
                                            bool dithering, bool interlacing)
 {
   // Reserved_*Direct16Bit PSO dedup, applied at the helper entry.
@@ -1982,7 +2040,7 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
                                                                                                       texture_mode;
 
   std::atomic<VkPipeline>& slot =
-    m_batch_pipelines[static_cast<uint8_t>(m_texture_filtering)][depth_test][render_mode][lookup_mode]
+    m_batch_pipelines[static_cast<uint8_t>(filter)][depth_test][render_mode][lookup_mode]
                      [transparency_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
 
   // Fast path: lock-free atomic load. This is what DrawBatchVertices
@@ -2008,7 +2066,7 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   // both reach the publish step; the loser destroys its pipeline
   // via vkDestroyPipeline and returns the winner's. Wasteful but
   // harmless - PSOs are deterministic on identical descriptors.
-  VkShaderModule fs = GetBatchFragmentShader(render_mode, lookup_mode, dithering, interlacing);
+  VkShaderModule fs = GetBatchFragmentShader(filter, render_mode, lookup_mode, dithering, interlacing);
   if (fs == VK_NULL_HANDLE)
     return VK_NULL_HANDLE;
 
@@ -2064,9 +2122,9 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   //   id = 109  RAW_TEXTURE                   (bool, per-call -
   //                                            texture_mode has
   //                                            RawTextureBit set)
-  //   id = 110  BINALPHA                      (bool, per-session -
-  //                                            m_texture_filtering is
-  //                                            one of the *BinAlpha
+  //   id = 110  BINALPHA                      (bool, per-call - the
+  //                                            filter argument is one
+  //                                            of the *BinAlpha
   //                                            filter values)
   //
   // 107-110 are meaningful only on the textured blobs; the untextured
@@ -2080,9 +2138,9 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   const bool palette_8_bit = (actual_tex_mode == static_cast<uint8_t>(GPUTextureMode::Palette8Bit));
   const bool raw_texture   = (static_cast<uint8_t>(lookup_mode) &
                               static_cast<uint8_t>(GPUTextureMode::RawTextureBit)) != 0;
-  const bool binalpha = (m_texture_filtering == GPUTextureFilter::BilinearBinAlpha ||
-                         m_texture_filtering == GPUTextureFilter::JINC2BinAlpha ||
-                         m_texture_filtering == GPUTextureFilter::xBRBinAlpha);
+  const bool binalpha = (filter == GPUTextureFilter::BilinearBinAlpha ||
+                         filter == GPUTextureFilter::JINC2BinAlpha ||
+                         filter == GPUTextureFilter::xBRBinAlpha);
   Vulkan::SpecConstants fs_spec;
   fs_spec.AddUInt(  0, static_cast<uint32_t>(m_resolution_scale));
   fs_spec.AddBool(100, brm != BatchRenderMode::TransparencyDisabled);
@@ -2106,7 +2164,7 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   if ((static_cast<GPUTransparencyMode>(transparency_mode) != GPUTransparencyMode::Disabled &&
        (static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::TransparencyDisabled &&
         static_cast<BatchRenderMode>(render_mode) != BatchRenderMode::OnlyOpaque)) ||
-      m_texture_filtering != GPUTextureFilter::Nearest)
+      filter != GPUTextureFilter::Nearest)
   {
     if (m_supports_dual_source_blend)
     {
@@ -2823,10 +2881,11 @@ void GPU_HW_Vulkan::DrawBatchVertices(BatchRenderMode render_mode, uint32_t base
   // load, Lazy mode either grabs the worker's result or compiles on
   // the main thread on race, Disabled compiles on every first use.
   //
-  // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  // [filter][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
   const uint8_t depth_test = m_batch.use_depth_buffer ? static_cast<uint8_t>(2) : static_cast<uint8_t>(m_batch.check_mask_before_draw);
   VkPipeline pipeline =
-    GetBatchPipeline(depth_test, static_cast<uint8_t>(render_mode), static_cast<uint8_t>(m_batch.texture_mode),
+    GetBatchPipeline(m_texture_filtering, depth_test, static_cast<uint8_t>(render_mode),
+                     static_cast<uint8_t>(m_batch.texture_mode),
                      static_cast<uint8_t>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);

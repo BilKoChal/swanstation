@@ -162,9 +162,19 @@ private:
   // for texture_mode 3 / 7 remain VK_NULL_HANDLE for the lifetime
   // of the GPU backend; SafeDestroy* handles VK_NULL_HANDLE
   // gracefully so DestroyPipelines doesn't trip on them.
-  VkShaderModule GetBatchFragmentShader(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
-  VkPipeline GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode, bool dithering,
-                              bool interlacing);
+  // The filter parameter selects which sub-cube of m_batch_pipelines /
+  // m_batch_fragment_shaders the lookup and slow-path compile target.
+  // Main-thread draw callers pass m_texture_filtering (current
+  // session filter). The background warm-up worker iterates filter
+  // independently of m_texture_filtering so it can populate sub-
+  // cubes for filters the user has not yet selected, while the main
+  // thread continues using the current filter unaffected. Both
+  // helpers are reentrant under the same (filter, ...) tuple - the
+  // slot publish under m_batch_shader_mutex handles the race winner.
+  VkShaderModule GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode,
+                                        bool dithering, bool interlacing);
+  VkPipeline GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode,
+                              uint8_t transparency_mode, bool dithering, bool interlacing);
 
   // Lazy non-batch PSO compile path. Mirrors the D3D12 backend's
   // GetVRAMFillPipeline / GetVRAMCopyPipeline / GetDisplayPipeline
