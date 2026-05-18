@@ -136,6 +136,7 @@ private:
 
   bool CompileShaders();
   void DestroyShaders();
+  bool RebuildDisplayPixelShaders();
 
   // Lazy batch-fragment-shader compile path. The shader matrix
   // starts all-null; GetBatchPixelShader fills a slot on demand

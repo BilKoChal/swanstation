@@ -609,8 +609,15 @@ void GPU_HW_D3D11::UpdateSettings()
   // be lazy-populated, other filters' sub-cubes stay valid". When
   // set alongside shader_source_changed it picks out the
   // filter-only-changed case.
-  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed);
+  //
+  // display_only_source_changed: chroma_smoothing flipped and
+  // nothing else affecting shader source changed. The batch pixel
+  // shader matrix, VRAM ops pixel shaders, and state objects all
+  // stay valid; only the 6-slot display pixel shader cache needs
+  // to go. Mirrors the D3D12 partial-clear from 57ac62e.
+  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed, display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed,
+                   &display_only_source_changed);
 
   if (framebuffer_changed)
   {
@@ -623,7 +630,29 @@ void GPU_HW_D3D11::UpdateSettings()
 
   if (shader_source_changed)
   {
-    if (only_dim_changed)
+    if (display_only_source_changed)
+    {
+      // chroma_smoothing flipped and nothing else - rebuild the six
+      // display pixel shaders against the new m_chroma_smoothing
+      // value (which UpdateHWSettings has already written into the
+      // member). The 144-cell batch pixel shader matrix, the VRAM
+      // ops pixel shaders, and the blend / depth-stencil / input
+      // layout state objects all stay valid. Cost is 6 D3DCompile
+      // + 6 CreatePixelShader calls, a fraction of a second
+      // instead of the full CompileShaders pass.
+      (void)RebuildDisplayPixelShaders();
+
+      // Relaunch the Lazy worker StopShaderCompileThread joined at
+      // the top of UpdateSettings; this branch doesn't go through
+      // CompileShaders so the launch site there isn't hit. Mirrors
+      // the D3D12 chroma partial-clear path.
+      if (g_settings.gpu_shader_precompile_mode == GPUShaderPrecompileMode::Lazy)
+      {
+        m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+        m_shader_compile_thread = std::thread(&GPU_HW_D3D11::ShaderCompileThreadEntryPoint, this);
+      }
+    }
+    else if (only_dim_changed)
     {
       // Filter changed but nothing in non_dim_diff (and the cbuffer-
       // only members in dim_diff don't move HLSL, so this is
@@ -648,10 +677,10 @@ void GPU_HW_D3D11::UpdateSettings()
     else
     {
       // Full flush: a non-dim shader-affecting change
-      // (multisamples / per-sample shading / UV limits / chroma
-      // smoothing / PGXP depth / colour perspective / precompile
-      // mode) invalidates EVERY sub-cube because those settings
-      // bake into the HLSL identically for every filter slot.
+      // (multisamples / per-sample shading / UV limits / PGXP depth
+      // / colour perspective / precompile mode) invalidates EVERY
+      // sub-cube because those settings bake into the HLSL
+      // identically for every filter slot.
       DestroyShaders();
       DestroyStateObjects();
       CreateStateObjects();
@@ -1178,20 +1207,10 @@ bool GPU_HW_D3D11::CompileShaders()
 
   progress.Increment();
 
-  for (uint8_t depth_24bit = 0; depth_24bit < 2; depth_24bit++)
-  {
-    for (uint8_t interlacing = 0; interlacing < 3; interlacing++)
-    {
-      const std::string ps = shadergen.GenerateDisplayFragmentShader(
-        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlacing),
-        static_cast<bool>(depth_24bit) && m_chroma_smoothing);
-      m_display_pixel_shaders[depth_24bit][interlacing] = shader_cache.GetPixelShader(m_device.Get(), ps);
-      if (!m_display_pixel_shaders[depth_24bit][interlacing])
-        return false;
-
-      progress.Increment();
-    }
-  }
+  if (!RebuildDisplayPixelShaders())
+    return false;
+  for (uint8_t i = 0; i < 6; i++)
+    progress.Increment();
 
   if (m_downsample_mode == GPUDownsampleMode::Adaptive)
   {
@@ -1455,6 +1474,44 @@ void GPU_HW_D3D11::DestroyShaders()
   m_batch_pixel_shaders = {};
   m_batch_vertex_shaders = {};
   m_batch_input_layout.Reset();
+}
+
+bool GPU_HW_D3D11::RebuildDisplayPixelShaders()
+{
+  // (Re)compile the 2x3 display pixel shader matrix against the
+  // current m_chroma_smoothing. Called from CompileShaders during
+  // the initial build and from UpdateSettings on a
+  // chroma_smoothing-only flip - chroma_smoothing is a DefineMacro
+  // inside GenerateDisplayFragmentShader only (see
+  // gpu_hw_shadergen.cpp:1056), so the batch pixel shader matrix
+  // and the VRAM ops pixel shaders stay valid through a chroma
+  // toggle and don't need rebuilding. Costs 6 D3DCompile +
+  // CreatePixelShader calls (a fraction of a second on a modern
+  // GPU) instead of a full CompileShaders pass walking the entire
+  // 144-cell batch matrix.
+  //
+  // chroma_smoothing only takes effect on the depth_24bit paths
+  // (see the '&& m_chroma_smoothing' guard below), so technically
+  // only three of the six display shaders depend on it. Rebuilding
+  // all six anyway keeps this path simple - on a chroma toggle the
+  // three depth_24bit=false shaders re-resolve to cache hits on
+  // their existing HLSL hashes (instant), and the three
+  // depth_24bit=true shaders pick up the new SMOOTH_CHROMA value.
+  if (!m_shadergen)
+    return false;
+  for (uint8_t depth_24bit = 0; depth_24bit < 2; depth_24bit++)
+  {
+    for (uint8_t interlacing = 0; interlacing < 3; interlacing++)
+    {
+      const std::string ps = m_shadergen->GenerateDisplayFragmentShader(
+        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlacing),
+        static_cast<bool>(depth_24bit) && m_chroma_smoothing);
+      m_display_pixel_shaders[depth_24bit][interlacing] = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+      if (!m_display_pixel_shaders[depth_24bit][interlacing])
+        return false;
+    }
+  }
+  return true;
 }
 
 void GPU_HW_D3D11::UploadUniformBuffer(const void* data, uint32_t data_size)
