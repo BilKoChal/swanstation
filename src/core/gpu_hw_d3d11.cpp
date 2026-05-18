@@ -1811,7 +1811,10 @@ void GPU_HW_D3D11::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t hei
   const uint32_t encoded_height = copy_rect.GetHeight();
 
   // Encode the 24-bit texture as 16-bit.
-  const uint32_t uniforms[4] = {copy_rect.left, copy_rect.top, copy_rect.GetWidth(), copy_rect.GetHeight()};
+  // 6 DWORDs to match the post-RESOLUTION_SCALE-refactor vram_read_ps
+  // cbuffer (u_base_coords.xy, u_size.xy, u_resolution_scale, u_pad0).
+  const uint32_t uniforms[6] = {copy_rect.left, copy_rect.top, copy_rect.GetWidth(), copy_rect.GetHeight(),
+                                m_resolution_scale, 0u /* u_pad0 */};
   m_context->RSSetState(m_cull_none_rasterizer_state_no_msaa.Get());
   m_context->OMSetRenderTargets(1, m_vram_encoding_texture.GetD3DRTVArray(), nullptr);
   m_context->OMSetDepthStencilState(m_depth_disabled_state.Get(), 0);

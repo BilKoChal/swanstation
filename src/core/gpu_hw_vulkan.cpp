@@ -3197,7 +3197,10 @@ void GPU_HW_Vulkan::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t he
   BeginRenderPass(m_vram_readback_render_pass, m_vram_readback_framebuffer, 0, 0, rp_width, rp_height);
 
   // Encode the 24-bit texture as 16-bit.
-  const uint32_t uniforms[4] = {copy_rect.left, copy_rect.top, copy_rect.GetWidth(), copy_rect.GetHeight()};
+  // 6 DWORDs to match the post-RESOLUTION_SCALE-refactor vram_read_ps
+  // cbuffer (u_base_coords.xy, u_size.xy, u_resolution_scale, u_pad0).
+  const uint32_t uniforms[6] = {copy_rect.left, copy_rect.top, copy_rect.GetWidth(), copy_rect.GetHeight(),
+                                m_resolution_scale, 0u /* u_pad0 */};
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, GetVRAMReadbackPipeline());
   vkCmdPushConstants(cmdbuf, m_single_sampler_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uniforms),
                      uniforms);

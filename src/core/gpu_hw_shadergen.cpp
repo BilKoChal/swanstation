@@ -1187,8 +1187,31 @@ std::string GPU_HW_ShaderGen::GenerateVRAMReadFragmentShader()
 {
   std::stringstream ss;
   WriteHeader(ss);
-  WriteCommonFunctions(ss);
-  DeclareUniformBuffer(ss, {"uint2 u_base_coords", "uint2 u_size"}, true);
+
+  // u_resolution_scale appended; u_pad0 keeps the cbuffer 16-byte-
+  // aligned. The 4 callers (D3D11 / D3D12 / OpenGL / Vulkan
+  // GPU_HW_*::ReadVRAM) must push uniforms in this exact order:
+  // u_base_coords.x, u_base_coords.y, u_size.x, u_size.y,
+  // u_resolution_scale, u_pad0.
+  DeclareUniformBuffer(ss,
+                       {"uint2 u_base_coords", "uint2 u_size", "uint u_resolution_scale", "uint u_pad0"},
+                       true);
+
+  // Route RESOLUTION_SCALE / VRAM_SIZE / RCP_VRAM_SIZE through the
+  // cbuffer above. Same pattern as e56d4d4 / 9d2b49d. vram_read_ps
+  // is the heaviest user of RESOLUTION_SCALE in the body:
+  //   * `if (RESOLUTION_SCALE == 1u)` for the fast 1x path
+  //   * Inner box-filter loops `for (offset < RESOLUTION_SCALE; ...)`
+  //   * Final divisor `RESOLUTION_SCALE * RESOLUTION_SCALE`
+  // The fast-path branch becomes a runtime branch on
+  // u_resolution_scale, but the branch is uniform across the wave
+  // (same cbuffer value for all SIMD lanes) so divergence cost
+  // is zero. The loops can no longer be fully unrolled at compile
+  // time, but the runtime loop overhead is microscopic compared
+  // to the texture-load cost - and vram_read runs on-demand
+  // (screenshot capture, libretro readback) not every frame.
+  WriteCBufferResolutionScaleAliases(ss);
+  WriteCommonFunctions(ss, true);
 
   DeclareTexture(ss, "samp0", 0, UsingMSAA());
 
