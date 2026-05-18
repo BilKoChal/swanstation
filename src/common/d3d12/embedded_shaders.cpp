@@ -33,5 +33,11 @@ namespace D3D12::EmbeddedShaders {
 #include "embedded_dxbc/vram_fill_ps_p1w1i1.inc"
 #include "embedded_dxbc/vram_update_depth_ps_msaa0.inc"
 #include "embedded_dxbc/vram_update_depth_ps_msaa1.inc"
+#include "embedded_dxbc/vram_read_ps_m1.inc"
+#include "embedded_dxbc/vram_read_ps_m2.inc"
+#include "embedded_dxbc/vram_read_ps_m4.inc"
+#include "embedded_dxbc/vram_read_ps_m8.inc"
+#include "embedded_dxbc/vram_read_ps_m16.inc"
+#include "embedded_dxbc/vram_read_ps_m32.inc"
 
 } // namespace D3D12::EmbeddedShaders

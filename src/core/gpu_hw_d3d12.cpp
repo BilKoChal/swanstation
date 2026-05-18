@@ -1737,20 +1737,66 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline(
 
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
-  if (!m_shadergen)
+  // Pre-baked DXBC blob - 6 variants on MULTISAMPLES (1, 2, 4,
+  // 8, 16, 32). Where vram_update_depth (91f8c32) was a binary
+  // MSAA on/off split, vram_read_ps splits on the sample-count
+  // cardinality itself: the [unroll] sample-resolve loop in the
+  // shader's LoadVRAM helper unrolls a different number of times
+  // per blob, so each power-of-2 count produces a distinct DXBC.
+  // PSO MSAA configuration (gpbuilder.SetMultisamples below)
+  // must match the shader's MULTISAMPLES constant - both come
+  // from m_multisamples, so the consistency is automatic.
+  //
+  // The switch only handles power-of-2 values up to 32 because
+  // GPU drivers only expose those as having quality levels > 0
+  // (see m_max_multisamples detection loop in CreateResources),
+  // and the libretro UI dropdown is restricted to those values.
+  // The default branch is a safety net that falls back to m1
+  // and warns - hitting it would indicate a future driver/UI
+  // mismatch that wants investigation.
+  D3D12_SHADER_BYTECODE fs;
+  switch (m_multisamples)
   {
-    Log_ErrorPrint("GetVRAMReadbackPipeline called before CompilePipelines constructed the shadergen");
-    return {};
+    case 1:
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m1,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m1_size_bytes};
+      break;
+    case 2:
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m2,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m2_size_bytes};
+      break;
+    case 4:
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m4,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m4_size_bytes};
+      break;
+    case 8:
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m8,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m8_size_bytes};
+      break;
+    case 16:
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m16,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m16_size_bytes};
+      break;
+    case 32:
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m32,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m32_size_bytes};
+      break;
+    default:
+      Log_WarningPrintf(
+        "GetVRAMReadbackPipeline: unexpected m_multisamples=%u not in "
+        "{1,2,4,8,16,32}; falling back to m1 blob (VRAM readback may "
+        "average samples incorrectly)",
+        m_multisamples);
+      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m1,
+            D3D12::EmbeddedShaders::k_vram_read_ps_m1_size_bytes};
+      break;
   }
-  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateVRAMReadFragmentShader());
-  if (!fs)
-    return {};
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetPixelShader(fs);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();

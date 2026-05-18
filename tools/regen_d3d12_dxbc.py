@@ -102,6 +102,22 @@ TEMPLATE_VARIANTS = {
         ("msaa0", ["MULTISAMPLING=0"]),
         ("msaa1", ["MULTISAMPLING=1"]),
     ],
+    # vram_read_ps: MSAA-count cardinality variant. Six values
+    # of MULTISAMPLES (1, 2, 4, 8, 16, 32) - the m1 variant uses
+    # Texture2D (no MSAA path); m2..m32 all use
+    # Texture2DMS<float4> but unroll the LoadVRAM sample-resolve
+    # loop a different number of times. Runtime selection in
+    # GetVRAMReadbackPipeline picks via switch on m_multisamples.
+    # MULTISAMPLING is derived in-shader (#if MULTISAMPLES > 1)
+    # rather than passed as a separate /D.
+    "vram_read.ps.hlsl": [
+        ("m1", ["MULTISAMPLES=1"]),
+        ("m2", ["MULTISAMPLES=2"]),
+        ("m4", ["MULTISAMPLES=4"]),
+        ("m8", ["MULTISAMPLES=8"]),
+        ("m16", ["MULTISAMPLES=16"]),
+        ("m32", ["MULTISAMPLES=32"]),
+    ],
 }
 
 

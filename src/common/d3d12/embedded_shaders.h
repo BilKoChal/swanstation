@@ -146,4 +146,42 @@ extern const size_t k_vram_update_depth_ps_msaa0_size_bytes;
 extern const uint8_t k_vram_update_depth_ps_msaa1[];
 extern const size_t k_vram_update_depth_ps_msaa1_size_bytes;
 
+// VRAM read pixel shader. Equivalent to
+// GPU_HW_ShaderGen::GenerateVRAMReadFragmentShader() in D3D12
+// mode post-2980961 cbuffer routing. Used by
+// GPU_HW_D3D12::GetVRAMReadbackPipeline for the upscaled-VRAM-
+// to-native-16bpp encode pass that backs screenshot capture,
+// libretro readback, and save-state staging.
+//
+// First MSAA-count cardinality variant. Six values of
+// MULTISAMPLES (1, 2, 4, 8, 16, 32). m1 takes the Texture2D
+// path with a single Load; m2..m32 use Texture2DMS<float4>
+// with an [unroll] loop over the sample count - each value
+// produces a different DXBC because the unroll count varies.
+// Body size scales linearly with the unroll: m1 = 3.6 KB,
+// m32 = 12.6 KB. Total embedded bytecode footprint ~ 38 KB
+// across the 6 blobs.
+//
+// Runtime selection in GetVRAMReadbackPipeline uses a switch
+// on m_multisamples - values outside {1, 2, 4, 8, 16, 32}
+// shouldn't occur in practice (GPU drivers only expose
+// power-of-2 MSAA counts as having quality levels > 0, and
+// the UI dropdown is restricted to those values) but the
+// switch falls back to the m1 blob with a warn log if one
+// ever does.
+//
+// Source: data/shaders/d3d12/vram_read.ps.hlsl
+extern const uint8_t k_vram_read_ps_m1[];
+extern const size_t k_vram_read_ps_m1_size_bytes;
+extern const uint8_t k_vram_read_ps_m2[];
+extern const size_t k_vram_read_ps_m2_size_bytes;
+extern const uint8_t k_vram_read_ps_m4[];
+extern const size_t k_vram_read_ps_m4_size_bytes;
+extern const uint8_t k_vram_read_ps_m8[];
+extern const size_t k_vram_read_ps_m8_size_bytes;
+extern const uint8_t k_vram_read_ps_m16[];
+extern const size_t k_vram_read_ps_m16_size_bytes;
+extern const uint8_t k_vram_read_ps_m32[];
+extern const size_t k_vram_read_ps_m32_size_bytes;
+
 } // namespace D3D12::EmbeddedShaders
