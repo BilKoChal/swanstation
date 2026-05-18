@@ -127,7 +127,7 @@ private:
   //
   // GetBatchFragmentShader returns a non-null ComPtr to the
   // ID3DBlob holding the compiled HLSL bytecode for the requested
-  // (filter, render_mode, texture_mode, interlacing)
+  // (filter, render_mode, texture_mode)
   // tuple, generating the shader source via a temporary shadergen
   // bound to that filter and feeding it through
   // m_shader_cache.GetPixelShader on a cache miss. The temporary
@@ -153,9 +153,8 @@ private:
   // Both helpers serialise their cache + array mutations through
   // m_batch_shader_mutex. The fast path is one uncontended lock
   // per DrawBatchVertices call.
-  ComPtr<ID3DBlob> GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool interlacing);
-  ComPtr<ID3D12PipelineState> GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode,
-                                               bool interlacing);
+  ComPtr<ID3DBlob> GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode);
+  ComPtr<ID3D12PipelineState> GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode);
 
   // Lazy non-batch PSO compile path.
   //
@@ -195,7 +194,7 @@ private:
 
   // Background-thread worker for 'Lazy' precompile mode: walks the
   // full PSO matrix in (depth_test, render_mode, transparency_mode,
-  // texture_mode, interlacing) order and calls
+  // texture_mode) order and calls
   // GetBatchPipeline on each cell. As with D3D11, the main thread
   // can race ahead and fill any slot it needs at draw time; the
   // worker just observes the filled slot under the lock and moves
@@ -252,7 +251,7 @@ private:
   //
   // GPUTextureFilter::Count = 7 -> the outermost dim size.
   //
-  // [filter][depth_test][render_mode][texture_mode][transparency_mode][interlacing]
+  // [filter][depth_test][render_mode][texture_mode][transparency_mode]
   // The [dithering] dim was dropped at the matrix-collapse commit
   // following the DITHERING-via-cbuffer routing (3af8e02): the FS
   // source no longer depends on the dithering bit, so the two
@@ -260,8 +259,13 @@ private:
   // held a redundant ComPtr in each pair. m_batch.dithering still
   // flips per-batch but it reaches the FS through u_dithering on the
   // batch UBO; the PSO lookup is dithering-agnostic.
-  DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 5, 9, 4, 2, 7> m_batch_pipelines;
-  DimensionalArray<std::atomic<ID3D12PipelineState*>, 2, 5, 9, 4, 2, 7> m_batch_pipelines_fastpath{};
+  // The [interlacing] dim was dropped at the matrix-collapse commit
+  // following the INTERLACING-via-cbuffer routing (eb42ffb): same
+  // shape, same reasoning. m_batch.interlacing still flips per-batch
+  // but the FS reads u_interlacing from the batch UBO with a
+  // short-circuit branch; the PSO lookup is interlacing-agnostic.
+  DimensionalArray<ComPtr<ID3D12PipelineState>, 5, 9, 4, 2, 7> m_batch_pipelines;
+  DimensionalArray<std::atomic<ID3D12PipelineState*>, 5, 9, 4, 2, 7> m_batch_pipelines_fastpath{};
 
   // m_batch_shader_mutex serialises the SLOW path of the lazy
   // helpers (cache mutation, ComPtr-array write, atomic-raw-pointer
@@ -287,19 +291,18 @@ private:
   // background compile they must outlive CompilePipelines so the
   // PSO-builder helper can fetch the bound bytecode when faulting
   // in a PSO. The fragment-shader matrix is keyed on
-  // (render, texture, interlacing) only - the depth/transparency
-  // dimensions of m_batch_pipelines don't enter the fragment shader
-  // source, and the dithering dim was collapsed at the same time as
-  // the PSO matrix above (DITHERING is now a u_dithering cbuffer
-  // runtime branch in the FS body; the source is invariant under
-  // the dithering bit).
+  // (render, texture) only - the depth/transparency dimensions of
+  // m_batch_pipelines don't enter the fragment shader source, the
+  // dithering dim was collapsed when DITHERING moved to u_dithering
+  // (f7f9e53), and the interlacing dim was collapsed when
+  // INTERLACING moved to u_interlacing (this commit's predecessor).
   //
   // Same fast/slow-path split as m_batch_pipelines above:
   // m_batch_fragment_shader_blobs owns the ComPtr; the parallel
   // _fastpath array is the lock-free view.
   DimensionalArray<ComPtr<ID3DBlob>, 2> m_batch_vertex_shader_blobs;            // [textured]
-  DimensionalArray<ComPtr<ID3DBlob>, 2, 9, 4, 7> m_batch_fragment_shader_blobs; // [filter][render][texture][interlace]
-  DimensionalArray<std::atomic<ID3DBlob*>, 2, 9, 4, 7> m_batch_fragment_shader_blobs_fastpath{};
+  DimensionalArray<ComPtr<ID3DBlob>, 9, 4, 7> m_batch_fragment_shader_blobs;    // [filter][render][texture]
+  DimensionalArray<std::atomic<ID3DBlob*>, 9, 4, 7> m_batch_fragment_shader_blobs_fastpath{};
 
   // [wrapped][interlaced]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2> m_vram_fill_pipelines;
