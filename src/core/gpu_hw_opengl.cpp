@@ -1459,6 +1459,8 @@ bool GPU_HW_OpenGL::PrecompileBatchPrograms(ShaderCompileProgressTracker& progre
   }
   return true;
 }
+
+const GL::Program* GPU_HW_OpenGL::GetBatchProgram(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing)
 {
   // Reserved_*Direct16Bit dedup. The fragment shader source for
   // texture_mode 3 / 7 is byte-for-byte identical to 2 / 6 after
