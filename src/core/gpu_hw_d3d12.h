@@ -179,10 +179,12 @@ private:
   // UpdateDisplay / etc. - takes no lock once the slot is filled.
   // The single-PSO ones use a bare std::atomic + ComPtr pair.
   //
-  // GetFullscreenQuadVertexShader is shared across most of the
-  // non-batch pipelines and is hoisted out as a separate helper so
-  // each PSO compile fetches it via the same lazy-fault pattern.
-  ComPtr<ID3DBlob> GetFullscreenQuadVertexShader();
+  // GetFullscreenQuadVertexShader returns the pre-baked DXBC blob for
+  // the screen-quad VS. No lazy compile, no caching state - the blob
+  // is statically linked from src/common/d3d12/embedded_dxbc/. Every
+  // non-batch pipeline in this backend uses it as the VS stage; see
+  // src/common/d3d12/embedded_shaders.h for the underlying declaration.
+  D3D12_SHADER_BYTECODE GetFullscreenQuadVertexShader();
   ComPtr<ID3D12PipelineState> GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlaced);
   ComPtr<ID3D12PipelineState> GetVRAMCopyPipeline(uint8_t depth_test);
   ComPtr<ID3D12PipelineState> GetVRAMWritePipeline(uint8_t depth_test);
@@ -310,13 +312,6 @@ private:
 
   ComPtr<ID3D12PipelineState> m_copy_pipeline;
   std::atomic<ID3D12PipelineState*> m_copy_pipeline_fastpath{nullptr};
-
-  // Vertex shader shared across the non-batch pipelines (VRAM read,
-  // display, copy/blit). Compiled lazily on first use via
-  // GetFullscreenQuadVertexShader; serialised through
-  // m_batch_shader_mutex. Used to be a CompilePipelines local that
-  // was always built at init.
-  ComPtr<ID3DBlob> m_fullscreen_quad_vertex_shader;
 
   D3D12::Texture m_vram_write_replacement_texture;
   D3D12::StreamBuffer m_texture_replacment_stream_buffer;

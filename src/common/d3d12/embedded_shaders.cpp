@@ -17,9 +17,6 @@
 // includes and the namespace.
 namespace D3D12::EmbeddedShaders {
 
-// (No .inc includes yet - this foundation patch lays down the storage TU.
-// Subsequent patches add HLSL sources under data/shaders/d3d12/ and the
-// matching generated .inc under src/common/d3d12/embedded_dxbc/, each
-// included from inside this namespace block.)
+#include "embedded_dxbc/fullscreen_quad_vs.inc"
 
 } // namespace D3D12::EmbeddedShaders

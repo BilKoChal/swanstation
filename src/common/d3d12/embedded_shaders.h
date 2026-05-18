@@ -39,9 +39,16 @@
 //
 namespace D3D12::EmbeddedShaders {
 
-// (No extern declarations yet - this foundation patch lays down the
-// directory layout, regen script, and namespace scaffolding. Subsequent
-// patches add HLSL sources, generated .inc files, and the matching
-// extern declarations here.)
+// Fullscreen-quad vertex shader. Emits a fullscreen triangle in NDC
+// from SV_VertexID 0..2 via the standard bit-shift trick - equivalent
+// to ShaderGen::GenerateScreenQuadVertexShader() in D3D12 mode. Used
+// by every non-batch pipeline in the D3D12 backend (vram_fill /
+// vram_copy / vram_write / vram_update_depth / vram_readback /
+// display / copy). Zero state dependency, so a single pre-baked
+// variant covers all call sites.
+//
+// Source: data/shaders/d3d12/fullscreen_quad.vs.hlsl
+extern const uint8_t k_fullscreen_quad_vs[];
+extern const size_t k_fullscreen_quad_vs_size_bytes;
 
 } // namespace D3D12::EmbeddedShaders

@@ -3,6 +3,7 @@
 #include "common/d3d11/shader_compiler.h"
 #include "common/d3d12/context.h"
 #include "common/d3d12/descriptor_heap_manager.h"
+#include "common/d3d12/embedded_shaders.h"
 #include "common/d3d12/shader_cache.h"
 #include "common/d3d12/util.h"
 #include "common/log.h"
@@ -822,11 +823,13 @@ bool GPU_HW_D3D12::CompilePipelines()
   const uint32_t batch_pipeline_progress_units =
     precompile_sync ? reachable_batch_cells * 2u * 5u : 0u;
   // Non-batch units only counted when we build them upfront. The
-  // fullscreen-quad VS (1), VRAM fill (4), VRAM copy (2), VRAM
-  // write (2), VRAM update depth (1), VRAM readback (1), display
-  // (6) and copy/blit (1) sum to 18 - one tick per pipeline so the
-  // progress bar tracks the actual work being done.
-  const uint32_t non_batch_progress_units = precompile_sync ? 18u : 0u;
+  // VRAM fill (4), VRAM copy (2), VRAM write (2), VRAM update depth
+  // (1), VRAM readback (1), display (6) and copy/blit (1) sum to 17
+  // - one tick per pipeline so the progress bar tracks the actual
+  // work being done. (Down from 18 since the fullscreen-quad VS no
+  // longer compiles - statically linked from
+  // src/common/d3d12/embedded_dxbc/ via GetFullscreenQuadVertexShader.)
+  const uint32_t non_batch_progress_units = precompile_sync ? 17u : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Pipelines",
                                         2 + batch_shader_progress_units + batch_pipeline_progress_units +
@@ -938,12 +941,13 @@ bool GPU_HW_D3D12::CompilePipelines()
   // function, after the rest of the non-batch pipelines are built.
 
   // Non-batch pipelines (VRAM fill / copy / write / update depth /
-  // readback, display, copy/blit, fullscreen-quad VS). On 'Enabled'
-  // build them all upfront here through the lazy helpers so the
-  // helpers' GetXxx slot-fill machinery is exercised the same way
-  // it would be at draw time. The progress bar continues to tick
-  // per pipeline so the user sees the same "1 + 4 + 2 + 2 + 1 + 1
-  // + 6 + 1 = 18 unit" count it always did.
+  // readback, display, copy/blit). On 'Enabled' build them all
+  // upfront here through the lazy helpers so the helpers' GetXxx
+  // slot-fill machinery is exercised the same way it would be at
+  // draw time. The progress bar ticks per pipeline so the user sees
+  // a "4 + 2 + 2 + 1 + 1 + 6 + 1 = 17 unit" count. (Was 18 before
+  // the fullscreen-quad VS moved to pre-baked DXBC, which has no
+  // compilation step to tick for.)
   //
   // On 'Lazy' the worker thread reaches these via the same helpers
   // before walking the batch matrix. On 'Disabled' nothing happens
@@ -952,9 +956,11 @@ bool GPU_HW_D3D12::CompilePipelines()
   // subsequent calls.
   if (precompile_sync)
   {
-    if (!GetFullscreenQuadVertexShader())
-      return false;
-    progress.Increment();
+    // (No fullscreen-quad VS step here - it's pre-baked DXBC now,
+    // statically linked from src/common/d3d12/embedded_dxbc/, so
+    // there's nothing to compile or fault in. See
+    // GetFullscreenQuadVertexShader. Progress unit count below drops
+    // by 1 accordingly.)
 
     for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
     {
@@ -1012,15 +1018,15 @@ bool GPU_HW_D3D12::CompilePipelines()
     // entire worker run (30-60 seconds) waiting for a lock window
     // between compiles. The window appears frozen the whole time.
     //
-    // Pre-filling the 18 non-batch pipelines here costs Lazy the same
+    // Pre-filling the 17 non-batch pipelines here costs Lazy the same
     // few-hundred-ms upfront pause 'Enabled' pays for its non-batch
     // section, which is well under a second on the 5090 and not
     // perceived as a "frozen" window. The worker then only walks the
     // batch matrix - the main thread doesn't generally need batch
     // PSOs until a few frames into gameplay, by which point the
     // worker is past its first few cells and the wait window is brief.
-    if (!GetFullscreenQuadVertexShader())
-      return false;
+    // (No fullscreen-quad VS pre-fill here either - pre-baked DXBC,
+    // see GetFullscreenQuadVertexShader.)
     for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
     {
       for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
@@ -1410,42 +1416,23 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
 // on a miss. The fast path is one uncontended atomic load per call
 // once the slot is filled.
 //
-// The shared fullscreen-quad vertex shader has its own helper that
-// the PSO helpers fall through to. That keeps each fault-in
-// self-contained: the very first non-batch helper call from a
-// 'Disabled' session pays for the VS compile, every subsequent call
-// reuses it.
+// The shared fullscreen-quad vertex shader is pre-baked DXBC (see
+// GetFullscreenQuadVertexShader and src/common/d3d12/embedded_shaders.h),
+// statically linked - no compile, no caching state, no mutex. PSO
+// helpers below treat it as a free dependency.
 // ----------------------------------------------------------------------
 
-GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetFullscreenQuadVertexShader()
+D3D12_SHADER_BYTECODE GPU_HW_D3D12::GetFullscreenQuadVertexShader()
 {
-  // Single-slot variant of the fast/slow path. Fast path: read the
-  // ComPtr under the lock (cheap - just a pointer copy + AddRef).
-  // Slow path: compile WITHOUT the lock held (so concurrent
-  // non-batch helpers can fault other pipelines while one compiles
-  // the shared VS), then publish under the lock with a double-check.
-  {
-    std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
-    if (m_fullscreen_quad_vertex_shader)
-      return m_fullscreen_quad_vertex_shader;
-  }
-
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetFullscreenQuadVertexShader called before CompilePipelines constructed the shadergen");
-    return {};
-  }
-  ComPtr<ID3DBlob> fresh = m_shader_cache.GetVertexShader(m_shadergen->GenerateScreenQuadVertexShader());
-  if (!fresh)
-  {
-    Log_ErrorPrint("Lazy fullscreen-quad vertex shader compile failed");
-    return {};
-  }
-
-  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
-  if (!m_fullscreen_quad_vertex_shader)
-    m_fullscreen_quad_vertex_shader = fresh;
-  return m_fullscreen_quad_vertex_shader;
+  // Pre-baked DXBC blob - no compile, no caching state, no mutex. The
+  // blob is statically linked from src/common/d3d12/embedded_dxbc/
+  // (generated offline by tools/regen_d3d12_dxbc.py from
+  // data/shaders/d3d12/fullscreen_quad.vs.hlsl). All callers receive
+  // the same const view; the storage outlives every PSO that binds it.
+  return D3D12_SHADER_BYTECODE{
+    D3D12::EmbeddedShaders::k_fullscreen_quad_vs,
+    D3D12::EmbeddedShaders::k_fullscreen_quad_vs_size_bytes,
+  };
 }
 
 GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint8_t wrapped, uint8_t interlaced)
@@ -1460,9 +1447,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1481,7 +1466,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
@@ -1522,9 +1507,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1542,7 +1525,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState((depth_test != 0), true,
@@ -1583,9 +1566,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMWritePipeline(uin
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1603,7 +1584,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMWritePipeline(uin
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoBlendingState();
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true,
@@ -1643,9 +1624,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeli
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1669,7 +1648,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeli
   gpbuilder.SetDepthStencilFormat(m_vram_depth_texture.GetFormat());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetNoCullRasterizationState();
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetMultisamples(m_multisamples);
   gpbuilder.SetDepthState(true, true, D3D12_COMPARISON_FUNC_ALWAYS);
@@ -1710,9 +1689,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline(
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1726,7 +1703,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline(
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
@@ -1768,9 +1745,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1785,7 +1760,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
@@ -1826,9 +1801,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
     return ret;
   }
 
-  ComPtr<ID3DBlob> vs = GetFullscreenQuadVertexShader();
-  if (!vs)
-    return {};
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   if (!m_shadergen)
   {
@@ -1842,7 +1815,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs.Get());
+  gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
   gpbuilder.SetPixelShader(fs.Get());
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
@@ -1918,12 +1891,8 @@ void GPU_HW_D3D12::DestroyPipelines()
 
   // m_copy_pipeline was previously not cleared here - latent leak
   // across UpdateSettings -> DestroyPipelines -> CompilePipelines
-  // cycles. The shared fullscreen-quad VS likewise needs to be
-  // dropped so the next CompilePipelines pass picks up any
-  // shadergen changes (e.g. the GLSL binding layout differing
-  // between Vulkan and Direct3D).
+  // cycles.
   m_copy_pipeline.Reset();
-  m_fullscreen_quad_vertex_shader.Reset();
 }
 
 void GPU_HW_D3D12::ClearDisplayPipelines()
