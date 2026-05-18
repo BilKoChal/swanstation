@@ -1253,12 +1253,24 @@ std::string GPU_HW_ShaderGen::GenerateVRAMWriteFragmentShader(bool use_ssbo)
 {
   std::stringstream ss;
   WriteHeader(ss);
-  WriteCommonFunctions(ss);
   DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
+
+  // u_resolution_scale appended; u_pad0 keeps the cbuffer 16-byte-
+  // aligned. VRAMWriteUBOData in gpu_hw.h must match this layout.
   DeclareUniformBuffer(ss,
                        {"uint2 u_base_coords", "uint2 u_end_coords", "uint2 u_size", "uint u_buffer_base_offset",
-                        "uint u_mask_or_bits", "float u_depth_value"},
+                        "uint u_mask_or_bits", "float u_depth_value", "uint u_resolution_scale", "uint u_pad0"},
                        true);
+
+  // Route RESOLUTION_SCALE / VRAM_SIZE / RCP_VRAM_SIZE through the
+  // cbuffer above. Same pattern as vram_copy_ps - the body references
+  // to RESOLUTION_SCALE / VRAM_SIZE at lines 1304-1305 below resolve
+  // through the #define aliases. This removes the scale axis from
+  // vram_write_ps's variant matrix; what remains is PGXP_DEPTH x
+  // use_ssbo = 4 variants, down from 4 x N where N is the count of
+  // distinct resolution scale values the user has cycled through.
+  WriteCBufferResolutionScaleAliases(ss);
+  WriteCommonFunctions(ss, true);
 
   if (use_ssbo && m_glsl)
   {

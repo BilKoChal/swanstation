@@ -153,6 +153,15 @@ protected:
     uint32_t u_buffer_base_offset;
     uint32_t u_mask_or_bits;
     float u_depth_value;
+    // Appended for the cbuffer-routed RESOLUTION_SCALE refactor.
+    // Matches the trailing "uint u_resolution_scale, uint u_pad0"
+    // members on the HLSL side in GenerateVRAMWriteFragmentShader.
+    // u_pad0 brings total to 44 bytes (the HLSL compiler rounds the
+    // cbuffer up to the next 16-byte multiple internally, but we
+    // upload exactly sizeof(struct) bytes on every backend and the
+    // shader never reads beyond u_resolution_scale).
+    uint32_t u_resolution_scale;
+    uint32_t u_pad0;
   };
 
   struct VRAMCopyUBOData

@@ -1095,7 +1095,13 @@ GPU_HW::VRAMWriteUBOData GPU_HW::GetVRAMWriteUBOData(uint32_t x, uint32_t y, uin
 {
   const VRAMWriteUBOData uniforms = {
     (x % VRAM_WIDTH), (y % VRAM_HEIGHT), ((x + width) % VRAM_WIDTH),  ((y + height) % VRAM_HEIGHT),     width,
-    height,           buffer_offset,     (set_mask) ? 0x8000u : 0x00, GetCurrentNormalizedVertexDepth()};
+    height,           buffer_offset,     (set_mask) ? 0x8000u : 0x00, GetCurrentNormalizedVertexDepth(),
+    // Cbuffer-routed RESOLUTION_SCALE - see GenerateVRAMWriteFragmentShader
+    // for the alias plumbing. The body uses RESOLUTION_SCALE +
+    // VRAM_SIZE which now derive from u_resolution_scale at runtime
+    // instead of being baked at shadergen time.
+    m_resolution_scale,
+    0u /* u_pad0 */};
   return uniforms;
 }
 
