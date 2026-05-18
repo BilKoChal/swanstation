@@ -184,4 +184,140 @@ extern const size_t k_vram_read_ps_m16_size_bytes;
 extern const uint8_t k_vram_read_ps_m32[];
 extern const size_t k_vram_read_ps_m32_size_bytes;
 
+// Display pixel shader. Equivalent to
+// GPU_HW_ShaderGen::GenerateDisplayFragmentShader(depth_24bit,
+// interlace_mode, smooth_chroma) in D3D12 mode post-e64fc28
+// cbuffer routing. Used by GPU_HW_D3D12::GetDisplayPipeline for
+// the every-frame scanout pass - the per-frame hot shader.
+//
+// 54 variants total across 4 axes:
+//   DEPTH_24BIT (2) x interlace_mode (3) x SMOOTH_CHROMA (2,
+//   collapsed to 1 when DEPTH_24BIT=0 since chroma is dead code
+//   there) x MULTISAMPLES (6: 1/2/4/8/16/32).
+//
+// Variant suffix convention: d{0,1}i{0,1,2}c{0,1}m{01,02,04,08,
+// 16,32}. interlace_mode maps to the (INTERLACED, INTERLEAVED)
+// bool pair: i0=(0,0), i1=(1,1), i2=(1,0). The d=0 set has 18
+// entries (no chroma dim); d=1 has 36 (both chroma values).
+//
+// Runtime selection in GetDisplayPipeline picks via two arrays:
+//   k_display_d0[interlace_mode][ms_idx]                  (3 x 6)
+//   k_display_d1[interlace_mode][smooth_chroma][ms_idx]   (3 x 2 x 6)
+// so the chroma dimension is structurally absent on the d=0
+// path. ms_idx is log2(m_multisamples), or 0 fallback for
+// unexpected values (the libretro UI dropdown only exposes
+// power-of-2 values and the GPU-driver capability detection
+// only reports power-of-2 counts as supported, so the fallback
+// shouldn't fire in practice).
+//
+// Source: data/shaders/d3d12/display.ps.hlsl
+extern const uint8_t k_display_ps_d0i0c0m01[];
+extern const size_t k_display_ps_d0i0c0m01_size_bytes;
+extern const uint8_t k_display_ps_d0i0c0m02[];
+extern const size_t k_display_ps_d0i0c0m02_size_bytes;
+extern const uint8_t k_display_ps_d0i0c0m04[];
+extern const size_t k_display_ps_d0i0c0m04_size_bytes;
+extern const uint8_t k_display_ps_d0i0c0m08[];
+extern const size_t k_display_ps_d0i0c0m08_size_bytes;
+extern const uint8_t k_display_ps_d0i0c0m16[];
+extern const size_t k_display_ps_d0i0c0m16_size_bytes;
+extern const uint8_t k_display_ps_d0i0c0m32[];
+extern const size_t k_display_ps_d0i0c0m32_size_bytes;
+extern const uint8_t k_display_ps_d0i1c0m01[];
+extern const size_t k_display_ps_d0i1c0m01_size_bytes;
+extern const uint8_t k_display_ps_d0i1c0m02[];
+extern const size_t k_display_ps_d0i1c0m02_size_bytes;
+extern const uint8_t k_display_ps_d0i1c0m04[];
+extern const size_t k_display_ps_d0i1c0m04_size_bytes;
+extern const uint8_t k_display_ps_d0i1c0m08[];
+extern const size_t k_display_ps_d0i1c0m08_size_bytes;
+extern const uint8_t k_display_ps_d0i1c0m16[];
+extern const size_t k_display_ps_d0i1c0m16_size_bytes;
+extern const uint8_t k_display_ps_d0i1c0m32[];
+extern const size_t k_display_ps_d0i1c0m32_size_bytes;
+extern const uint8_t k_display_ps_d0i2c0m01[];
+extern const size_t k_display_ps_d0i2c0m01_size_bytes;
+extern const uint8_t k_display_ps_d0i2c0m02[];
+extern const size_t k_display_ps_d0i2c0m02_size_bytes;
+extern const uint8_t k_display_ps_d0i2c0m04[];
+extern const size_t k_display_ps_d0i2c0m04_size_bytes;
+extern const uint8_t k_display_ps_d0i2c0m08[];
+extern const size_t k_display_ps_d0i2c0m08_size_bytes;
+extern const uint8_t k_display_ps_d0i2c0m16[];
+extern const size_t k_display_ps_d0i2c0m16_size_bytes;
+extern const uint8_t k_display_ps_d0i2c0m32[];
+extern const size_t k_display_ps_d0i2c0m32_size_bytes;
+extern const uint8_t k_display_ps_d1i0c0m01[];
+extern const size_t k_display_ps_d1i0c0m01_size_bytes;
+extern const uint8_t k_display_ps_d1i0c0m02[];
+extern const size_t k_display_ps_d1i0c0m02_size_bytes;
+extern const uint8_t k_display_ps_d1i0c0m04[];
+extern const size_t k_display_ps_d1i0c0m04_size_bytes;
+extern const uint8_t k_display_ps_d1i0c0m08[];
+extern const size_t k_display_ps_d1i0c0m08_size_bytes;
+extern const uint8_t k_display_ps_d1i0c0m16[];
+extern const size_t k_display_ps_d1i0c0m16_size_bytes;
+extern const uint8_t k_display_ps_d1i0c0m32[];
+extern const size_t k_display_ps_d1i0c0m32_size_bytes;
+extern const uint8_t k_display_ps_d1i0c1m01[];
+extern const size_t k_display_ps_d1i0c1m01_size_bytes;
+extern const uint8_t k_display_ps_d1i0c1m02[];
+extern const size_t k_display_ps_d1i0c1m02_size_bytes;
+extern const uint8_t k_display_ps_d1i0c1m04[];
+extern const size_t k_display_ps_d1i0c1m04_size_bytes;
+extern const uint8_t k_display_ps_d1i0c1m08[];
+extern const size_t k_display_ps_d1i0c1m08_size_bytes;
+extern const uint8_t k_display_ps_d1i0c1m16[];
+extern const size_t k_display_ps_d1i0c1m16_size_bytes;
+extern const uint8_t k_display_ps_d1i0c1m32[];
+extern const size_t k_display_ps_d1i0c1m32_size_bytes;
+extern const uint8_t k_display_ps_d1i1c0m01[];
+extern const size_t k_display_ps_d1i1c0m01_size_bytes;
+extern const uint8_t k_display_ps_d1i1c0m02[];
+extern const size_t k_display_ps_d1i1c0m02_size_bytes;
+extern const uint8_t k_display_ps_d1i1c0m04[];
+extern const size_t k_display_ps_d1i1c0m04_size_bytes;
+extern const uint8_t k_display_ps_d1i1c0m08[];
+extern const size_t k_display_ps_d1i1c0m08_size_bytes;
+extern const uint8_t k_display_ps_d1i1c0m16[];
+extern const size_t k_display_ps_d1i1c0m16_size_bytes;
+extern const uint8_t k_display_ps_d1i1c0m32[];
+extern const size_t k_display_ps_d1i1c0m32_size_bytes;
+extern const uint8_t k_display_ps_d1i1c1m01[];
+extern const size_t k_display_ps_d1i1c1m01_size_bytes;
+extern const uint8_t k_display_ps_d1i1c1m02[];
+extern const size_t k_display_ps_d1i1c1m02_size_bytes;
+extern const uint8_t k_display_ps_d1i1c1m04[];
+extern const size_t k_display_ps_d1i1c1m04_size_bytes;
+extern const uint8_t k_display_ps_d1i1c1m08[];
+extern const size_t k_display_ps_d1i1c1m08_size_bytes;
+extern const uint8_t k_display_ps_d1i1c1m16[];
+extern const size_t k_display_ps_d1i1c1m16_size_bytes;
+extern const uint8_t k_display_ps_d1i1c1m32[];
+extern const size_t k_display_ps_d1i1c1m32_size_bytes;
+extern const uint8_t k_display_ps_d1i2c0m01[];
+extern const size_t k_display_ps_d1i2c0m01_size_bytes;
+extern const uint8_t k_display_ps_d1i2c0m02[];
+extern const size_t k_display_ps_d1i2c0m02_size_bytes;
+extern const uint8_t k_display_ps_d1i2c0m04[];
+extern const size_t k_display_ps_d1i2c0m04_size_bytes;
+extern const uint8_t k_display_ps_d1i2c0m08[];
+extern const size_t k_display_ps_d1i2c0m08_size_bytes;
+extern const uint8_t k_display_ps_d1i2c0m16[];
+extern const size_t k_display_ps_d1i2c0m16_size_bytes;
+extern const uint8_t k_display_ps_d1i2c0m32[];
+extern const size_t k_display_ps_d1i2c0m32_size_bytes;
+extern const uint8_t k_display_ps_d1i2c1m01[];
+extern const size_t k_display_ps_d1i2c1m01_size_bytes;
+extern const uint8_t k_display_ps_d1i2c1m02[];
+extern const size_t k_display_ps_d1i2c1m02_size_bytes;
+extern const uint8_t k_display_ps_d1i2c1m04[];
+extern const size_t k_display_ps_d1i2c1m04_size_bytes;
+extern const uint8_t k_display_ps_d1i2c1m08[];
+extern const size_t k_display_ps_d1i2c1m08_size_bytes;
+extern const uint8_t k_display_ps_d1i2c1m16[];
+extern const size_t k_display_ps_d1i2c1m16_size_bytes;
+extern const uint8_t k_display_ps_d1i2c1m32[];
+extern const size_t k_display_ps_d1i2c1m32_size_bytes;
+
 } // namespace D3D12::EmbeddedShaders

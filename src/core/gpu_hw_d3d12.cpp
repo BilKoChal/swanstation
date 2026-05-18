@@ -1839,21 +1839,204 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8
 
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetDisplayPipeline called before CompilePipelines constructed the shadergen");
-    return {};
-  }
-  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateDisplayFragmentShader(
-    static_cast<bool>(depth_24), static_cast<InterlacedRenderMode>(interlace_mode), m_chroma_smoothing));
-  if (!fs)
-    return {};
+  // Pre-baked DXBC blob - 54 variants on
+  // [depth_24][interlace_mode][smooth_chroma][ms_idx]. Two
+  // arrays rather than one ragged 4D array because the
+  // smooth_chroma dimension is structurally absent on the
+  // depth_24=0 path (SMOOTH_CHROMA is dead code there - the
+  // 16-bit body never touches the chroma helpers, so fxc /O3
+  // would have produced identical DXBC for c=0 and c=1 anyway).
+  //
+  // ms_idx is log2(m_multisamples). MultisamplesIndex computes
+  // it via switch since m_multisamples ranges over {1, 2, 4, 8,
+  // 16, 32} and we want a compile-time-warnable fallback for
+  // anything else. Same predicate / fallback shape as the
+  // vram_read pre-bake (21f4623).
+  //
+  // The arrays are function-scope static const so they
+  // initialise once on first call; the initialisation cost is
+  // amortised across the per-frame stream of display PSO lookups
+  // for the rest of the session.
+  static const auto kMultisamplesIndex = [](uint32_t multisamples) -> uint32_t {
+    switch (multisamples)
+    {
+      case 1:  return 0;
+      case 2:  return 1;
+      case 4:  return 2;
+      case 8:  return 3;
+      case 16: return 4;
+      case 32: return 5;
+      default:
+        Log_WarningPrintf(
+          "GetDisplayPipeline: unexpected m_multisamples=%u not in "
+          "{1,2,4,8,16,32}; falling back to m1 blob (display may "
+          "average MSAA samples incorrectly)",
+          multisamples);
+        return 0;
+    }
+  };
+
+  static const D3D12_SHADER_BYTECODE k_display_d0[3][6] = {
+    // interlace_mode = 0
+    {
+      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m01,
+       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m01_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m02,
+       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m02_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m04,
+       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m04_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m08,
+       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m08_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m16,
+       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m16_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m32,
+       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m32_size_bytes},
+    },
+    // interlace_mode = 1
+    {
+      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m01,
+       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m01_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m02,
+       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m02_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m04,
+       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m04_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m08,
+       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m08_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m16,
+       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m16_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m32,
+       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m32_size_bytes},
+    },
+    // interlace_mode = 2
+    {
+      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m01,
+       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m01_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m02,
+       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m02_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m04,
+       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m04_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m08,
+       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m08_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m16,
+       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m16_size_bytes},
+      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m32,
+       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m32_size_bytes},
+    },
+  };
+
+  static const D3D12_SHADER_BYTECODE k_display_d1[3][2][6] = {
+    // interlace_mode = 0
+    {
+      // smooth_chroma = 0
+      {
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m01,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m01_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m02,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m02_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m04,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m04_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m08,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m08_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m16,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m16_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m32,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m32_size_bytes},
+      },
+      // smooth_chroma = 1
+      {
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m01,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m01_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m02,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m02_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m04,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m04_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m08,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m08_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m16,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m16_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m32,
+         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m32_size_bytes},
+      },
+    },
+    // interlace_mode = 1
+    {
+      // smooth_chroma = 0
+      {
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m01,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m01_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m02,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m02_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m04,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m04_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m08,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m08_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m16,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m16_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m32,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m32_size_bytes},
+      },
+      // smooth_chroma = 1
+      {
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m01,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m01_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m02,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m02_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m04,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m04_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m08,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m08_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m16,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m16_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m32,
+         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m32_size_bytes},
+      },
+    },
+    // interlace_mode = 2
+    {
+      // smooth_chroma = 0
+      {
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m01,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m01_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m02,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m02_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m04,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m04_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m08,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m08_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m16,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m16_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m32,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m32_size_bytes},
+      },
+      // smooth_chroma = 1
+      {
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m01,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m01_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m02,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m02_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m04,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m04_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m08,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m08_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m16,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m16_size_bytes},
+        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m32,
+         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m32_size_bytes},
+      },
+    },
+  };
+
+  const uint32_t ms_idx = kMultisamplesIndex(m_multisamples);
+  const D3D12_SHADER_BYTECODE fs =
+    depth_24
+      ? k_display_d1[interlace_mode][m_chroma_smoothing ? 1 : 0][ms_idx]
+      : k_display_d0[interlace_mode][ms_idx];
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetPixelShader(fs);
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();
