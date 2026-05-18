@@ -113,6 +113,29 @@ void GPU_HW::Reset(bool clear_vram)
 
   m_batch = {};
   m_batch_ubo_data = {};
+
+  // Re-seed the per-session cbuffer fields that the line above just
+  // zeroed. These three settings live in the batch UBO but are owned
+  // by Initialize / UpdateHWSettings, not by the per-draw SetDrawMode
+  // path - if they stay at zero, the next FlushRender uploads
+  // u_resolution_scale = 0, and every shader expression involving
+  // RESOLUTION_SCALE (which the cbuffer-refactor patch macro-aliased
+  // to u_resolution_scale) divides by zero. Concretely, RCP_VRAM_SIZE
+  // = float2(1.0) / float2(uint2(1024, 512) * 0u) = INF, every
+  // textured fragment samples at (INF, INF), every palette lookup
+  // hits palette index 0 (transparent), every text glyph is
+  // discarded. Untextured polygons render fine because their FS
+  // never touches RESOLUTION_SCALE.
+  //
+  // The original Reset's zero-init was safe pre-refactor because all
+  // batch UBO fields were per-draw-owned (texture window, alpha
+  // factors, interlace field, mask bit) and got refilled before the
+  // next FlushRender. The per-session fields break that invariant,
+  // so we restore them explicitly here.
+  m_batch_ubo_data.u_resolution_scale = m_resolution_scale;
+  m_batch_ubo_data.u_true_color = m_true_color ? 1u : 0u;
+  m_batch_ubo_data.u_scaled_dithering = m_scaled_dithering ? 1u : 0u;
+
   m_batch_ubo_dirty = true;
   m_current_depth = 1;
 
