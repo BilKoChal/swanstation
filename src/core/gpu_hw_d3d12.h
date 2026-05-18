@@ -126,26 +126,34 @@ private:
   //
   // GetBatchFragmentShader returns a non-null ComPtr to the
   // ID3DBlob holding the compiled HLSL bytecode for the requested
-  // (render_mode, texture_mode, dithering, interlacing) tuple,
-  // generating the shader source via m_shadergen and feeding it
-  // through m_shader_cache.GetPixelShader on a cache miss. It also
-  // handles the Reserved_Direct16Bit (3) -> Direct16Bit (2) and
+  // (filter, render_mode, texture_mode, dithering, interlacing)
+  // tuple, generating the shader source via a temporary shadergen
+  // bound to that filter and feeding it through
+  // m_shader_cache.GetPixelShader on a cache miss. The temporary
+  // shadergen lets the worker / main thread fault in a non-current
+  // filter's sub-cube without having to reconstruct m_shadergen
+  // (which stays bound to the runtime-current m_texture_filtering
+  // for the non-batch helpers below). It also handles the
+  // Reserved_Direct16Bit (3) -> Direct16Bit (2) and
   // Reserved_RawDirect16Bit (7) -> RawDirect16Bit (6) dedup at the
   // blob array level.
   //
   // GetBatchPipeline returns the ID3D12PipelineState for the full
-  // 6-D PSO matrix slot. It builds the gpbuilder state on demand,
-  // calling GetBatchFragmentShader for the bound shader, then
-  // hands the descriptor to m_shader_cache.GetPipelineState (which
-  // hits the on-disk PSO cache where possible, only paying the
-  // actual driver compile on cold runs). Reserved_* texture-mode
-  // PSOs inherit the canonical PSO ComPtr.
+  // 7-D PSO matrix slot (filter added as the outermost dimension to
+  // the existing 6-D layout - mirrors the Vulkan dim-cache shape).
+  // It builds the gpbuilder state on demand, calling
+  // GetBatchFragmentShader for the bound shader with the same
+  // filter, then hands the descriptor to
+  // m_shader_cache.GetPipelineState (which hits the on-disk PSO
+  // cache where possible, only paying the actual driver compile on
+  // cold runs). Reserved_* texture-mode PSOs inherit the canonical
+  // PSO ComPtr.
   //
   // Both helpers serialise their cache + array mutations through
   // m_batch_shader_mutex. The fast path is one uncontended lock
   // per DrawBatchVertices call.
-  ComPtr<ID3DBlob> GetBatchFragmentShader(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
-  ComPtr<ID3D12PipelineState> GetBatchPipeline(uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode,
+  ComPtr<ID3DBlob> GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
+  ComPtr<ID3D12PipelineState> GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode,
                                                bool dithering, bool interlacing);
 
   // Lazy non-batch PSO compile path.
@@ -223,9 +231,27 @@ private:
   // (in GetBatchPipeline's slow path); m_batch_pipelines_fastpath
   // is the atomic view the runloop reads on the fast path.
   //
-  // [depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
-  DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2, 5, 9, 4, 2> m_batch_pipelines;
-  DimensionalArray<std::atomic<ID3D12PipelineState*>, 2, 2, 5, 9, 4, 2> m_batch_pipelines_fastpath{};
+  // filter is the outermost dimension. With the cbuffer-refactor
+  // patch (7b575a3) the HLSL is invariant under
+  // resolution_scale / true_color / scaled_dithering, but it is
+  // STILL dependent on texture filter - the FilteredSampleFromVRAM
+  // helper is emitted differently for Nearest vs Bilinear vs
+  // JINC2 vs xBR vs the BinAlpha variants. Dimensioning over filter
+  // lets a filter toggle skip the DestroyPipelines round trip in
+  // UpdateSettings: the previous filter's sub-cube remains valid
+  // and reachable, and switching back to it later is an atomic
+  // load on an already-filled slot. Mirrors the same shape the
+  // Vulkan backend has carried for filter / true_color /
+  // scaled_dithering (Vulkan keeps true_color and scaled_dithering
+  // as dims too because those are VkSpecializationInfo spec
+  // constants and each combination needs a distinct VkPipeline;
+  // D3D12 doesn't because they're cbuffer fields now).
+  //
+  // GPUTextureFilter::Count = 7 -> the outermost dim size.
+  //
+  // [filter][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2, 5, 9, 4, 2, 7> m_batch_pipelines;
+  DimensionalArray<std::atomic<ID3D12PipelineState*>, 2, 2, 5, 9, 4, 2, 7> m_batch_pipelines_fastpath{};
 
   // m_batch_shader_mutex serialises the SLOW path of the lazy
   // helpers (cache mutation, ComPtr-array write, atomic-raw-pointer
@@ -259,8 +285,8 @@ private:
   // m_batch_fragment_shader_blobs owns the ComPtr; the parallel
   // _fastpath array is the lock-free view.
   DimensionalArray<ComPtr<ID3DBlob>, 2> m_batch_vertex_shader_blobs;            // [textured]
-  DimensionalArray<ComPtr<ID3DBlob>, 2, 2, 9, 4> m_batch_fragment_shader_blobs; // [render][texture][dither][interlace]
-  DimensionalArray<std::atomic<ID3DBlob*>, 2, 2, 9, 4> m_batch_fragment_shader_blobs_fastpath{};
+  DimensionalArray<ComPtr<ID3DBlob>, 2, 2, 9, 4, 7> m_batch_fragment_shader_blobs; // [filter][render][texture][dither][interlace]
+  DimensionalArray<std::atomic<ID3DBlob*>, 2, 2, 9, 4, 7> m_batch_fragment_shader_blobs_fastpath{};
 
   // [wrapped][interlaced]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2> m_vram_fill_pipelines;
