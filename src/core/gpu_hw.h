@@ -129,7 +129,14 @@ protected:
     uint32_t u_resolution_scale;
     uint32_t u_true_color;
     uint32_t u_scaled_dithering;
-    uint32_t u_pad0; // pad to 16-byte cbuffer row
+    // u_dithering: per-batch ordered dithering toggle (the PSX
+    // GP0(E1).dither_enable bit). Used to live in the shader source
+    // as a compile-time DITHERING macro and as a dim in the batch
+    // FS / PSO matrices; now a runtime branch on the cbuffer field.
+    // Set in SetDrawMode alongside m_batch.dithering. Mirror of
+    // u_scaled_dithering's per-session shape, but the per-batch
+    // granularity matches the underlying register write rate.
+    uint32_t u_dithering;
   };
 
   struct VRAMFillUBOData

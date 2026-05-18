@@ -1409,6 +1409,16 @@ void GPU_HW::DispatchRenderCommand()
   m_batch.texture_mode = texture_mode;
   m_batch.transparency_mode = transparency_mode;
   m_batch.dithering = dithering_enable;
+  // Push the new dithering bit to the batch UBO so the next
+  // FlushRender's shader sees it. Was a compile-time #define
+  // baked into the FS source (driving a dim of the batch FS / PSO
+  // matrix); now a runtime branch on u_dithering. Toggling this
+  // mid-frame - which happens on every PSX GP0(E1).dither_enable
+  // write - is a single 4-byte cbuffer write, no shader recompile
+  // and no PSO churn.
+  const uint32_t new_dithering = dithering_enable ? 1u : 0u;
+  m_batch_ubo_dirty |= (m_batch_ubo_data.u_dithering != new_dithering);
+  m_batch_ubo_data.u_dithering = new_dithering;
 
   if (m_draw_mode.IsTextureWindowChanged())
   {

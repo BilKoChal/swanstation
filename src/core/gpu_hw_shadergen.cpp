@@ -84,7 +84,7 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
                        {"uint2 u_texture_window_and", "uint2 u_texture_window_or", "float u_src_alpha_factor",
                         "float u_dst_alpha_factor", "uint u_interlaced_displayed_field",
                         "bool u_set_mask_while_drawing", "uint u_resolution_scale", "uint u_true_color",
-                        "uint u_scaled_dithering", "uint u_pad0"},
+                        "uint u_scaled_dithering", "uint u_dithering"},
                        false);
 
   // Alias the historical compile-time constants to their cbuffer-
@@ -731,7 +731,16 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
   DefineMacro(ss, "PALETTE_4_BIT", actual_texture_mode == GPUTextureMode::Palette4Bit);
   DefineMacro(ss, "PALETTE_8_BIT", actual_texture_mode == GPUTextureMode::Palette8Bit);
   DefineMacro(ss, "RAW_TEXTURE", raw_texture);
-  DefineMacro(ss, "DITHERING", dithering);
+  // DITHERING used to live as a compile-time #define driving three
+  // #if/#else blocks in the FS body. It is now routed through the
+  // batch UBO (u_dithering) and the three former #if sites below
+  // are uniform-control-flow runtime branches. Toggling dithering
+  // (per-batch, owned by m_batch.dithering) is a single 4-byte
+  // cbuffer write picked up on the next FlushRender - no DXBC
+  // recompile and no PSO rebuild needed when the PSX
+  // GP0(E1).dither_enable bit flips mid-frame. Same shape as
+  // u_scaled_dithering above, just lifted from the per-call axis
+  // rather than per-session.
   // DITHERING_SCALED and TRUE_COLOR used to live as compile-time
   // #defines, baking a fresh shader compile for every flip of either.
   // They are now routed through the batch UBO (u_scaled_dithering,
@@ -928,18 +937,19 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
 
     // If not using true color, truncate the framebuffer colors to 5-bit.
     // Runtime branch on u_true_color (was a compile-time #if). The
-    // inner RAW_TEXTURE / DITHERING #ifs stay compile-time because
-    // those are still structural in the shader matrix.
+    // inner RAW_TEXTURE #if stays compile-time because that is still
+    // structural in the shader matrix; the inner dithering choice
+    // is itself a runtime branch on u_dithering for the same
+    // cbuffer-routing reason as u_true_color above.
     if (u_true_color != 0u)
     {
       icolor = uint3(texcol.rgb * float3(255.0, 255.0, 255.0));
       #if !RAW_TEXTURE
         icolor = (icolor * vertcol) >> 7;
-        #if DITHERING
+        if (u_dithering != 0u)
           icolor = ApplyDithering(uint2(v_pos.xy), icolor);
-        #else
+        else
           icolor = min(icolor, uint3(255u, 255u, 255u));
-        #endif
       #endif
     }
     else
@@ -947,11 +957,10 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
       icolor = uint3(texcol.rgb * float3(255.0, 255.0, 255.0)) >> 3;
       #if !RAW_TEXTURE
         icolor = (icolor * vertcol) >> 4;
-        #if DITHERING
+        if (u_dithering != 0u)
           icolor = ApplyDithering(uint2(v_pos.xy), icolor);
-        #else
+        else
           icolor = min(icolor >> 3, uint3(31u, 31u, 31u));
-        #endif
       #endif
     }
 
@@ -963,12 +972,15 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     icolor = vertcol;
     ialpha = 1.0;
 
-    #if DITHERING
+    if (u_dithering != 0u)
+    {
       icolor = ApplyDithering(uint2(v_pos.xy), icolor);
-    #else
+    }
+    else
+    {
       if (u_true_color == 0u)
         icolor >>= 3;
-    #endif
+    }
 
     // However, the mask bit is cleared if set mask bit is false.
     oalpha = float(u_set_mask_while_drawing);
