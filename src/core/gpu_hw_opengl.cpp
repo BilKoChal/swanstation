@@ -798,8 +798,17 @@ void GPU_HW_OpenGL::UpdateSettings()
   // CompilePrograms (which would otherwise relink every program in
   // the batch matrix). The new values ride the per-batch UBO
   // upload on the next FlushRender.
-  bool framebuffer_changed, shaders_changed, shader_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, nullptr, nullptr, &shader_source_changed);
+  //
+  // only_dim_changed: dim-cube setting (filter / true_color /
+  // scaled_dithering) changed and nothing in non_dim_diff. With
+  // the dim cache (filter outermost) this means "filter sub-cube
+  // can be lazy-populated, other filters' sub-cubes stay valid".
+  // CompilePrograms takes a clear_existing_render_programs flag so
+  // this path can call through without throwing away the previous
+  // filter's compiled programs. Mirrors the D3D11 / D3D12 / Vulkan
+  // dim-cache fast paths.
+  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed);
 
   if (framebuffer_changed)
   {
@@ -810,7 +819,13 @@ void GPU_HW_OpenGL::UpdateSettings()
     CreateFramebuffer();
   }
   if (shader_source_changed)
-    CompilePrograms();
+  {
+    // only_dim_changed: filter (and/or cbuffer-only members) changed
+    // but nothing in non_dim_diff. Preserve previously-visited
+    // filter sub-cubes so the user can cycle filters without paying
+    // the recompile cost more than once per filter.
+    CompilePrograms(/*clear_existing_render_programs=*/!only_dim_changed);
+  }
 
   if (framebuffer_changed)
   {
@@ -1058,7 +1073,7 @@ bool GPU_HW_OpenGL::CreateTextureBuffer()
   return true;
 }
 
-bool GPU_HW_OpenGL::CompilePrograms()
+bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
 {
   // Reset every program object so the new compile starts from a
   // clean slate. Without this, on an UpdateSettings round-trip
@@ -1075,11 +1090,26 @@ bool GPU_HW_OpenGL::CompilePrograms()
   // destination before taking the source's state, so default-
   // assigning each slot to a temporary {} both glDeleteProgram's
   // the old handle and rewinds the slot to id = 0.
-  for (auto& a : m_render_programs)
-    for (auto& b : a)
-      for (auto& c : b)
-        for (auto& slot : c)
-          slot = GL::Program{};
+  //
+  // clear_existing_render_programs=false is the dim-cache fast
+  // path: UpdateSettings on a filter-only flip passes false so
+  // the previous filter's sub-cube (and any other filter sub-
+  // cubes the user has visited this session) keep their compiled
+  // programs. The precompile_sync loop below walks only the new
+  // filter's sub-cube; slots that were already populated by a
+  // previous visit short-circuit on IsValid() in GetBatchProgram,
+  // empty slots get compiled. 5-level nesting matches the
+  // [filter][render_mode][texture_mode][dithering][interlacing]
+  // shape of m_render_programs added in the dim cache port.
+  if (clear_existing_render_programs)
+  {
+    for (auto& a : m_render_programs)
+      for (auto& b : a)
+        for (auto& c : b)
+          for (auto& d : c)
+            for (auto& slot : d)
+              slot = GL::Program{};
+  }
 
   // Open the disk-backed program cache once. On subsequent calls
   // (UpdateSettings -> CompilePrograms) the instance still holds
@@ -1121,6 +1151,15 @@ bool GPU_HW_OpenGL::CompilePrograms()
 
   if (precompile_sync)
   {
+    // The dim cache makes m_render_programs filter-dimensioned.
+    // precompile_sync walks ONLY the current m_texture_filtering
+    // sub-cube, not the full 7-filter matrix - pre-filling six
+    // unused sub-cubes would multiply the cold-cache GLSL compile
+    // pass by 7x for no gain (the game can only be running under
+    // one filter at a time, and the other sub-cubes get faulted
+    // in on demand if the user later flips the filter setting and
+    // UpdateSettings calls CompilePrograms again).
+    const GPUTextureFilter cur_filter = m_texture_filtering;
     for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
       for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
@@ -1129,7 +1168,7 @@ bool GPU_HW_OpenGL::CompilePrograms()
         {
           for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
           {
-            const GL::Program* prog = GetBatchProgram(render_mode, texture_mode, static_cast<bool>(dithering),
+            const GL::Program* prog = GetBatchProgram(cur_filter, render_mode, texture_mode, static_cast<bool>(dithering),
                                                       static_cast<bool>(interlacing));
             if (!prog)
               return false;
@@ -1286,7 +1325,7 @@ bool GPU_HW_OpenGL::CompilePrograms()
   return true;
 }
 
-const GL::Program* GPU_HW_OpenGL::GetBatchProgram(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing)
+const GL::Program* GPU_HW_OpenGL::GetBatchProgram(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing)
 {
   // Reserved_*Direct16Bit dedup. The fragment shader source for
   // texture_mode 3 / 7 is byte-for-byte identical to 2 / 6 after
@@ -1300,20 +1339,31 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(uint8_t render_mode, uint8_t t
   const uint8_t lookup_mode = (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
                          (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
+  const uint8_t filter_idx = static_cast<uint8_t>(filter);
 
-  GL::Program& slot = m_render_programs[render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
+  GL::Program& slot = m_render_programs[filter_idx][render_mode][texture_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
   if (slot.IsValid())
     return &slot;
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetBatchProgram called before CompilePrograms constructed the shadergen");
-    return nullptr;
-  }
+  // Construct a per-call shadergen bound to the requested filter.
+  // m_shadergen exists for the non-batch programs below
+  // CompilePrograms and is bound to the runtime-current
+  // m_texture_filtering. With the dim cache the batch slot we're
+  // building may be for a filter different from m_texture_filtering
+  // (when CompilePrograms walks a freshly-toggled filter's sub-cube
+  // before any draw has run, the runtime is still on the new
+  // filter, but the contract is to use the explicit filter
+  // parameter so the cache stays consistent with what would happen
+  // if a non-current sub-cube were faulted in some other way -
+  // and to mirror what D3D11 / D3D12 do).
+  GPU_HW_ShaderGen tmp_shadergen(
+    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+    m_scaled_dithering, filter, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+    m_supports_dual_source_blend);
 
   const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
-  const std::string batch_vs = m_shadergen->GenerateBatchVertexShader(textured);
-  const std::string fs = m_shadergen->GenerateBatchFragmentShader(
+  const std::string batch_vs = tmp_shadergen.GenerateBatchVertexShader(textured);
+  const std::string fs = tmp_shadergen.GenerateBatchFragmentShader(
     static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
 
   const bool use_binding_layout = m_use_binding_layout;
@@ -1347,7 +1397,8 @@ const GL::Program* GPU_HW_OpenGL::GetBatchProgram(uint8_t render_mode, uint8_t t
   std::optional<GL::Program> prog = m_shader_cache.GetProgram(batch_vs, {}, fs, link_callback);
   if (!prog)
   {
-    Log_ErrorPrintf("Lazy batch program compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode, texture_mode,
+    Log_ErrorPrintf("Lazy batch program compile failed for (f=%u, rm=%u, tm=%u, d=%u, i=%u)",
+                    static_cast<uint8_t>(filter), render_mode, texture_mode,
                     static_cast<uint8_t>(dithering), static_cast<uint8_t>(interlacing));
     return nullptr;
   }
@@ -1375,7 +1426,13 @@ void GPU_HW_OpenGL::DrawBatchVertices(BatchRenderMode render_mode, uint32_t base
   // combination, then cached. Single-threaded - no mutex / no
   // atomic - because the libretro hardware-renderer protocol only
   // gives us one GL context bound to this thread.
-  const GL::Program* prog = GetBatchProgram(static_cast<uint8_t>(render_mode), static_cast<uint8_t>(m_batch.texture_mode),
+  //
+  // m_texture_filtering selects the active filter's sub-cube. Filter
+  // is the outermost dim so a filter toggle in UpdateSettings can
+  // skip the CompilePrograms round trip - the other filters' sub-
+  // cubes remain valid and reachable, switching back to a previously-
+  // visited filter is a slot validity check.
+  const GL::Program* prog = GetBatchProgram(m_texture_filtering, static_cast<uint8_t>(render_mode), static_cast<uint8_t>(m_batch.texture_mode),
                                             m_batch.dithering, m_batch.interlacing);
   if (!prog)
     return;

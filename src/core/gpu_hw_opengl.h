@@ -138,7 +138,7 @@ private:
   bool CreateUniformBuffer();
   bool CreateTextureBuffer();
 
-  bool CompilePrograms();
+  bool CompilePrograms(bool clear_existing_render_programs = true);
 
   // Lazy batch-program compile path. The libretro hardware-renderer
   // protocol gives us a single GL context bound to the runloop
@@ -155,7 +155,24 @@ private:
   // applying the Reserved_*Direct16Bit dedup at the matrix level
   // by re-linking the program from the canonical mode's source
   // string (the shader cache makes the second link cheap).
-  const GL::Program* GetBatchProgram(uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
+  //
+  // filter is the outermost cache dimension. With the cbuffer-
+  // refactor patch (7b575a3) the GLSL is invariant under
+  // resolution_scale / true_color / scaled_dithering, but it is
+  // STILL dependent on texture filter - the FilteredSampleFromVRAM
+  // helper is emitted differently for Nearest / Bilinear / JINC2 /
+  // xBR / the BinAlpha variants. Dimensioning the cache over
+  // filter lets a filter toggle skip the DestroyShaders-equivalent
+  // CompilePrograms round trip in UpdateSettings: the previous
+  // filter's sub-cube remains valid and reachable, switching back
+  // to it later is just a slot validity check. Mirrors the D3D12
+  // / D3D11 dim caches from 10c53b8 / 00cf11f and the Vulkan dim
+  // cache from the glslang-elimination series. The slow-path
+  // shadergen is rebuilt per-call against the requested filter
+  // so the helper stays consistent with its sibling backends even
+  // though the single-threaded GL context never reaches it with a
+  // non-current filter today.
+  const GL::Program* GetBatchProgram(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
 
   void SetDepthFunc();
   void SetDepthFunc(GLenum func);
@@ -184,8 +201,8 @@ private:
   std::unique_ptr<GL::StreamBuffer> m_texture_stream_buffer;
   GLuint m_texture_buffer_r16ui_texture = 0;
 
-  std::array<std::array<std::array<std::array<GL::Program, 2>, 2>, 9>, 4>
-    m_render_programs;                                          // [render_mode][texture_mode][dithering][interlacing]
+  std::array<std::array<std::array<std::array<std::array<GL::Program, 2>, 2>, 9>, 4>, 7>
+    m_render_programs;                                          // [filter][render_mode][texture_mode][dithering][interlacing]
   std::array<std::array<GL::Program, 3>, 2> m_display_programs; // [depth_24][interlaced]
   std::array<std::array<GL::Program, 2>, 2> m_vram_fill_programs;
   GL::Program m_vram_read_program;
