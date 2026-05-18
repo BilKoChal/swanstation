@@ -797,8 +797,9 @@ void GPU_HW_Vulkan::UpdateSettings()
   // becomes a no-op for paths that pre-stop here.)
   StopShaderCompileThread();
 
-  bool framebuffer_changed, shaders_changed, only_dim_changed, downsample_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, &downsample_changed);
+  bool framebuffer_changed, shaders_changed, only_dim_changed, downsample_changed, display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, &downsample_changed,
+                   /*shader_source_changed=*/nullptr, &display_only_source_changed);
 
   if (framebuffer_changed)
   {
@@ -863,7 +864,48 @@ void GPU_HW_Vulkan::UpdateSettings()
 
   if (shaders_changed)
   {
-    if (only_dim_changed)
+    if (display_only_source_changed)
+    {
+      // chroma_smoothing flipped and nothing else affecting shader
+      // source. SMOOTH_CHROMA is constant_id=103 inside the display
+      // FS (see GetDisplayPipeline). Every other Vulkan pipeline -
+      // the 1164-cell m_batch_pipelines matrix, the VRAM ops PSOs
+      // (vram_fill / vram_read / vram_write / vram_copy / vram_
+      // update_depth / vram_readback), the downsample PSOs, the
+      // batch FS modules - is invariant under chroma_smoothing
+      // (none of them reach the SMOOTH_CHROMA spec const or the
+      // display FS at all), so DestroyPipelines would throw away
+      // ~1.2k valid pipelines just to invalidate 6. Destroy only
+      // the 6-slot display pipeline cache; GetDisplayPipeline
+      // lazy-faults a fresh pipeline with the new SMOOTH_CHROMA
+      // spec const on the next UpdateDisplay. Mirrors the D3D12 /
+      // D3D11 / OpenGL partial-clear from 57ac62e / 93e5db5 /
+      // 722e98a.
+      m_display_pipelines.enumerate(Vulkan::Util::SafeDestroyPipeline);
+
+      // Relaunch the background batch warm-up worker that
+      // StopShaderCompileThread joined at the top of UpdateSettings;
+      // this branch doesn't go through CompilePipelines so its
+      // launch site at line ~1929 isn't reached. The worker only
+      // walks m_batch_pipelines (which doesn't carry SMOOTH_CHROMA
+      // anywhere), so keeping it stopped after a chroma toggle
+      // would just starve a mid-warmup session of further
+      // background fill. Match the precompile_mode gate from
+      // CompilePipelines verbatim - Lazy AND Enabled both run the
+      // worker on Vulkan (Enabled's first pass over the current
+      // filter sub-cube hits the lock-free fast-return path since
+      // precompile_sync already filled it, then warms the other
+      // six sub-cubes; that asymmetry is intentional and unrelated
+      // to chroma_smoothing).
+      const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+      if (precompile_mode == GPUShaderPrecompileMode::Lazy ||
+          precompile_mode == GPUShaderPrecompileMode::Enabled)
+      {
+        m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+        m_shader_compile_thread = std::thread(&GPU_HW_Vulkan::ShaderCompileThreadEntryPoint, this);
+      }
+    }
+    else if (only_dim_changed)
     {
       // Only cache-dimensioned settings changed (texture filter,
       // true colour, and/or scaled dithering). m_batch_pipelines
@@ -886,10 +928,10 @@ void GPU_HW_Vulkan::UpdateSettings()
     {
       // Full flush: any non-dimensioned shader-affecting change
       // (resolution scale, MSAA, per-sample shading, UV limits,
-      // chroma smoothing, PGXP depth, colour perspective,
-      // precompile mode) invalidates every sub-cube because per-
-      // session spec constants and structural SPIR-V choice apply
-      // identically to all of them.
+      // PGXP depth, colour perspective, precompile mode)
+      // invalidates every sub-cube because per-session spec
+      // constants and structural SPIR-V choice apply identically
+      // to all of them.
       DestroyPipelines();
       CompilePipelines();
     }
