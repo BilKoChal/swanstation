@@ -807,8 +807,18 @@ void GPU_HW_OpenGL::UpdateSettings()
   // this path can call through without throwing away the previous
   // filter's compiled programs. Mirrors the D3D11 / D3D12 / Vulkan
   // dim-cache fast paths.
-  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed);
+  //
+  // display_only_source_changed: chroma_smoothing flipped and
+  // nothing else affecting shader source changed. The batch program
+  // matrix, VRAM ops programs, and downsample programs all stay
+  // valid; only the 6-slot m_display_programs cache needs to go.
+  // Mirrors the D3D12 / D3D11 partial-clear from 57ac62e / 93e5db5.
+  // OpenGL has no worker thread so there's no relaunch step on this
+  // path - precompile_mode contract is simply "RebuildDisplayPrograms
+  // is synchronous" in any mode.
+  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed, display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed,
+                   &display_only_source_changed);
 
   if (framebuffer_changed)
   {
@@ -820,11 +830,30 @@ void GPU_HW_OpenGL::UpdateSettings()
   }
   if (shader_source_changed)
   {
-    // only_dim_changed: filter (and/or cbuffer-only members) changed
-    // but nothing in non_dim_diff. Preserve previously-visited
-    // filter sub-cubes so the user can cycle filters without paying
-    // the recompile cost more than once per filter.
-    CompilePrograms(/*clear_existing_render_programs=*/!only_dim_changed);
+    if (display_only_source_changed)
+    {
+      // chroma_smoothing flipped and nothing else - rebuild the six
+      // display programs against the new m_chroma_smoothing value
+      // (which UpdateHWSettings has already written into the member).
+      // The 144-cell batch program matrix, the VRAM ops programs, and
+      // the downsample programs all stay valid. Cost is 6 link calls
+      // (mostly cache hits from m_shader_cache for previously-seen
+      // GLSL hashes) instead of the full CompilePrograms pass walking
+      // the entire batch matrix.
+      (void)RebuildDisplayPrograms();
+    }
+    else
+    {
+      // only_dim_changed: filter (and/or cbuffer-only members) changed
+      // but nothing in non_dim_diff. Preserve previously-visited
+      // filter sub-cubes so the user can cycle filters without paying
+      // the recompile cost more than once per filter.
+      //
+      // Otherwise (non-dim, non-display-only source change): wipe all
+      // sub-cubes via clear_existing_render_programs=true, full
+      // rebuild walks the current filter's sub-cube.
+      CompilePrograms(/*clear_existing_render_programs=*/!only_dim_changed);
+    }
   }
 
   if (framebuffer_changed)
@@ -1182,32 +1211,10 @@ bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
   // constructed (program id 0); each cell is filled on first draw
   // by GetBatchProgram on the runloop thread.
 
-  for (uint8_t depth_24bit = 0; depth_24bit < 2; depth_24bit++)
-  {
-    for (uint8_t interlaced = 0; interlaced < 3; interlaced++)
-    {
-      const std::string vs = shadergen.GenerateScreenQuadVertexShader();
-      const std::string fs = shadergen.GenerateDisplayFragmentShader(
-        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlaced), m_chroma_smoothing);
-
-      std::optional<GL::Program> prog =
-        shader_cache.GetProgram(vs, {}, fs, [this, use_binding_layout](GL::Program& p) {
-          if (!IsGLES() && !use_binding_layout)
-            p.BindFragData(0, "o_col0");
-        });
-      if (!prog)
-        return false;
-
-      if (!use_binding_layout)
-      {
-        prog->BindUniformBlock("UBOBlock", 1);
-        prog->Bind();
-        prog->Uniform1i("samp0", 0);
-      }
-      m_display_programs[depth_24bit][interlaced] = std::move(*prog);
-      progress.Increment();
-    }
-  }
+  if (!RebuildDisplayPrograms())
+    return false;
+  for (uint8_t i = 0; i < 6; i++)
+    progress.Increment();
 
   for (uint8_t wrapped = 0; wrapped < 2; wrapped++)
   {
@@ -1322,6 +1329,60 @@ bool GPU_HW_OpenGL::CompilePrograms(bool clear_existing_render_programs)
   progress.Increment();
 #undef UPDATE_PROGRESS
 
+  return true;
+}
+
+bool GPU_HW_OpenGL::RebuildDisplayPrograms()
+{
+  // (Re)compile the 2x3 m_display_programs matrix against the
+  // current m_chroma_smoothing. Called from CompilePrograms during
+  // the initial / full-rebuild pass and from UpdateSettings on a
+  // chroma_smoothing-only flip - chroma_smoothing is a DefineMacro
+  // inside GenerateDisplayFragmentShader only (see
+  // gpu_hw_shadergen.cpp:1056), so the batch program matrix, the
+  // VRAM ops programs, the VRAM read/write/copy/update-depth
+  // programs, and the downsample programs all stay valid through
+  // a chroma toggle and don't need rebuilding. Costs 6 link calls
+  // (effectively cache hits via m_shader_cache when an HLSL/GLSL
+  // hash has been seen before; cold builds otherwise) instead of
+  // the full CompilePrograms pass.
+  //
+  // chroma_smoothing only takes effect on the depth_24bit paths
+  // (see the SMOOTH_CHROMA DefineMacro in
+  // GenerateDisplayFragmentShader), so technically only three of
+  // the six display programs depend on it. Rebuilding all six
+  // anyway keeps this path simple - on a chroma toggle the three
+  // depth_24bit=false programs re-resolve to cache hits on their
+  // existing GLSL hashes (instant), and the three depth_24bit=true
+  // programs pick up the new SMOOTH_CHROMA value.
+  if (!m_shadergen)
+    return false;
+  const bool use_binding_layout = m_use_binding_layout;
+  for (uint8_t depth_24bit = 0; depth_24bit < 2; depth_24bit++)
+  {
+    for (uint8_t interlaced = 0; interlaced < 3; interlaced++)
+    {
+      const std::string vs = m_shadergen->GenerateScreenQuadVertexShader();
+      const std::string fs = m_shadergen->GenerateDisplayFragmentShader(
+        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlaced), m_chroma_smoothing);
+
+      std::optional<GL::Program> prog =
+        m_shader_cache.GetProgram(vs, {}, fs, [this, use_binding_layout](GL::Program& p) {
+          if (!IsGLES() && !use_binding_layout)
+            p.BindFragData(0, "o_col0");
+        });
+      if (!prog)
+        return false;
+
+      if (!use_binding_layout)
+      {
+        prog->BindUniformBlock("UBOBlock", 1);
+        prog->Bind();
+        prog->Uniform1i("samp0", 0);
+      }
+      m_display_programs[depth_24bit][interlaced] = std::move(*prog);
+    }
+  }
   return true;
 }
 

@@ -139,6 +139,7 @@ private:
   bool CreateTextureBuffer();
 
   bool CompilePrograms(bool clear_existing_render_programs = true);
+  bool RebuildDisplayPrograms();
 
   // Lazy batch-program compile path. The libretro hardware-renderer
   // protocol gives us a single GL context bound to the runloop
