@@ -190,8 +190,22 @@ protected:
   // Backends without the dimension (D3D11 / D3D12 today) can ignore
   // this and continue doing a full destroy + recompile on any
   // shaders_changed event.
+  //
+  // The optional out-parameter downsample_changed is set to true iff
+  // the downsample mode setting has changed from the cached session
+  // value. Downsample mode does NOT participate in either
+  // *framebuffer_changed (unless Adaptive is involved on either
+  // side of the transition, since Adaptive uses a different
+  // display-texture width and an additional weight texture) or
+  // *shaders_changed (downsample mode never affects batch
+  // pipelines / batch fragment shaders). Backends opt into a
+  // targeted downsample-only rebuild path by reading this flag;
+  // Disabled <-> Box transitions cost a couple of small VkPipeline
+  // / texture / framebuffer creates rather than a full VRAM
+  // round-trip.
   void UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
-                        bool* only_dim_changed = nullptr);
+                        bool* only_dim_changed = nullptr,
+                        bool* downsample_changed = nullptr);
 
   virtual void UpdateVRAMReadTexture();
   virtual void UpdateDepthBufferFromMaskBit() = 0;

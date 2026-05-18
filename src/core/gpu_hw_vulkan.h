@@ -139,6 +139,17 @@ private:
   void ClearFramebuffer();
   void DestroyFramebuffer();
 
+  // Downsample-only resource lifecycle. Extracted from
+  // Create/DestroyFramebuffer so a downsample-mode toggle can be
+  // serviced WITHOUT the full framebuffer round-trip (ReadVRAM ->
+  // recreate-everything -> UpdateVRAM). Used directly by
+  // UpdateSettings when downsample_changed is the only thing that
+  // differs, and called from Create/DestroyFramebuffer for the
+  // full-rebuild path.
+  bool CreateDownsampleResources(uint32_t texture_width, uint32_t texture_height, VkFormat texture_format);
+  void DestroyDownsampleResources();
+  void DestroyDownsamplePipelines();
+
   bool CreateVertexBuffer();
   bool CreateUniformBuffer();
   bool CreateTextureBuffer();

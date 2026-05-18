@@ -797,8 +797,8 @@ void GPU_HW_Vulkan::UpdateSettings()
   // becomes a no-op for paths that pre-stop here.)
   StopShaderCompileThread();
 
-  bool framebuffer_changed, shaders_changed, only_dim_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed);
+  bool framebuffer_changed, shaders_changed, only_dim_changed, downsample_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, &downsample_changed);
 
   if (framebuffer_changed)
   {
@@ -813,6 +813,53 @@ void GPU_HW_Vulkan::UpdateSettings()
 
   if (framebuffer_changed)
     CreateFramebuffer();
+
+  // Downsample-only resource rebuild. Triggered when downsample mode
+  // changed but framebuffer_changed did NOT (i.e. Disabled <-> Box,
+  // neither end Adaptive). Without this branch the only way the
+  // backend could service a downsample toggle was via the full
+  // ReadVRAM -> CreateFramebuffer -> UpdateVRAM round-trip - which
+  // produced a multi-second freeze on every toggle even though the
+  // batch matrix and main VRAM textures don't depend on downsample
+  // mode at all. The work here is bounded by the downsample
+  // resource and PSO count: 1 texture + 1 framebuffer + 1 PSO for
+  // Box; ~4-12 textures/views + framebuffers + 4 PSOs for
+  // Adaptive (which would only land here when transitioning from
+  // Box - the Disabled <-> Adaptive and Box <-> Adaptive cases go
+  // through framebuffer_changed above).
+  //
+  // Order matters relative to shaders_changed below. If
+  // shaders_changed is also true and a full DestroyPipelines /
+  // CompilePipelines pair runs, that pair would (a) destroy the
+  // downsample PSOs anyway and (b) pre-fill them again via
+  // CompilePipelines' Lazy/Enabled non-batch pre-fill block - using
+  // the resources we recreate here. Doing the resource swap first
+  // means the PSO pre-fill picks up the new render pass.
+  if (downsample_changed && !framebuffer_changed)
+  {
+    DestroyDownsamplePipelines();
+    DestroyDownsampleResources();
+    if (m_downsample_mode != GPUDownsampleMode::Disabled)
+    {
+      const uint32_t texture_width = VRAM_WIDTH * m_resolution_scale;
+      const uint32_t texture_height = VRAM_HEIGHT * m_resolution_scale;
+      const VkFormat texture_format = VK_FORMAT_R8G8B8A8_UNORM;
+      CreateDownsampleResources(texture_width, texture_height, texture_format);
+    }
+  }
+  else if (downsample_changed)
+  {
+    // framebuffer_changed = true ALSO implies downsample_changed for
+    // Disabled <-> Adaptive / Box <-> Adaptive. CreateFramebuffer
+    // above already rebuilt the downsample resources for the new
+    // mode (via DestroyFramebuffer + the CreateDownsampleResources
+    // call at the bottom of CreateFramebuffer), so all that remains
+    // is to drop the stale downsample PSOs - they referenced the
+    // OLD render pass and would otherwise be left referencing
+    // destroyed Vulkan handles. The shaders_changed path or the
+    // post-shaders rebuild step below pre-fills the new PSOs.
+    DestroyDownsamplePipelines();
+  }
 
   if (shaders_changed)
   {
@@ -839,12 +886,34 @@ void GPU_HW_Vulkan::UpdateSettings()
     {
       // Full flush: any non-dimensioned shader-affecting change
       // (resolution scale, MSAA, per-sample shading, UV limits,
-      // chroma smoothing, downsample mode, PGXP depth, colour
-      // perspective, precompile mode) invalidates every sub-cube
-      // because per-session spec constants and structural SPIR-V
-      // choice apply identically to all of them.
+      // chroma smoothing, PGXP depth, colour perspective,
+      // precompile mode) invalidates every sub-cube because per-
+      // session spec constants and structural SPIR-V choice apply
+      // identically to all of them.
       DestroyPipelines();
       CompilePipelines();
+    }
+  }
+  else if (downsample_changed)
+  {
+    // No shader change. Pre-build new downsample PSOs in Enabled /
+    // Lazy modes so the next display call doesn't pay the lazy-
+    // fault stutter. Disabled stays truly lazy by contract.
+    const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+    if (precompile_mode == GPUShaderPrecompileMode::Enabled ||
+        precompile_mode == GPUShaderPrecompileMode::Lazy)
+    {
+      if (m_downsample_mode == GPUDownsampleMode::Adaptive)
+      {
+        (void)GetDownsampleFirstPassPipeline();
+        (void)GetDownsampleMidPassPipeline();
+        (void)GetDownsampleBlurPassPipeline();
+        (void)GetDownsampleCompositePassPipeline();
+      }
+      else if (m_downsample_mode == GPUDownsampleMode::Box)
+      {
+        (void)GetDownsampleFirstPassPipeline();
+      }
     }
   }
 
@@ -1230,6 +1299,23 @@ bool GPU_HW_Vulkan::CreateFramebuffer()
                                                     m_point_sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   dsubuilder.Update(g_vulkan_context->GetDevice());
 
+  if (m_downsample_mode != GPUDownsampleMode::Disabled)
+  {
+    if (!CreateDownsampleResources(texture_width, texture_height, texture_format))
+      return false;
+  }
+
+  ClearDisplay();
+  SetFullVRAMDirtyRectangle();
+  return true;
+}
+
+bool GPU_HW_Vulkan::CreateDownsampleResources(uint32_t texture_width, uint32_t texture_height, VkFormat texture_format)
+{
+  VkCommandBuffer cmdbuf = g_vulkan_context->GetCurrentCommandBuffer();
+  Vulkan::DescriptorSetUpdateBuilder dsubuilder;
+  Vulkan::FramebufferBuilder fbb;
+
   if (m_downsample_mode == GPUDownsampleMode::Adaptive)
   {
     const uint32_t levels = GetAdaptiveDownsamplingMipLevels();
@@ -1327,10 +1413,30 @@ bool GPU_HW_Vulkan::CreateFramebuffer()
     if (m_downsample_mip_views[0].framebuffer == VK_NULL_HANDLE)
       return false;
   }
-
-  ClearDisplay();
-  SetFullVRAMDirtyRectangle();
   return true;
+}
+
+void GPU_HW_Vulkan::DestroyDownsampleResources()
+{
+  Vulkan::Util::SafeFreeGlobalDescriptorSet(m_downsample_composite_descriptor_set);
+  for (SmoothMipView& mv : m_downsample_mip_views)
+  {
+    Vulkan::Util::SafeFreeGlobalDescriptorSet(mv.descriptor_set);
+    Vulkan::Util::SafeDestroyImageView(mv.image_view);
+    Vulkan::Util::SafeDestroyFramebuffer(mv.framebuffer);
+  }
+  m_downsample_mip_views.clear();
+  m_downsample_texture.Destroy(false);
+  Vulkan::Util::SafeDestroyFramebuffer(m_downsample_weight_framebuffer);
+  m_downsample_weight_texture.Destroy(false);
+}
+
+void GPU_HW_Vulkan::DestroyDownsamplePipelines()
+{
+  Vulkan::Util::SafeDestroyPipeline(m_downsample_first_pass_pipeline);
+  Vulkan::Util::SafeDestroyPipeline(m_downsample_mid_pass_pipeline);
+  Vulkan::Util::SafeDestroyPipeline(m_downsample_blur_pass_pipeline);
+  Vulkan::Util::SafeDestroyPipeline(m_downsample_composite_pass_pipeline);
 }
 
 void GPU_HW_Vulkan::ClearFramebuffer()
@@ -1357,18 +1463,7 @@ void GPU_HW_Vulkan::ClearFramebuffer()
 
 void GPU_HW_Vulkan::DestroyFramebuffer()
 {
-  Vulkan::Util::SafeFreeGlobalDescriptorSet(m_downsample_composite_descriptor_set);
-
-  for (SmoothMipView& mv : m_downsample_mip_views)
-  {
-    Vulkan::Util::SafeFreeGlobalDescriptorSet(mv.descriptor_set);
-    Vulkan::Util::SafeDestroyImageView(mv.image_view);
-    Vulkan::Util::SafeDestroyFramebuffer(mv.framebuffer);
-  }
-  m_downsample_mip_views.clear();
-  m_downsample_texture.Destroy(false);
-  Vulkan::Util::SafeDestroyFramebuffer(m_downsample_weight_framebuffer);
-  m_downsample_weight_texture.Destroy(false);
+  DestroyDownsampleResources();
 
   Vulkan::Util::SafeFreeGlobalDescriptorSet(m_batch_descriptor_set);
   Vulkan::Util::SafeFreeGlobalDescriptorSet(m_vram_copy_descriptor_set);
@@ -2873,10 +2968,7 @@ void GPU_HW_Vulkan::DestroyPipelines()
   Vulkan::Util::SafeDestroyPipeline(m_vram_readback_pipeline);
   Vulkan::Util::SafeDestroyPipeline(m_vram_update_depth_pipeline);
 
-  Vulkan::Util::SafeDestroyPipeline(m_downsample_first_pass_pipeline);
-  Vulkan::Util::SafeDestroyPipeline(m_downsample_mid_pass_pipeline);
-  Vulkan::Util::SafeDestroyPipeline(m_downsample_blur_pass_pipeline);
-  Vulkan::Util::SafeDestroyPipeline(m_downsample_composite_pass_pipeline);
+  DestroyDownsamplePipelines();
 
   // Cached shared vertex shaders for the non-batch helpers. Reset
   // here so the next CompilePipelines pass picks up any shadergen

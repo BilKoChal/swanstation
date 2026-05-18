@@ -129,7 +129,7 @@ bool GPU_HW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool u
 }
 
 void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
-                              bool* only_dim_changed)
+                              bool* only_dim_changed, bool* downsample_changed)
 {
   const uint32_t resolution_scale = CalculateResolutionScale();
   const uint32_t multisamples = std::min(m_max_multisamples, g_settings.gpu_multisamples);
@@ -139,7 +139,18 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
   const bool disable_color_perspective = m_supports_disable_color_perspective && ShouldDisableColorPerspective();
 
   *framebuffer_changed =
-    (m_resolution_scale != resolution_scale || m_multisamples != multisamples || m_downsample_mode != downsample_mode);
+    (m_resolution_scale != resolution_scale || m_multisamples != multisamples ||
+     // Downsample mode only changes framebuffer dimensions when Adaptive is
+     // involved (Adaptive uses VRAM_WIDTH * res_scale for the display
+     // texture and creates an additional weight texture; Disabled and Box
+     // both use GPU_MAX_DISPLAY_WIDTH * res_scale and only differ in
+     // whether the downsample texture / framebuffer chain exists at all).
+     // The backend's UpdateSettings handler picks up the Disabled <-> Box
+     // and other non-Adaptive downsample transitions via the dedicated
+     // downsample_changed out-parameter below, which does NOT trigger the
+     // full ReadVRAM -> CreateFramebuffer -> UpdateVRAM round-trip.
+     (m_downsample_mode != downsample_mode &&
+      (m_downsample_mode == GPUDownsampleMode::Adaptive || downsample_mode == GPUDownsampleMode::Adaptive)));
 
   // Split the shader-affecting setting comparison into "cache-
   // dimensioned settings changed" and "non-dimensioned settings
@@ -151,10 +162,16 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
   // CompilePipelines just lazy-populates the new sub-cube on top of
   // whatever was already there. Any non-dimensioned change
   // (resolution scale, MSAA, per-sample shading, UV limits, chroma
-  // smoothing, downsample mode, PGXP depth, colour perspective,
-  // precompile mode) flips per-session spec constants or structural
-  // SPIR-V blob choice applied to EVERY sub-cube and therefore
-  // requires a full flush.
+  // smoothing, PGXP depth, colour perspective, precompile mode)
+  // flips per-session spec constants or structural SPIR-V blob
+  // choice applied to EVERY sub-cube and therefore requires a full
+  // flush.
+  //
+  // Downsample mode is intentionally NOT in either diff list - it
+  // does not affect the batch matrix at all (no spec const, no
+  // structural SPIR-V choice). Downsample mode transitions are
+  // surfaced separately via downsample_changed and serviced by the
+  // backend without touching the batch pipeline cache.
   //
   // GPUTextureFilter, m_true_color and m_scaled_dithering are the
   // three settings the Vulkan backend currently dimensions over.
@@ -168,12 +185,14 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
     (m_resolution_scale != resolution_scale || m_multisamples != multisamples ||
      m_per_sample_shading != per_sample_shading ||
      m_using_uv_limits != use_uv_limits || m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing ||
-     m_downsample_mode != downsample_mode || m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer() ||
+     m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer() ||
      m_disable_color_perspective != disable_color_perspective ||
      m_shader_precompile_mode != g_settings.gpu_shader_precompile_mode);
   *shaders_changed = dim_diff || non_dim_diff;
   if (only_dim_changed)
     *only_dim_changed = dim_diff && !non_dim_diff;
+  if (downsample_changed)
+    *downsample_changed = (m_downsample_mode != downsample_mode);
 
   m_resolution_scale = resolution_scale;
   m_multisamples = multisamples;
