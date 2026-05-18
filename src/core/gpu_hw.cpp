@@ -1121,7 +1121,12 @@ GPU_HW::VRAMCopyUBOData GPU_HW::GetVRAMCopyUBOData(uint32_t src_x, uint32_t src_
                                     width * m_resolution_scale,
                                     height * m_resolution_scale,
                                     m_GPUSTAT.set_mask_while_drawing ? 1u : 0u,
-                                    GetCurrentNormalizedVertexDepth()};
+                                    GetCurrentNormalizedVertexDepth(),
+                                    // Cbuffer-routed RESOLUTION_SCALE - the shader's VRAM_SIZE / RCP_VRAM_SIZE
+                                    // aliases now derive from this field instead of having m_resolution_scale
+                                    // baked compile-time. See GenerateVRAMCopyFragmentShader.
+                                    m_resolution_scale,
+                                    0u /* u_pad0 */};
 
   return uniforms;
 }

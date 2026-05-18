@@ -32,6 +32,15 @@ private:
 
   void WriteCommonFunctions(std::stringstream& ss, bool batch_uniform_buffer = false);
   void WriteBatchUniformBuffer(std::stringstream& ss);
+
+  // Emit the #define aliases that route RESOLUTION_SCALE / VRAM_SIZE /
+  // RCP_VRAM_SIZE through u_resolution_scale in the shader's currently-
+  // in-scope cbuffer. Used by both WriteBatchUniformBuffer (where the
+  // cbuffer is the batch UBO) and by non-batch shaders that have added
+  // u_resolution_scale to their own per-shader UBO. Must be called
+  // AFTER the cbuffer declaration so u_resolution_scale is in scope.
+  void WriteCBufferResolutionScaleAliases(std::stringstream& ss);
+
   void WriteBatchTextureFilter(std::stringstream& ss, GPUTextureFilter texture_filter);
 
   uint32_t m_resolution_scale;

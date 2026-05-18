@@ -93,6 +93,21 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
   // the preprocessor just substitutes them with arithmetic over
   // u_resolution_scale. VRAM_WIDTH / VRAM_HEIGHT stay compile-time
   // literals because they are fixed PSX geometry, not session state.
+  WriteCBufferResolutionScaleAliases(ss);
+}
+
+void GPU_HW_ShaderGen::WriteCBufferResolutionScaleAliases(std::stringstream& ss)
+{
+  // The caller has already declared a cbuffer that contains
+  // `uint u_resolution_scale` (either the batch UBO via
+  // WriteBatchUniformBuffer, or a per-shader UBO that grew the field
+  // as part of the non-batch cbuffer-routing refactor). All we do
+  // here is alias the legacy compile-time constants to the cbuffer
+  // field so existing shader bodies that reference RESOLUTION_SCALE /
+  // VRAM_SIZE / RCP_VRAM_SIZE keep compiling. The arithmetic over
+  // u_resolution_scale happens once per shader invocation - HLSL /
+  // GLSL fold the constant-folding-friendly bits (the VRAM_WIDTH /
+  // VRAM_HEIGHT literals) at compile time.
   ss << "#define RESOLUTION_SCALE u_resolution_scale\n";
   ss << "#define VRAM_SIZE (uint2(" << VRAM_WIDTH << "u, " << VRAM_HEIGHT << "u) * u_resolution_scale)\n";
   ss << "#define RCP_VRAM_SIZE (float2(1.0, 1.0) / float2(VRAM_SIZE))\n";
@@ -1304,12 +1319,26 @@ std::string GPU_HW_ShaderGen::GenerateVRAMCopyFragmentShader()
 
   std::stringstream ss;
   WriteHeader(ss);
-  WriteCommonFunctions(ss);
   DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
+
+  // u_resolution_scale is at the END of the cbuffer (after u_depth_value)
+  // so existing field offsets stay stable - the only change is a new
+  // 4-byte field appended. VRAMCopyUBOData in gpu_hw.h must match.
   DeclareUniformBuffer(ss,
                        {"uint2 u_src_coords", "uint2 u_dst_coords", "uint2 u_end_coords", "uint2 u_size",
-                        "bool u_set_mask_bit", "float u_depth_value"},
+                        "bool u_set_mask_bit", "float u_depth_value", "uint u_resolution_scale", "uint u_pad0"},
                        true);
+
+  // Route RESOLUTION_SCALE / VRAM_SIZE / RCP_VRAM_SIZE through
+  // u_resolution_scale in the cbuffer above instead of having
+  // m_resolution_scale baked compile-time via WriteCommonFunctions's
+  // CONSTANT-emit path. After this, a resolution-scale toggle no
+  // longer changes the HLSL source string - same source, same hash,
+  // same DXBC - which is what makes vram_copy_ps pre-bakeable in a
+  // follow-up patch (cuts the variant axis from PGXP x scale down
+  // to just PGXP).
+  WriteCBufferResolutionScaleAliases(ss);
+  WriteCommonFunctions(ss, true);
 
   DeclareTexture(ss, "samp0", 0, msaa);
   DefineMacro(ss, "MSAA_COPY", msaa);

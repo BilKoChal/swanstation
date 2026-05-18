@@ -167,6 +167,15 @@ protected:
     uint32_t u_height;
     uint32_t u_set_mask_bit;
     float u_depth_value;
+    // Appended for the cbuffer-routed RESOLUTION_SCALE refactor (this
+    // commit). Matches the trailing "uint u_resolution_scale, uint u_pad0"
+    // members on the HLSL side in GenerateVRAMCopyFragmentShader -
+    // u_pad0 keeps the cbuffer 16-byte-aligned (HLSL cbuffers pack to
+    // 16-byte rows; after u_depth_value at offset 36, adding one uint
+    // would end at offset 40, but the row ends at 48 so we pad to
+    // bring the total to 48 bytes).
+    uint32_t u_resolution_scale;
+    uint32_t u_pad0;
   };
 
   class ShaderCompileProgressTracker
