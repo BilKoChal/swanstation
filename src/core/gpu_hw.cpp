@@ -1398,6 +1398,17 @@ void GPU_HW::DispatchRenderCommand()
   }
 
   m_batch.interlacing = IsInterlacedRenderingEnabled();
+  // u_interlacing gates the discard in the FS body; the value is
+  // updated on every SetDrawMode so a display-mode flip mid-frame
+  // is picked up by the next FlushRender. The displayed-field LSB
+  // is only meaningful when interlacing is on (the FS discard short-
+  // circuits on u_interlacing == 0), but pushing it unconditionally
+  // when on keeps the existing per-frame field-flip handling -
+  // the C++ alternation cost is one branch + one cbuffer compare,
+  // negligible compared to the FlushRender that follows.
+  const uint32_t new_interlacing = m_batch.interlacing ? 1u : 0u;
+  m_batch_ubo_dirty |= (m_batch_ubo_data.u_interlacing != new_interlacing);
+  m_batch_ubo_data.u_interlacing = new_interlacing;
   if (m_batch.interlacing)
   {
     const uint32_t displayed_field = GetActiveLineLSB();

@@ -84,7 +84,8 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
                        {"uint2 u_texture_window_and", "uint2 u_texture_window_or", "float u_src_alpha_factor",
                         "float u_dst_alpha_factor", "uint u_interlaced_displayed_field",
                         "bool u_set_mask_while_drawing", "uint u_resolution_scale", "uint u_true_color",
-                        "uint u_scaled_dithering", "uint u_dithering"},
+                        "uint u_scaled_dithering", "uint u_dithering",
+                        "uint u_interlacing", "uint u_pad0", "uint u_pad1", "uint u_pad2"},
                        false);
 
   // Alias the historical compile-time constants to their cbuffer-
@@ -748,7 +749,19 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
   // branches in the FS body. Toggling either is a single cbuffer
   // write picked up on the next FlushRender, with no DXBC recompile
   // and no PSO rebuild.
-  DefineMacro(ss, "INTERLACING", interlacing);
+  // INTERLACING used to live as a compile-time #define driving the
+  // y-LSB / u_interlaced_displayed_field discard guard in the FS
+  // body. It is now routed through the batch UBO (u_interlacing) and
+  // the former #if site below is a uniform-control-flow short-circuit
+  // branch on the cbuffer scalar. Same shape as the u_dithering
+  // routing in 3af8e02 - one runtime check instead of two compiled
+  // shader variants, and toggling display-mode interlace state is a
+  // single 4-byte cbuffer write. u_interlaced_displayed_field still
+  // carries the active-field LSB (0 or 1) when interlacing is on;
+  // u_interlacing gates whether the discard runs at all. The two
+  // are kept as separate fields so each can be updated independently
+  // - the field LSB changes per frame, the interlacing on/off bit
+  // changes on display-mode changes.
   DefineMacro(ss, "TEXTURE_FILTERING", m_texture_filter != GPUTextureFilter::Nearest);
   DefineMacro(ss, "UV_LIMITS", m_uv_limits);
   DefineMacro(ss, "USE_DUAL_SOURCE", use_dual_source);
@@ -892,10 +905,19 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
   float ialpha;
   float oalpha;
 
-  #if INTERLACING
-    if ((fixYCoord(uint(v_pos.y)) & 1u) == u_interlaced_displayed_field)
-      discard;
-  #endif
+  // Was a compile-time #if INTERLACING guard. Now u_interlacing is
+  // a cbuffer scalar (0 = off, 1 = on) and the inner LSB compare
+  // gates on it. HLSL short-circuits &&, so the y-LSB / fixYCoord
+  // arithmetic only runs when interlacing is actually on. The
+  // discard keyword's presence in the source disables early-Z
+  // writeback for both the on and off cases - a known trade for
+  // cbuffer routing - but for PSX content this matters little:
+  // most geometry is back-to-front, the depth values come from
+  // VS interpolation so early depth TEST still works, and the
+  // 5090's FS throughput is many orders of magnitude in excess
+  // of what PSX rendering can saturate.
+  if (u_interlacing != 0u && (fixYCoord(uint(v_pos.y)) & 1u) == u_interlaced_displayed_field)
+    discard;
 
   #if TEXTURED
 

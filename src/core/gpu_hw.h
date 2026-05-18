@@ -137,6 +137,26 @@ protected:
     // u_scaled_dithering's per-session shape, but the per-batch
     // granularity matches the underlying register write rate.
     uint32_t u_dithering;
+    // u_interlacing: per-batch interlaced-rendering gate (0 = off,
+    // 1 = on). Used to live as a compile-time INTERLACING macro
+    // gating a discard block; now a runtime short-circuit branch on
+    // the cbuffer field. u_interlaced_displayed_field above carries
+    // the active-field LSB and is updated independently in the same
+    // SetDrawMode block - the two fields are split so each can be
+    // updated on its own cadence (field LSB per frame, interlacing
+    // on/off on display-mode changes).
+    uint32_t u_interlacing;
+    // Reserved cbuffer slots. The batch UBO has been progressively
+    // growing as compile-time #defines move to runtime cbuffer
+    // branches (RESOLUTION_SCALE, TRUE_COLOR, DITHERING_SCALED,
+    // DITHERING, INTERLACING). Pre-allocating the remaining slots
+    // in the 4th 16-byte row matches the layout HLSL would have
+    // padded to anyway, and lets follow-up commits route additional
+    // axes (PGXP_DEPTH, UV_LIMITS, etc.) into a named slot without
+    // changing the cbuffer's external size or alignment.
+    uint32_t u_pad0;
+    uint32_t u_pad1;
+    uint32_t u_pad2;
   };
 
   struct VRAMFillUBOData
