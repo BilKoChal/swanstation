@@ -51,4 +51,15 @@ namespace D3D12::EmbeddedShaders {
 extern const uint8_t k_fullscreen_quad_vs[];
 extern const size_t k_fullscreen_quad_vs_size_bytes;
 
+// Copy/blit pixel shader. Equivalent to
+// ShaderGen::GenerateCopyFragmentShader() in D3D12 mode. Single
+// texture sample with a cbuffer-driven source rect; zero state
+// dependency (no MULTISAMPLING split, no RESOLUTION_SCALE bake-in,
+// no preprocessor variant axes). Used by GetCopyPipeline for full-
+// frame blits (presentation copies, downscaling).
+//
+// Source: data/shaders/d3d12/copy.ps.hlsl
+extern const uint8_t k_copy_ps[];
+extern const size_t k_copy_ps_size_bytes;
+
 } // namespace D3D12::EmbeddedShaders

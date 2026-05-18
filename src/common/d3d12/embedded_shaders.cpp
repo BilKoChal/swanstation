@@ -18,5 +18,6 @@
 namespace D3D12::EmbeddedShaders {
 
 #include "embedded_dxbc/fullscreen_quad_vs.inc"
+#include "embedded_dxbc/copy_ps.inc"
 
 } // namespace D3D12::EmbeddedShaders

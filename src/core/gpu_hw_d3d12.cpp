@@ -1803,20 +1803,20 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
 
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
-  if (!m_shadergen)
-  {
-    Log_ErrorPrint("GetCopyPipeline called before CompilePipelines constructed the shadergen");
-    return {};
-  }
-  ComPtr<ID3DBlob> fs = m_shader_cache.GetPixelShader(m_shadergen->GenerateCopyFragmentShader());
-  if (!fs)
-    return {};
+  // Pre-baked DXBC blob, same shape as the VS - statically linked
+  // from src/common/d3d12/embedded_dxbc/copy_ps.inc, single variant,
+  // no shader_cache lookup, no D3DCompile, no m_shadergen
+  // dependency. The PSO compile below is the only remaining work.
+  const D3D12_SHADER_BYTECODE fs = {
+    D3D12::EmbeddedShaders::k_copy_ps,
+    D3D12::EmbeddedShaders::k_copy_ps_size_bytes,
+  };
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetVertexShader(vs.pShaderBytecode, static_cast<uint32_t>(vs.BytecodeLength));
-  gpbuilder.SetPixelShader(fs.Get());
+  gpbuilder.SetPixelShader(fs.pShaderBytecode, static_cast<uint32_t>(fs.BytecodeLength));
   gpbuilder.SetNoCullRasterizationState();
   gpbuilder.SetNoDepthTestState();
   gpbuilder.SetNoBlendingState();
