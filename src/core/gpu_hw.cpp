@@ -160,7 +160,7 @@ bool GPU_HW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool u
 
 void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
                               bool* only_dim_changed, bool* downsample_changed,
-                              bool* shader_source_changed)
+                              bool* shader_source_changed, bool* display_only_source_changed)
 {
   const uint32_t resolution_scale = CalculateResolutionScale();
   const uint32_t multisamples = std::min(m_max_multisamples, g_settings.gpu_multisamples);
@@ -257,6 +257,43 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
       (m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer()) ||
       (m_disable_color_perspective != disable_color_perspective) ||
       (m_shader_precompile_mode != g_settings.gpu_shader_precompile_mode);
+  }
+
+  // display_only_source_changed: true when shader_source_changed
+  // fired SOLELY because chroma_smoothing flipped, and every other
+  // shader-source-affecting setting stayed put. chroma_smoothing
+  // is the one setting in the shader_source_changed set that
+  // never reaches the batch matrix or the VRAM ops PSOs - it's a
+  // DefineMacro in GenerateDisplayFragmentShader only, see
+  // gpu_hw_shadergen.cpp:1056. Splitting it out lets a backend
+  // service a chroma toggle by invalidating just the 6-slot
+  // display PSO cache and letting it lazy-fault on the next
+  // UpdateDisplay, instead of throwing away the 1164-PSO batch
+  // matrix and 12-or-so non-batch VRAM ops PSOs that don't care.
+  //
+  // The non-batch / batch split here is asymmetric on purpose:
+  // multisamples / per_sample_shading also affect non-batch PSOs
+  // (VRAM fill / copy / write / update depth - see the
+  // gpbuilder.SetMultisamples calls in gpu_hw_d3d12.cpp around
+  // line 1439-1627) so a 'non-batch source changed' signal
+  // wouldn't carve out a clean partial-rebuild path the way
+  // chroma_smoothing does. shader_precompile_mode is similarly
+  // excluded here - a precompile mode flip is a request to walk
+  // the matrix synchronously NOW, which the full
+  // DestroyPipelines + CompilePipelines path handles correctly
+  // and a display-only clear obviously does not.
+  if (display_only_source_changed)
+  {
+    const bool chroma_diff = (m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing);
+    const bool other_source_diff =
+      (m_texture_filtering != g_settings.gpu_texture_filter) ||
+      (m_multisamples != multisamples) ||
+      (m_per_sample_shading != per_sample_shading) ||
+      (m_using_uv_limits != use_uv_limits) ||
+      (m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer()) ||
+      (m_disable_color_perspective != disable_color_perspective) ||
+      (m_shader_precompile_mode != g_settings.gpu_shader_precompile_mode);
+    *display_only_source_changed = chroma_diff && !other_source_diff;
   }
 
   m_resolution_scale = resolution_scale;

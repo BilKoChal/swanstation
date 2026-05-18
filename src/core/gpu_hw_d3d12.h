@@ -121,6 +121,7 @@ private:
 
   bool CompilePipelines();
   void DestroyPipelines();
+  void ClearDisplayPipelines();
 
   // Lazy batch-fragment-shader-blob + PSO compile path.
   //

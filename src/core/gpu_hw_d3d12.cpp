@@ -421,8 +421,14 @@ void GPU_HW_D3D12::UpdateSettings()
   // changed case; when set without shader_source_changed it picks
   // out the cbuffer-only case (which the gate at the bottom
   // implicitly handles by checking shader_source_changed).
-  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed);
+  //
+  // display_only_source_changed: chroma_smoothing flipped and
+  // nothing else affecting shader source changed. The batch matrix
+  // and VRAM ops PSOs stay valid; only the 6-slot display PSO
+  // cache needs to go.
+  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed, display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed,
+                   &display_only_source_changed);
 
   if (framebuffer_changed)
   {
@@ -440,7 +446,48 @@ void GPU_HW_D3D12::UpdateSettings()
 
   if (shader_source_changed)
   {
-    if (only_dim_changed)
+    if (display_only_source_changed)
+    {
+      // chroma_smoothing flipped and nothing else - clear just the
+      // display PSO cache; the next UpdateDisplay's
+      // GetDisplayPipeline lazy-faults each (depth_24, interlace_mode)
+      // slot with HLSL re-generated against the new
+      // m_chroma_smoothing. Cost is 6 D3DCompile + 6 PSO creates
+      // (a couple of seconds) instead of the full ~1164-PSO
+      // matrix walk.
+      ClearDisplayPipelines();
+
+      // Honour the precompile_mode contract for the rebuild side:
+      //   Enabled: pre-fault the six display PSOs synchronously so
+      //            the first UpdateDisplay after the toggle doesn't
+      //            stutter. Six D3DCompile + six PSO creates run in
+      //            roughly a second on the user's RTX 5090, well
+      //            under the multi-tens-of-seconds the full matrix
+      //            walk used to take.
+      //   Lazy:    relaunch the background worker we stopped above
+      //            so the batch matrix continues to warm up. The
+      //            display PSOs get faulted on first use - same as
+      //            Lazy's normal contract for the non-batch
+      //            pipelines.
+      //   Disabled: no worker, no pre-fault. Display PSOs are
+      //            faulted on first use, matching the
+      //            "skip all compilation at init" contract.
+      const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+      if (precompile_mode == GPUShaderPrecompileMode::Enabled)
+      {
+        for (uint8_t depth_24 = 0; depth_24 < 2; depth_24++)
+        {
+          for (uint8_t interlace_mode = 0; interlace_mode < 3; interlace_mode++)
+            (void)GetDisplayPipeline(depth_24, interlace_mode);
+        }
+      }
+      else if (precompile_mode == GPUShaderPrecompileMode::Lazy)
+      {
+        m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+        m_shader_compile_thread = std::thread(&GPU_HW_D3D12::ShaderCompileThreadEntryPoint, this);
+      }
+    }
+    else if (only_dim_changed)
     {
       // Filter changed but nothing in non_dim_diff (and the cbuffer-
       // only members in dim_diff don't move HLSL, so this is
@@ -464,10 +511,10 @@ void GPU_HW_D3D12::UpdateSettings()
     else
     {
       // Full flush: a non-dim shader-affecting change
-      // (multisamples / per-sample shading / UV limits / chroma
-      // smoothing / PGXP depth / colour perspective / precompile
-      // mode) invalidates EVERY sub-cube because those settings
-      // bake into the HLSL identically for every filter slot.
+      // (multisamples / per-sample shading / UV limits / PGXP depth
+      // / colour perspective / precompile mode) invalidates EVERY
+      // sub-cube because those settings bake into the HLSL
+      // identically for every filter slot.
       DestroyPipelines();
       CompilePipelines();
     }
@@ -1877,6 +1924,29 @@ void GPU_HW_D3D12::DestroyPipelines()
   // between Vulkan and Direct3D).
   m_copy_pipeline.Reset();
   m_fullscreen_quad_vertex_shader.Reset();
+}
+
+void GPU_HW_D3D12::ClearDisplayPipelines()
+{
+  // Partial destroy: drop just the display PSO cache. Used by
+  // UpdateSettings on a chroma_smoothing-only flip - chroma_smoothing
+  // is a DefineMacro inside GenerateDisplayFragmentShader only, so
+  // the batch matrix and the VRAM ops PSOs stay valid. The next
+  // UpdateDisplay call's GetDisplayPipeline will lazy-fault each
+  // (depth_24, interlace_mode) slot with HLSL re-generated against
+  // the new m_chroma_smoothing.
+  //
+  // No StopShaderCompileThread / m_shadergen.reset needed - the
+  // worker only walks the batch matrix, and m_shadergen doesn't
+  // hold chroma_smoothing as ctor state (GenerateDisplayFragmentShader
+  // takes it as a per-call parameter from the member
+  // m_chroma_smoothing, which UpdateHWSettings has already updated by
+  // the time we land here). UpdateSettings has already executed the
+  // command list to completion via g_d3d12_context->ExecuteCommandList(true),
+  // so no in-flight draw references these PSOs.
+  m_display_pipelines_fastpath.enumerate(
+    [](std::atomic<ID3D12PipelineState*>& s) { s.store(nullptr, std::memory_order_relaxed); });
+  m_display_pipelines = {};
 }
 
 bool GPU_HW_D3D12::CreateTextureReplacementStreamBuffer()
