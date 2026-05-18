@@ -180,18 +180,18 @@ protected:
                            static_cast<float>(rgba >> 24) * (1.0f / 255.0f));
   }
 
-  // The optional out-parameter only_filter_changed is set to true
-  // iff *shaders_changed is true AND the texture filter setting is
-  // the only shader-affecting setting that differs from the cached
-  // session state. Backends with a filter-dimensioned batch
-  // pipeline cache (Vulkan) can read this to skip DestroyPipelines
-  // on a filter-only swap, preserving previously-built sub-cubes
-  // for instant return when the user cycles back through filters.
+  // The optional out-parameter only_dim_changed is set to true iff
+  // *shaders_changed is true AND the change is confined to the
+  // settings the backend's batch pipeline cache is dimensioned over
+  // (currently: texture filter, true colour, scaled dithering).
+  // Backends with a dimensioned batch cache (Vulkan) can read this
+  // to skip DestroyPipelines on such a toggle, preserving previously-
+  // built sub-cubes for instant return when the user cycles back.
   // Backends without the dimension (D3D11 / D3D12 today) can ignore
   // this and continue doing a full destroy + recompile on any
   // shaders_changed event.
   void UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
-                        bool* only_filter_changed = nullptr);
+                        bool* only_dim_changed = nullptr);
 
   virtual void UpdateVRAMReadTexture();
   virtual void UpdateDepthBufferFromMaskBit() = 0;

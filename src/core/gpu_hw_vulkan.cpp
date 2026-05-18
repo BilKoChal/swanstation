@@ -797,8 +797,8 @@ void GPU_HW_Vulkan::UpdateSettings()
   // becomes a no-op for paths that pre-stop here.)
   StopShaderCompileThread();
 
-  bool framebuffer_changed, shaders_changed, only_filter_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_filter_changed);
+  bool framebuffer_changed, shaders_changed, only_dim_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed);
 
   if (framebuffer_changed)
   {
@@ -816,31 +816,33 @@ void GPU_HW_Vulkan::UpdateSettings()
 
   if (shaders_changed)
   {
-    if (only_filter_changed)
+    if (only_dim_changed)
     {
-      // Filter is the only shader-affecting setting that changed.
-      // m_batch_pipelines / m_batch_fragment_shaders are filter-
-      // dimensioned, the previous filter's sub-cube is still valid
-      // and stays populated. CompilePipelines just lazy-populates
-      // the new filter's sub-cube on top: in Enabled mode the
-      // precompile_sync loop walks the matrix calling GetBatchPipeline
-      // which now indexes by the new m_texture_filtering, so the
-      // OTHER filter sub-cubes are untouched. In Lazy / Disabled the
-      // new sub-cube stays empty until first draw / the worker
-      // reaches each cell.
+      // Only cache-dimensioned settings changed (texture filter,
+      // true colour, and/or scaled dithering). m_batch_pipelines
+      // is dimensioned over all three; the previous tuple's sub-
+      // cube is still valid and stays populated. CompilePipelines
+      // just lazy-populates the new tuple's sub-cube on top: in
+      // Enabled mode the precompile_sync loop walks the matrix
+      // calling GetBatchPipeline with the new (m_texture_filtering,
+      // m_true_color, m_scaled_dithering) tuple, so the OTHER sub-
+      // cubes are untouched. In Lazy / Disabled the new sub-cube
+      // stays empty until first draw / the worker reaches each
+      // cell.
       //
-      // Cycling back to a previously-visited filter is instant - no
+      // Cycling back to a previously-visited tuple is instant - no
       // vkCreateGraphicsPipelines call, no destroy/recreate, just an
       // atomic load of an already-filled slot.
       CompilePipelines();
     }
     else
     {
-      // Full flush: any non-filter shader-affecting change
-      // (resolution scale, MSAA, true colour, PGXP depth, ...)
-      // invalidates every filter's sub-cube because per-session
-      // spec constants and structural SPIR-V choice apply
-      // identically to all of them.
+      // Full flush: any non-dimensioned shader-affecting change
+      // (resolution scale, MSAA, per-sample shading, UV limits,
+      // chroma smoothing, downsample mode, PGXP depth, colour
+      // perspective, precompile mode) invalidates every sub-cube
+      // because per-session spec constants and structural SPIR-V
+      // choice apply identically to all of them.
       DestroyPipelines();
       CompilePipelines();
     }
@@ -1589,7 +1591,8 @@ bool GPU_HW_Vulkan::CompilePipelines()
               for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
               {
                 VkPipeline pipeline =
-                  GetBatchPipeline(m_texture_filtering, depth_test, render_mode, texture_mode, transparency_mode,
+                  GetBatchPipeline(m_texture_filtering, m_true_color, m_scaled_dithering,
+                                   depth_test, render_mode, texture_mode, transparency_mode,
                                    static_cast<bool>(dithering), static_cast<bool>(interlacing));
                 if (pipeline == VK_NULL_HANDLE)
                   return false;
@@ -1875,6 +1878,20 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
   // sub-cubes - they would never be looked up at draw time and the
   // PSOs would just sit unused.
   //
+  // The (m_true_color, m_scaled_dithering) snapshot is taken once at
+  // worker entry. The worker is responsible only for the current
+  // (true_color, scaled_dithering) combo's seven filter sub-cubes -
+  // walking all four combos in the background would balloon warm-up
+  // time to several minutes on a cold pipeline cache, well past
+  // "useful". Toggling true_color or scaled_dithering at runtime is
+  // serviced the same way a filter swap is: the previous combo's
+  // sub-cubes stay populated and are instantly addressable on a
+  // cycle-back, while the new combo gets a sync compile of its
+  // current filter sub-cube (Enabled) or lazy fault-in (Lazy /
+  // Disabled), plus a new background worker rooted at the new
+  // (true_color, scaled_dithering) tuple covering the other six
+  // filters.
+  //
   // The quit flag is checked between cells so DestroyPipelines can
   // stop the worker within at most one PSO compile of latency
   // (Vulkan PSO compiles can be ~50-200 ms with the heavier texture
@@ -1884,6 +1901,8 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
   // IsBatchShaderReachable.
   const bool dual_source = m_supports_dual_source_blend;
   const uint8_t current_filter = static_cast<uint8_t>(m_texture_filtering);
+  const bool true_color = m_true_color;
+  const bool scaled_dithering = m_scaled_dithering;
   for (uint8_t f_offset = 0; f_offset < static_cast<uint8_t>(GPUTextureFilter::Count); f_offset++)
   {
     const uint8_t filter_idx =
@@ -1911,7 +1930,8 @@ void GPU_HW_Vulkan::ShaderCompileThreadEntryPoint()
                 if (m_shader_compile_thread_quit.load(std::memory_order_relaxed))
                   return;
 
-                GetBatchPipeline(filter, depth_test, render_mode, texture_mode, transparency_mode,
+                GetBatchPipeline(filter, true_color, scaled_dithering, depth_test, render_mode,
+                                 texture_mode, transparency_mode,
                                  static_cast<bool>(dithering), static_cast<bool>(interlacing));
               }
             }
@@ -2028,7 +2048,8 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(GPUTextureFilter filter, ui
   return fresh;
 }
 
-VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode,
+VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, bool true_color, bool scaled_dithering,
+                                           uint8_t depth_test, uint8_t render_mode,
                                            uint8_t texture_mode, uint8_t transparency_mode,
                                            bool dithering, bool interlacing)
 {
@@ -2040,7 +2061,8 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, uint8_t dept
                                                                                                       texture_mode;
 
   std::atomic<VkPipeline>& slot =
-    m_batch_pipelines[static_cast<uint8_t>(filter)][depth_test][render_mode][lookup_mode]
+    m_batch_pipelines[static_cast<uint8_t>(filter)][static_cast<uint8_t>(true_color)]
+                     [static_cast<uint8_t>(scaled_dithering)][depth_test][render_mode][lookup_mode]
                      [transparency_mode][static_cast<uint8_t>(dithering)][static_cast<uint8_t>(interlacing)];
 
   // Fast path: lock-free atomic load. This is what DrawBatchVertices
@@ -2113,8 +2135,14 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, uint8_t dept
   //   id = 102  TRANSPARENCY_ONLY_TRANSPARENT (bool, per-call)
   //   id = 103  DITHERING                     (bool, per-call)
   //   id = 104  INTERLACING                   (bool, per-call)
-  //   id = 105  DITHERING_SCALED              (bool, per-session)
-  //   id = 106  TRUE_COLOR                    (bool, per-session)
+  //   id = 105  DITHERING_SCALED              (bool, cache-dim - the
+  //                                            scaled_dithering
+  //                                            argument is a dimension
+  //                                            of m_batch_pipelines so
+  //                                            toggling does not flush
+  //                                            other sub-cubes)
+  //   id = 106  TRUE_COLOR                    (bool, cache-dim - same
+  //                                            mechanism as id 105)
   //   id = 107  PALETTE_4_BIT                 (bool, per-call -
   //                                            actual_texture_mode == 0)
   //   id = 108  PALETTE_8_BIT                 (bool, per-call -
@@ -2148,8 +2176,8 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, uint8_t dept
   fs_spec.AddBool(102, brm == BatchRenderMode::OnlyTransparent);
   fs_spec.AddBool(103, dithering);
   fs_spec.AddBool(104, interlacing);
-  fs_spec.AddBool(105, m_scaled_dithering);
-  fs_spec.AddBool(106, m_true_color);
+  fs_spec.AddBool(105, scaled_dithering);
+  fs_spec.AddBool(106, true_color);
   fs_spec.AddBool(107, palette_4_bit);
   fs_spec.AddBool(108, palette_8_bit);
   fs_spec.AddBool(109, raw_texture);
@@ -2881,10 +2909,11 @@ void GPU_HW_Vulkan::DrawBatchVertices(BatchRenderMode render_mode, uint32_t base
   // load, Lazy mode either grabs the worker's result or compiles on
   // the main thread on race, Disabled compiles on every first use.
   //
-  // [filter][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  // [filter][true_color][scaled_dithering][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
   const uint8_t depth_test = m_batch.use_depth_buffer ? static_cast<uint8_t>(2) : static_cast<uint8_t>(m_batch.check_mask_before_draw);
   VkPipeline pipeline =
-    GetBatchPipeline(m_texture_filtering, depth_test, static_cast<uint8_t>(render_mode),
+    GetBatchPipeline(m_texture_filtering, m_true_color, m_scaled_dithering,
+                     depth_test, static_cast<uint8_t>(render_mode),
                      static_cast<uint8_t>(m_batch.texture_mode),
                      static_cast<uint8_t>(m_batch.transparency_mode), m_batch.dithering, m_batch.interlacing);
 

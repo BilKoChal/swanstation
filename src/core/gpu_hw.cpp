@@ -129,7 +129,7 @@ bool GPU_HW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool u
 }
 
 void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
-                              bool* only_filter_changed)
+                              bool* only_dim_changed)
 {
   const uint32_t resolution_scale = CalculateResolutionScale();
   const uint32_t multisamples = std::min(m_max_multisamples, g_settings.gpu_multisamples);
@@ -141,29 +141,39 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
   *framebuffer_changed =
     (m_resolution_scale != resolution_scale || m_multisamples != multisamples || m_downsample_mode != downsample_mode);
 
-  // Split the shader-affecting setting comparison into "filter
-  // changed" and "anything else changed". A filter-only change can
-  // be served by a backend that keeps a per-filter sub-cube of
-  // batch pipelines populated across swaps - the previous filter's
-  // PSOs are still valid and reachable, so DestroyPipelines can be
-  // skipped and CompilePipelines just lazy-populates the new
-  // filter's sub-cube on top of whatever was already there. Any
-  // non-filter change (resolution, MSAA, true colour, PGXP depth,
-  // dithering, precompile mode, ...) flips the per-session spec
-  // constants or the structural SPIR-V blob choice applied to
-  // EVERY filter sub-cube and therefore requires a full flush.
-  const bool filter_diff = (m_texture_filtering != g_settings.gpu_texture_filter);
-  const bool non_filter_diff =
+  // Split the shader-affecting setting comparison into "cache-
+  // dimensioned settings changed" and "non-dimensioned settings
+  // changed". A change confined to dimensioned settings can be
+  // served by a backend that keeps a per-(filter, true_color,
+  // scaled_dithering) sub-cube of batch pipelines populated across
+  // toggles - the previous sub-cube's PSOs are still valid and
+  // reachable, so DestroyPipelines can be skipped and
+  // CompilePipelines just lazy-populates the new sub-cube on top of
+  // whatever was already there. Any non-dimensioned change
+  // (resolution scale, MSAA, per-sample shading, UV limits, chroma
+  // smoothing, downsample mode, PGXP depth, colour perspective,
+  // precompile mode) flips per-session spec constants or structural
+  // SPIR-V blob choice applied to EVERY sub-cube and therefore
+  // requires a full flush.
+  //
+  // GPUTextureFilter, m_true_color and m_scaled_dithering are the
+  // three settings the Vulkan backend currently dimensions over.
+  // The set may extend to other 2-value spec consts in the future
+  // without changing this API.
+  const bool filter_diff           = (m_texture_filtering != g_settings.gpu_texture_filter);
+  const bool true_color_diff       = (m_true_color != g_settings.gpu_true_color);
+  const bool scaled_dithering_diff = (m_scaled_dithering != g_settings.gpu_scaled_dithering);
+  const bool dim_diff              = filter_diff || true_color_diff || scaled_dithering_diff;
+  const bool non_dim_diff =
     (m_resolution_scale != resolution_scale || m_multisamples != multisamples ||
-     m_true_color != g_settings.gpu_true_color || m_per_sample_shading != per_sample_shading ||
-     m_scaled_dithering != g_settings.gpu_scaled_dithering ||
+     m_per_sample_shading != per_sample_shading ||
      m_using_uv_limits != use_uv_limits || m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing ||
      m_downsample_mode != downsample_mode || m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer() ||
      m_disable_color_perspective != disable_color_perspective ||
      m_shader_precompile_mode != g_settings.gpu_shader_precompile_mode);
-  *shaders_changed = filter_diff || non_filter_diff;
-  if (only_filter_changed)
-    *only_filter_changed = filter_diff && !non_filter_diff;
+  *shaders_changed = dim_diff || non_dim_diff;
+  if (only_dim_changed)
+    *only_dim_changed = dim_diff && !non_dim_diff;
 
   m_resolution_scale = resolution_scale;
   m_multisamples = multisamples;

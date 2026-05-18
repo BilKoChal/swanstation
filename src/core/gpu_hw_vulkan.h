@@ -164,16 +164,20 @@ private:
   // gracefully so DestroyPipelines doesn't trip on them.
   // The filter parameter selects which sub-cube of m_batch_pipelines /
   // m_batch_fragment_shaders the lookup and slow-path compile target.
-  // Main-thread draw callers pass m_texture_filtering (current
-  // session filter). The background warm-up worker iterates filter
-  // independently of m_texture_filtering so it can populate sub-
-  // cubes for filters the user has not yet selected, while the main
-  // thread continues using the current filter unaffected. Both
-  // helpers are reentrant under the same (filter, ...) tuple - the
+  // The true_color / scaled_dithering parameters extend the same
+  // pattern to those per-session spec consts on m_batch_pipelines
+  // only - they do not affect SPIR-V blob choice so the FS module
+  // cache stays a single 5D array shared across (true_color,
+  // scaled_dithering) combos. Main-thread draw callers pass
+  // (m_texture_filtering, m_true_color, m_scaled_dithering); the
+  // background warm-up worker passes the filter it is currently
+  // warming alongside its captured (m_true_color, m_scaled_dithering)
+  // snapshot. Both helpers are reentrant under the same tuple - the
   // slot publish under m_batch_shader_mutex handles the race winner.
   VkShaderModule GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode,
                                         bool dithering, bool interlacing);
-  VkPipeline GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode,
+  VkPipeline GetBatchPipeline(GPUTextureFilter filter, bool true_color, bool scaled_dithering,
+                              uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode,
                               uint8_t transparency_mode, bool dithering, bool interlacing);
 
   // Lazy non-batch PSO compile path. Mirrors the D3D12 backend's
@@ -268,24 +272,46 @@ private:
   uint32_t m_current_uniform_buffer_offset = 0;
   VkBufferView m_texture_stream_buffer_view = VK_NULL_HANDLE;
 
-  // [filter][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
+  // [filter][true_color][scaled_dithering][depth_test][render_mode][texture_mode][transparency_mode][dithering][interlacing]
   //
-  // Filter is the outermost dimension - one sub-cube per
-  // GPUTextureFilter value (Nearest, Bilinear / BilinearBinAlpha,
-  // JINC2 / JINC2BinAlpha, xBR / xBRBinAlpha = 7 entries). Filter
-  // selects which pre-baked batch FS SPIR-V blob backs every PSO in
-  // its sub-cube; the other 6 dimensions are the structural axes
-  // shared across all filters. Indexing by current m_texture_filtering
-  // means filter-only setting changes do NOT need to flush the cache:
-  // the previous filter's sub-cube remains valid, populated, and
-  // instantly addressable when the user cycles back to it.
-  // CompilePipelines on a filter-only change populates the new
-  // sub-cube (in Enabled mode) or leaves it empty for lazy fault-in
-  // (in Lazy / Disabled). DestroyPipelines still does a full sweep
-  // - it is reached only on a non-filter shader-affecting change
-  // (resolution scale, MSAA, true colour, ...), which flips per-
-  // session state applied to every sub-cube and therefore invalidates
-  // all of them at once.
+  // Three outermost dimensions are the "near-instant toggle"
+  // settings: each represents a per-session value baked into every
+  // PSO via spec const (true_color = id 106, scaled_dithering = id
+  // 105) or structural SPIR-V blob selection (filter). Indexing by
+  // the current m_texture_filtering / m_true_color / m_scaled_dith-
+  // ering means toggling any of them in the core options menu does
+  // NOT flush the cache: the previous sub-cube remains valid,
+  // populated, and instantly addressable when the user cycles back.
+  // CompilePipelines on such a toggle populates the new sub-cube
+  // (Enabled mode synchronous, Lazy via worker, Disabled lazy
+  // fault-in). DestroyPipelines still does a full sweep - it is
+  // reached only on a NON-dimensioned shader-affecting change
+  // (resolution scale, MSAA, per-sample shading, UV limits, chroma
+  // smoothing, downsample mode, PGXP depth, colour perspective,
+  // precompile mode), which flips per-session state applied to
+  // EVERY sub-cube and therefore invalidates all of them at once.
+  //
+  // The six inner dimensions are the per-batch / per-draw state
+  // that GetBatchPipeline indexes today: depth-test mode, render
+  // mode, texture mode, transparency mode, per-call dithering bit
+  // (m_batch.dithering, NOT m_scaled_dithering), and the
+  // interlacing bit. These are passed to GetBatchPipeline as
+  // explicit arguments from DrawBatchVertices and the precompile
+  // loop.
+  //
+  // The background warm-up worker scopes its walk to the CURRENT
+  // (m_true_color, m_scaled_dithering) snapshot taken at thread
+  // entry, varying only filter and the six inner dims. We
+  // intentionally do NOT walk the off-current spec const sub-cubes
+  // in the background: a full 7 x 2 x 2 = 28 sub-cube warm-up on
+  // a cold pipeline cache would take a few minutes of background
+  // CPU per session, well past "useful" into "annoying". Instead
+  // the first toggle of true_color or scaled_dithering pays the
+  // usual sync compile (Enabled) or fault-in stutter (Lazy /
+  // Disabled) for the new combo's current filter sub-cube; the
+  // worker then walks the new combo's six other filter sub-cubes
+  // in the background as before. Cycling back is instant in all
+  // modes thanks to the dimensioned cache.
   //
   // std::atomic<VkPipeline> rather than a plain VkPipeline so the
   // draw path can sample a slot without taking any lock. The slow
@@ -296,15 +322,7 @@ private:
   // by the precompile worker or by an earlier main-thread fault-in
   // - is a single memory_order_acquire load with no kernel calls
   // and no serialisation against the worker.
-  //
-  // Without the lock-free fast path the user-visible experience
-  // after a texture-filter change was a multi-second hang: the
-  // precompile worker held m_batch_shader_mutex for the duration of
-  // each PSO compile (~hundreds of ms on the heavier shaders), so
-  // every concurrent main-thread DrawBatchVertices stalled behind
-  // it for at least one full compile, and the runloop never made
-  // forward progress until the worker finished the entire matrix.
-  DimensionalArray<std::atomic<VkPipeline>, 2, 2, 5, 9, 4, 3, 7> m_batch_pipelines{};
+  DimensionalArray<std::atomic<VkPipeline>, 2, 2, 5, 9, 4, 3, 2, 2, 7> m_batch_pipelines{};
 
   // Persistent vertex / fragment shader modules and shadergen for
   // the lazy and background-thread compile paths. These used to be
