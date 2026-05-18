@@ -5,7 +5,6 @@
 #include "common/vulkan/texture.h"
 #include "core/host_display.h"
 #include "gpu_hw.h"
-#include "gpu_hw_shadergen.h"
 #include "texture_replacements.h"
 #include <array>
 #include <atomic>
@@ -311,7 +310,6 @@ private:
   // itself. See the comment on m_batch_pipelines above for why
   // this matters.
   std::mutex m_batch_shader_mutex;
-  std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
   std::thread m_shader_compile_thread;
   std::atomic<bool> m_shader_compile_thread_quit{false};
 

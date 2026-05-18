@@ -127,10 +127,38 @@ def _batch_fs_textured_nearest_variants():
     return out
 
 
+def _batch_fs_textured_filter_variants():
+    """Shared structural cube for non-Nearest filter templates.
+
+    UV_LIMITS is implicit (ShouldUseUVLimits() forces it true for any
+    non-Nearest filter), so the cube collapses to 4 axes vs the 5
+    Nearest template uses. 3 x 2 x 2 x 2 = 24 blobs.
+    """
+    out = []
+    interp_axes = [
+        ("none",     []),
+        ("centroid", ["INTERP_CENTROID"]),
+        ("sample",   ["INTERP_SAMPLE"]),
+    ]
+    persp_axes = [("persp", []), ("noperp", ["NOPERSP"])]
+    dual_axes  = [("nodual", []), ("dual", ["DUAL_SOURCE"])]
+    pgxp_axes  = [("pgxpoff", []), ("pgxpon", ["PGXP_DEPTH"])]
+    for i_name, i_defs in interp_axes:
+        for p_name, p_defs in persp_axes:
+            for d_name, d_defs in dual_axes:
+                for x_name, x_defs in pgxp_axes:
+                    suffix = f"{i_name}_{p_name}_{d_name}_{x_name}"
+                    out.append((suffix, i_defs + p_defs + d_defs + x_defs))
+    return out
+
+
 TEMPLATE_VARIANTS = {
     "batch.vert.glsl":                      _batch_vs_variants(),
     "batch_untextured.frag.glsl":           _batch_fs_untextured_variants(),
     "batch_textured_nearest.frag.glsl":     _batch_fs_textured_nearest_variants(),
+    "batch_textured_bilinear.frag.glsl":    _batch_fs_textured_filter_variants(),
+    "batch_textured_jinc2.frag.glsl":       _batch_fs_textured_filter_variants(),
+    "batch_textured_xbr.frag.glsl":         _batch_fs_textured_filter_variants(),
 }
 
 

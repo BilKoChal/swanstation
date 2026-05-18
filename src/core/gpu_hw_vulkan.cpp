@@ -10,7 +10,6 @@
 #include "common/vulkan/staging_texture.h"
 #include "common/vulkan/util.h"
 #include "core/shader_cache_version.h"
-#include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "host_interface.h"
 #include "core/host_interface.h"
@@ -1412,11 +1411,6 @@ bool GPU_HW_Vulkan::CompilePipelines()
   VkDevice device = g_vulkan_context->GetDevice();
   VkPipelineCache pipeline_cache = g_vulkan_shader_cache->GetPipelineCache();
 
-  m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
-    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-    m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-    m_supports_dual_source_blend);
-
   // Three-mode precompile control - see GPUShaderPrecompileMode in
   // core/types.h.
   //
@@ -1850,54 +1844,60 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(uint8_t render_mode, uint8_
   // parallel. Two threads compiling the SAME shader is harmless:
   // both produce equivalent SPIR-V; the publish step picks one and
   // the loser destroys its VkShaderModule.
-  VkShaderModule fresh = VK_NULL_HANDLE;
-  const bool textured_embedded =
-    (lookup_mode != static_cast<uint8_t>(GPUTextureMode::Disabled)) &&
-    (m_texture_filtering == GPUTextureFilter::Nearest);
-  if (lookup_mode == static_cast<uint8_t>(GPUTextureMode::Disabled) || textured_embedded)
+  // All texture filters and the untextured path are pre-baked. Pick
+  // the structural blob from per-call and per-session state; per-call
+  // spec constants (TRANSPARENCY, DITHERING, INTERLACING, PALETTE_*,
+  // RAW_TEXTURE, BINALPHA, ...) are applied at pipeline-create time in
+  // GetBatchPipeline.
+  //
+  // use_dual_source matches the original shadergen-side derivation:
+  //   supports && ((render_mode is transparent) || filter != Nearest)
+  const bool is_textured = (lookup_mode != static_cast<uint8_t>(GPUTextureMode::Disabled));
+  const bool dual_source = m_supports_dual_source_blend &&
+    ((render_mode == static_cast<uint8_t>(BatchRenderMode::TransparentAndOpaque) ||
+      render_mode == static_cast<uint8_t>(BatchRenderMode::OnlyTransparent)) ||
+     (m_texture_filtering != GPUTextureFilter::Nearest));
+  const Vulkan::EmbeddedShaders::EmbeddedShaderBlob* blob_ptr;
+  if (!is_textured)
   {
-    // Pre-baked path: untextured (texture_mode == Disabled) and the
-    // textured-Nearest slice both land here. Per-call spec constants
-    // (TRANSPARENCY, DITHERING, INTERLACING, PALETTE_*, RAW_TEXTURE,
-    // ...) are applied at pipeline-create time in GetBatchPipeline.
-    //
-    // use_dual_source matches the shadergen-side derivation:
-    //   supports && ((render_mode is transparent) || filter != Nearest)
-    // For both branches here we are nearest-or-untextured, so the
-    // filter half evaluates false and we drop to the render_mode test.
-    const bool dual_source = m_supports_dual_source_blend &&
-      (render_mode == static_cast<uint8_t>(BatchRenderMode::TransparentAndOpaque) ||
-       render_mode == static_cast<uint8_t>(BatchRenderMode::OnlyTransparent));
-    const Vulkan::EmbeddedShaders::EmbeddedShaderBlob* blob_ptr;
-    if (textured_embedded)
-    {
-      blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedNearestFragmentShaderBlob(
-        m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-        dual_source, m_pgxp_depth_buffer, m_using_uv_limits);
-    }
-    else
-    {
-      blob_ptr = &Vulkan::EmbeddedShaders::GetBatchUntexturedFragmentShaderBlob(
-        m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-        dual_source, m_pgxp_depth_buffer);
-    }
-    fresh = Vulkan::EmbeddedShaders::CreateShaderModule(blob_ptr->spv, blob_ptr->size_bytes);
+    blob_ptr = &Vulkan::EmbeddedShaders::GetBatchUntexturedFragmentShaderBlob(
+      m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+      dual_source, m_pgxp_depth_buffer);
   }
   else
   {
-    // Textured non-Nearest slices still go through shadergen + glslang;
-    // conversion lands in subsequent patches, one filter family at a
-    // time (Bilinear / BilinearBinAlpha, JINC2 / JINC2BinAlpha, xBR /
-    // xBRBinAlpha).
-    if (!m_shadergen)
+    switch (m_texture_filtering)
     {
-      Log_ErrorPrint("GetBatchFragmentShader called before CompilePipelines constructed the shadergen");
-      return VK_NULL_HANDLE;
+      case GPUTextureFilter::Nearest:
+        blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedNearestFragmentShaderBlob(
+          m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+          dual_source, m_pgxp_depth_buffer, m_using_uv_limits);
+        break;
+      case GPUTextureFilter::Bilinear:
+      case GPUTextureFilter::BilinearBinAlpha:
+        blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedBilinearFragmentShaderBlob(
+          m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+          dual_source, m_pgxp_depth_buffer);
+        break;
+      case GPUTextureFilter::JINC2:
+      case GPUTextureFilter::JINC2BinAlpha:
+        blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedJINC2FragmentShaderBlob(
+          m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+          dual_source, m_pgxp_depth_buffer);
+        break;
+      case GPUTextureFilter::xBR:
+      case GPUTextureFilter::xBRBinAlpha:
+        blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedXBRFragmentShaderBlob(
+          m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
+          dual_source, m_pgxp_depth_buffer);
+        break;
+      default:
+        Log_ErrorPrintf("GetBatchFragmentShader: unknown texture filter %u",
+                        static_cast<unsigned>(m_texture_filtering));
+        return VK_NULL_HANDLE;
     }
-    const std::string fs = m_shadergen->GenerateBatchFragmentShader(
-      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-    fresh = g_vulkan_shader_cache->GetFragmentShader(fs);
   }
+  VkShaderModule fresh = Vulkan::EmbeddedShaders::CreateShaderModule(blob_ptr->spv, blob_ptr->size_bytes);
   if (fresh == VK_NULL_HANDLE)
   {
     Log_ErrorPrintf("Lazy batch fragment shader compile failed for (rm=%u, tm=%u, d=%u, i=%u)", render_mode,
@@ -2013,10 +2013,14 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   //   id = 109  RAW_TEXTURE                   (bool, per-call -
   //                                            texture_mode has
   //                                            RawTextureBit set)
+  //   id = 110  BINALPHA                      (bool, per-session -
+  //                                            m_texture_filtering is
+  //                                            one of the *BinAlpha
+  //                                            filter values)
   //
-  // 107-109 are meaningful only on the textured Nearest blobs; the
-  // untextured blobs do not declare them. Passing them is harmless -
-  // unrecognised spec const IDs are silently dropped.
+  // 107-110 are meaningful only on the textured blobs; the untextured
+  // blobs do not declare them. Passing them is harmless - unrecognised
+  // spec const IDs are silently dropped.
   const BatchRenderMode brm = static_cast<BatchRenderMode>(render_mode);
   const uint8_t actual_tex_mode =
     static_cast<uint8_t>(lookup_mode) &
@@ -2025,6 +2029,9 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   const bool palette_8_bit = (actual_tex_mode == static_cast<uint8_t>(GPUTextureMode::Palette8Bit));
   const bool raw_texture   = (static_cast<uint8_t>(lookup_mode) &
                               static_cast<uint8_t>(GPUTextureMode::RawTextureBit)) != 0;
+  const bool binalpha = (m_texture_filtering == GPUTextureFilter::BilinearBinAlpha ||
+                         m_texture_filtering == GPUTextureFilter::JINC2BinAlpha ||
+                         m_texture_filtering == GPUTextureFilter::xBRBinAlpha);
   Vulkan::SpecConstants fs_spec;
   fs_spec.AddUInt(  0, static_cast<uint32_t>(m_resolution_scale));
   fs_spec.AddBool(100, brm != BatchRenderMode::TransparencyDisabled);
@@ -2037,6 +2044,7 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(uint8_t depth_test, uint8_t render_mo
   fs_spec.AddBool(107, palette_4_bit);
   fs_spec.AddBool(108, palette_8_bit);
   fs_spec.AddBool(109, raw_texture);
+  fs_spec.AddBool(110, binalpha);
   gpbuilder.SetFragmentShader(fs, fs_spec.GetInfo());
 
   gpbuilder.SetRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -2137,8 +2145,8 @@ VkShaderModule GPU_HW_Vulkan::GetFullscreenQuadVertexShader()
   if (m_fullscreen_quad_vertex_shader != VK_NULL_HANDLE)
     return m_fullscreen_quad_vertex_shader;
 
-  // Pre-baked SPIR-V: no glslang invocation, no shader_cache lookup, no
-  // dependency on m_shadergen existing yet. See
+  // Pre-baked SPIR-V: no glslang invocation, no shader_cache lookup,
+  // available the moment the Vulkan device is up. See
   // data/shaders/vulkan/screen_quad.vert.glsl for the source of the blob,
   // and src/common/vulkan/embedded_shaders.h for the loader.
   m_fullscreen_quad_vertex_shader = Vulkan::EmbeddedShaders::CreateShaderModule(
@@ -2687,7 +2695,6 @@ void GPU_HW_Vulkan::DestroyPipelines()
   // matrix - the worker writes into m_batch_fragment_shaders and
   // m_batch_pipelines, both of which we're about to enumerate-destroy.
   StopShaderCompileThread();
-  m_shadergen.reset();
 
   // Atomic slot teardown. By this point the worker is stopped and
   // no other thread is touching the arrays, so memory_order_relaxed

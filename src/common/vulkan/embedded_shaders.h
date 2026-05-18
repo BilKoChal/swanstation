@@ -262,6 +262,48 @@ const EmbeddedShaderBlob& GetBatchTexturedNearestFragmentShaderBlob(bool msaa,
                                                                     bool pgxp_depth,
                                                                     bool uv_limits);
 
+// Batch FS, textured-with-Bilinear / BilinearBinAlpha-filter slice.
+// Four structural axes (UV_LIMITS is implicit - all non-Nearest filter
+// sessions have m_using_uv_limits forced true by ShouldUseUVLimits, so
+// there is no non-UV variant):
+//
+//   - Input interpolation qualifier (none / centroid / sample). 3.
+//   - Color input perspective (standard / noperspective). 2.
+//   - Dual-source output. 2.
+//   - PGXP depth output. 2.
+//
+// 3 x 2 x 2 x 2 = 24 blobs. The Bilinear vs BilinearBinAlpha distinction
+// is folded into a per-call BINALPHA specialisation constant (id=110).
+extern const EmbeddedShaderBlob k_batch_textured_bilinear_fs_blobs[24];
+
+const EmbeddedShaderBlob& GetBatchTexturedBilinearFragmentShaderBlob(bool msaa,
+                                                                     bool per_sample_shading,
+                                                                     bool noperspective_color,
+                                                                     bool dual_source,
+                                                                     bool pgxp_depth);
+
+// Batch FS, textured-with-JINC2 / JINC2BinAlpha-filter slice. Same
+// structural cube as the Bilinear family (4 axes, 24 blobs). JINC2 vs
+// JINC2BinAlpha collapsed via the BINALPHA spec const.
+extern const EmbeddedShaderBlob k_batch_textured_jinc2_fs_blobs[24];
+
+const EmbeddedShaderBlob& GetBatchTexturedJINC2FragmentShaderBlob(bool msaa,
+                                                                  bool per_sample_shading,
+                                                                  bool noperspective_color,
+                                                                  bool dual_source,
+                                                                  bool pgxp_depth);
+
+// Batch FS, textured-with-xBR / xBRBinAlpha-filter slice. Same
+// structural cube as the Bilinear / JINC2 families (4 axes, 24 blobs).
+// xBR vs xBRBinAlpha collapsed via the BINALPHA spec const.
+extern const EmbeddedShaderBlob k_batch_textured_xbr_fs_blobs[24];
+
+const EmbeddedShaderBlob& GetBatchTexturedXBRFragmentShaderBlob(bool msaa,
+                                                                bool per_sample_shading,
+                                                                bool noperspective_color,
+                                                                bool dual_source,
+                                                                bool pgxp_depth);
+
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
 //
