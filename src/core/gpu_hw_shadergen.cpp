@@ -15,13 +15,26 @@ GPU_HW_ShaderGen::GPU_HW_ShaderGen(HostDisplay::RenderAPI render_api, uint32_t r
 
 GPU_HW_ShaderGen::~GPU_HW_ShaderGen() = default;
 
-void GPU_HW_ShaderGen::WriteCommonFunctions(std::stringstream& ss)
+void GPU_HW_ShaderGen::WriteCommonFunctions(std::stringstream& ss, bool batch_uniform_buffer)
 {
   DefineMacro(ss, "MULTISAMPLING", UsingMSAA());
 
-  ss << "CONSTANT uint RESOLUTION_SCALE = " << m_resolution_scale << "u;\n";
-  ss << "CONSTANT uint2 VRAM_SIZE = uint2(" << VRAM_WIDTH << ", " << VRAM_HEIGHT << ") * RESOLUTION_SCALE;\n";
-  ss << "CONSTANT float2 RCP_VRAM_SIZE = float2(1.0, 1.0) / float2(VRAM_SIZE);\n";
+  // RESOLUTION_SCALE / VRAM_SIZE / RCP_VRAM_SIZE are emitted either
+  // as file-scope literals (the legacy path - used for non-batch
+  // shaders that don't bind the batch UBO) or are derived from
+  // u_resolution_scale inside the batch UBO (the per-session path).
+  // The batch path lets the same DXBC / GLSL serve every resolution
+  // scale without recompile; the legacy path keeps the literal
+  // baking that non-batch shaders rely on. WriteBatchUniformBuffer
+  // emits the #defines for the batch path; we just skip the
+  // file-scope CONSTANT block here when it's going to.
+  if (!batch_uniform_buffer)
+  {
+    ss << "CONSTANT uint RESOLUTION_SCALE = " << m_resolution_scale << "u;\n";
+    ss << "CONSTANT uint2 VRAM_SIZE = uint2(" << VRAM_WIDTH << ", " << VRAM_HEIGHT << ") * RESOLUTION_SCALE;\n";
+    ss << "CONSTANT float2 RCP_VRAM_SIZE = float2(1.0, 1.0) / float2(VRAM_SIZE);\n";
+  }
+
   ss << "CONSTANT uint MULTISAMPLES = " << m_multisamples << "u;\n";
   ss << "CONSTANT bool PER_SAMPLE_SHADING = " << (m_per_sample_shading ? "true" : "false") << ";\n";
   ss << R"(
@@ -70,8 +83,19 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
   DeclareUniformBuffer(ss,
                        {"uint2 u_texture_window_and", "uint2 u_texture_window_or", "float u_src_alpha_factor",
                         "float u_dst_alpha_factor", "uint u_interlaced_displayed_field",
-                        "bool u_set_mask_while_drawing"},
+                        "bool u_set_mask_while_drawing", "uint u_resolution_scale", "uint u_true_color",
+                        "uint u_scaled_dithering", "uint u_pad0"},
                        false);
+
+  // Alias the historical compile-time constants to their cbuffer-
+  // backed equivalents. Every existing reference in the shader body
+  // (RESOLUTION_SCALE, VRAM_SIZE, RCP_VRAM_SIZE) keeps working as-is;
+  // the preprocessor just substitutes them with arithmetic over
+  // u_resolution_scale. VRAM_WIDTH / VRAM_HEIGHT stay compile-time
+  // literals because they are fixed PSX geometry, not session state.
+  ss << "#define RESOLUTION_SCALE u_resolution_scale\n";
+  ss << "#define VRAM_SIZE (uint2(" << VRAM_WIDTH << "u, " << VRAM_HEIGHT << "u) * u_resolution_scale)\n";
+  ss << "#define RCP_VRAM_SIZE (float2(1.0, 1.0) / float2(VRAM_SIZE))\n";
 }
 
 std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
@@ -82,8 +106,14 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
   DefineMacro(ss, "UV_LIMITS", m_uv_limits);
   DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
 
-  WriteCommonFunctions(ss);
+  // Order matters: WriteBatchUniformBuffer must emit before
+  // WriteCommonFunctions so the #define aliases for RESOLUTION_SCALE
+  // / VRAM_SIZE / RCP_VRAM_SIZE are in scope when fixYCoord (defined
+  // in WriteCommonFunctions) references them, and so that the
+  // resulting u_resolution_scale references resolve against an
+  // already-declared cbuffer member.
   WriteBatchUniformBuffer(ss);
+  WriteCommonFunctions(ss, true);
 
   ss << R"(
 
@@ -687,16 +717,25 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
   DefineMacro(ss, "PALETTE_8_BIT", actual_texture_mode == GPUTextureMode::Palette8Bit);
   DefineMacro(ss, "RAW_TEXTURE", raw_texture);
   DefineMacro(ss, "DITHERING", dithering);
-  DefineMacro(ss, "DITHERING_SCALED", m_scaled_dithering);
+  // DITHERING_SCALED and TRUE_COLOR used to live as compile-time
+  // #defines, baking a fresh shader compile for every flip of either.
+  // They are now routed through the batch UBO (u_scaled_dithering,
+  // u_true_color), checked at runtime via uniform-control-flow
+  // branches in the FS body. Toggling either is a single cbuffer
+  // write picked up on the next FlushRender, with no DXBC recompile
+  // and no PSO rebuild.
   DefineMacro(ss, "INTERLACING", interlacing);
-  DefineMacro(ss, "TRUE_COLOR", m_true_color);
   DefineMacro(ss, "TEXTURE_FILTERING", m_texture_filter != GPUTextureFilter::Nearest);
   DefineMacro(ss, "UV_LIMITS", m_uv_limits);
   DefineMacro(ss, "USE_DUAL_SOURCE", use_dual_source);
   DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
 
-  WriteCommonFunctions(ss);
+  // Same ordering rule as in GenerateBatchVertexShader: cbuffer
+  // declaration before helpers, so RESOLUTION_SCALE / VRAM_SIZE /
+  // RCP_VRAM_SIZE are macro-aliased to u_resolution_scale before
+  // fixYCoord references them.
   WriteBatchUniformBuffer(ss);
+  WriteCommonFunctions(ss, true);
   DeclareTexture(ss, "samp0", 0);
 
   if (m_glsl)
@@ -717,18 +756,17 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
   ss << R"(
 uint3 ApplyDithering(uint2 coord, uint3 icol)
 {
-  #if DITHERING_SCALED
-    uint2 fc = coord & uint2(3u, 3u);
-  #else
-    uint2 fc = (coord / uint2(RESOLUTION_SCALE, RESOLUTION_SCALE)) & uint2(3u, 3u);
-  #endif
+  uint2 fc;
+  if (u_scaled_dithering != 0u)
+    fc = coord & uint2(3u, 3u);
+  else
+    fc = (coord / uint2(RESOLUTION_SCALE, RESOLUTION_SCALE)) & uint2(3u, 3u);
   int offset = s_dither_values[fc.y * 4u + fc.x];
 
-  #if !TRUE_COLOR
-    return uint3(clamp((int3(icol) + int3(offset, offset, offset)) >> 3, 0, 31));
-  #else
+  if (u_true_color != 0u)
     return uint3(clamp(int3(icol) + int3(offset, offset, offset), 0, 255));
-  #endif
+  else
+    return uint3(clamp((int3(icol) + int3(offset, offset, offset)) >> 3, 0, 31));
 }
 
 #if TEXTURED
@@ -874,17 +912,11 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     semitransparent = (texcol.a >= 0.5);
 
     // If not using true color, truncate the framebuffer colors to 5-bit.
-    #if !TRUE_COLOR
-      icolor = uint3(texcol.rgb * float3(255.0, 255.0, 255.0)) >> 3;
-      #if !RAW_TEXTURE
-        icolor = (icolor * vertcol) >> 4;
-        #if DITHERING
-          icolor = ApplyDithering(uint2(v_pos.xy), icolor);
-        #else
-          icolor = min(icolor >> 3, uint3(31u, 31u, 31u));
-        #endif
-      #endif
-    #else
+    // Runtime branch on u_true_color (was a compile-time #if). The
+    // inner RAW_TEXTURE / DITHERING #ifs stay compile-time because
+    // those are still structural in the shader matrix.
+    if (u_true_color != 0u)
+    {
       icolor = uint3(texcol.rgb * float3(255.0, 255.0, 255.0));
       #if !RAW_TEXTURE
         icolor = (icolor * vertcol) >> 7;
@@ -894,7 +926,19 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
           icolor = min(icolor, uint3(255u, 255u, 255u));
         #endif
       #endif
-    #endif
+    }
+    else
+    {
+      icolor = uint3(texcol.rgb * float3(255.0, 255.0, 255.0)) >> 3;
+      #if !RAW_TEXTURE
+        icolor = (icolor * vertcol) >> 4;
+        #if DITHERING
+          icolor = ApplyDithering(uint2(v_pos.xy), icolor);
+        #else
+          icolor = min(icolor >> 3, uint3(31u, 31u, 31u));
+        #endif
+      #endif
+    }
 
     // Compute output alpha (mask bit)
     oalpha = float(u_set_mask_while_drawing ? 1 : int(semitransparent));
@@ -907,9 +951,8 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     #if DITHERING
       icolor = ApplyDithering(uint2(v_pos.xy), icolor);
     #else
-      #if !TRUE_COLOR
+      if (u_true_color == 0u)
         icolor >>= 3;
-      #endif
     #endif
 
     // However, the mask bit is cleared if set mask bit is false.
@@ -923,14 +966,17 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
   #endif
 
   float3 color;
-  #if !TRUE_COLOR
+  if (u_true_color != 0u)
+  {
+    // True color is actually simpler here since we want to preserve the precision.
+    color = (float3(icolor) * premultiply_alpha) / float3(255.0, 255.0, 255.0);
+  }
+  else
+  {
     // We want to apply the alpha before the truncation to 16-bit, otherwise we'll be passing a 32-bit precision color
     // into the blend unit, which can cause a small amount of error to accumulate.
     color = floor(float3(icolor) * premultiply_alpha) / float3(31.0, 31.0, 31.0);
-  #else
-    // True color is actually simpler here since we want to preserve the precision.
-    color = (float3(icolor) * premultiply_alpha) / float3(255.0, 255.0, 255.0);
-  #endif
+  }
 
   #if TRANSPARENCY && TEXTURED
     // Apply semitransparency. If not a semitransparent texel, destination alpha is ignored.

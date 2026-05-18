@@ -116,6 +116,20 @@ protected:
     float u_dst_alpha_factor;
     uint32_t u_interlaced_displayed_field;
     uint32_t u_set_mask_while_drawing;
+    // Per-session fields. These used to be baked into the HLSL/GLSL
+    // source at shadergen time via DefineMacro / CONSTANT-literal
+    // emission, which forced a fresh shader compile for every value
+    // (every resolution scale, every true_color flip, every
+    // scaled_dithering flip). Routing them through the batch
+    // uniform buffer instead means a toggle is a single 4-byte
+    // cbuffer write picked up on the next FlushRender - no DXBC
+    // recompile, no PSO rebuild, no batch matrix flush. Mirrors
+    // what Vulkan spec consts do for the same settings on the
+    // pre-baked SPIR-V path.
+    uint32_t u_resolution_scale;
+    uint32_t u_true_color;
+    uint32_t u_scaled_dithering;
+    uint32_t u_pad0; // pad to 16-byte cbuffer row
   };
 
   struct VRAMFillUBOData

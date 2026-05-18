@@ -35,7 +35,7 @@ public:
                                     const std::string_view fragment_shader, const PreLinkCallback& callback = {});
 
 private:
-  static constexpr uint32_t FILE_VERSION = 3;
+  static constexpr uint32_t FILE_VERSION = 4;
 
   struct CacheIndexKey
   {

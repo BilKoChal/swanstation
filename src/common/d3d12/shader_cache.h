@@ -62,7 +62,7 @@ public:
   ComPtr<ID3D12PipelineState> GetPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
 
 private:
-  static constexpr uint32_t FILE_VERSION = 1;
+  static constexpr uint32_t FILE_VERSION = 2;
 
   struct CacheIndexKey
   {

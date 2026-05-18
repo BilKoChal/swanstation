@@ -89,6 +89,13 @@ bool GPU_HW::Initialize(HostDisplay* host_display)
 
   m_pgxp_depth_buffer = g_settings.UsingPGXPDepthBuffer();
 
+  // Seed the per-session cbuffer fields. m_batch_ubo_dirty defaults
+  // to true so the first FlushRender uploads these; subsequent
+  // sessions update them in UpdateHWSettings below.
+  m_batch_ubo_data.u_resolution_scale = m_resolution_scale;
+  m_batch_ubo_data.u_true_color = m_true_color ? 1u : 0u;
+  m_batch_ubo_data.u_scaled_dithering = m_scaled_dithering ? 1u : 0u;
+
   UpdateSoftwareRenderer(false);
 
   return true;
@@ -205,6 +212,19 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
   m_downsample_mode = downsample_mode;
   m_disable_color_perspective = disable_color_perspective;
   m_shader_precompile_mode = g_settings.gpu_shader_precompile_mode;
+
+  // Push per-session cbuffer fields into the batch UBO. These three
+  // settings used to drive shader recompiles on every flip; they now
+  // ride the existing per-session UBO upload that already runs on
+  // m_batch_ubo_dirty. Setting the flag here ensures the next
+  // FlushRender picks up the new values before any draw uses them.
+  // Toggling these settings is effectively free at the shader cache
+  // level on D3D11 / D3D12 / OpenGL backends, and on Vulkan it
+  // reduces redundant spec const churn.
+  m_batch_ubo_data.u_resolution_scale = m_resolution_scale;
+  m_batch_ubo_data.u_true_color = m_true_color ? 1u : 0u;
+  m_batch_ubo_data.u_scaled_dithering = m_scaled_dithering ? 1u : 0u;
+  m_batch_ubo_dirty = true;
 
   if (!m_supports_dual_source_blend && TextureFilterRequiresDualSourceBlend(m_texture_filtering))
     m_texture_filtering = GPUTextureFilter::Nearest;

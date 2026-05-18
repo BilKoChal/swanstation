@@ -38,7 +38,7 @@ public:
   ComPtr<ID3D11PixelShader> GetPixelShader(ID3D11Device* device, std::string_view shader_code);
 
 private:
-  static constexpr uint32_t FILE_VERSION = 2;
+  static constexpr uint32_t FILE_VERSION = 3;
 
   struct CacheIndexKey
   {
