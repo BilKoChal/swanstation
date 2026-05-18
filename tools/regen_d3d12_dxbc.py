@@ -60,9 +60,21 @@ TEMPLATE_VARIANTS = {}
 
 
 def find_fxc(explicit_fxc, explicit_wine):
-    # On Windows, look for fxc.exe in the Windows 10 SDK install location
-    # first, then PATH. On Linux, require Wine + explicit --fxc pointing at
-    # the Windows fxc.exe install.
+    # On Windows, look for fxc.exe in the Windows 10 / 11 SDK install
+    # location first, then PATH. On Linux, look in any Wine prefix
+    # we can find that has the SDK installed; only fall back to the
+    # --fxc override when the user explicitly points us at one.
+    #
+    # Microsoft's actual fxc.exe is required - Wine's bundled
+    # d3dcompiler_47.dll (which is the vkd3d-shader reimplementation)
+    # produces DXBC that doesn't pass Microsoft D3D12 PSO validation
+    # for non-trivial shaders. cd971cd / da20f5b chronicles a
+    # vram_copy_ps pre-bake attempt that failed with
+    # CreateGraphicsPipelineState E_FAIL because the .inc was built
+    # with vkd3d-shader. The check_microsoft_creator() validator
+    # below rejects vkd3d-compiled output post-hoc, but it's better
+    # to find Microsoft's fxc.exe up-front and skip the wasted
+    # compile time entirely. See data/shaders/d3d12/README.md.
     if explicit_fxc:
         fxc = Path(explicit_fxc)
         if not fxc.exists():
@@ -77,17 +89,32 @@ def find_fxc(explicit_fxc, explicit_wine):
         if path:
             return [path]
 
-    # Try the common Windows 10 SDK install location even when not on
-    # Windows (in case the user has the SDK mounted under Wine prefix).
+    # SDK auto-detection. The Windows 10 / 11 SDK installs fxc.exe at
+    # <SDK_root>/<version>/x64/fxc.exe. Try the standard install
+    # locations on Windows AND under every plausible Wine prefix on
+    # Linux. The /Program Files/ and /Program Files (x86)/ split
+    # depends on whether the SDK was installed as 32-bit or 64-bit;
+    # check both. Wine prefix discovery covers $WINEPREFIX (if set),
+    # the default ~/.wine, and any prefixes under ~/.local/share/
+    # wineprefixes/ that PlayOnLinux and lutris-style installs use.
     sdk_roots = [
         Path("C:/Program Files (x86)/Windows Kits/10/bin"),
         Path("C:/Program Files/Windows Kits/10/bin"),
     ]
-    # Add Wine-prefix style path if we have one.
-    wine_prefix = os.environ.get("WINEPREFIX")
-    if wine_prefix:
-        sdk_roots.append(Path(wine_prefix) / "drive_c" / "Program Files (x86)" / "Windows Kits" / "10" / "bin")
-        sdk_roots.append(Path(wine_prefix) / "drive_c" / "Program Files" / "Windows Kits" / "10" / "bin")
+    wine_prefixes = []
+    if "WINEPREFIX" in os.environ:
+        wine_prefixes.append(Path(os.environ["WINEPREFIX"]))
+    default_prefix = Path.home() / ".wine"
+    if default_prefix.exists() and default_prefix not in wine_prefixes:
+        wine_prefixes.append(default_prefix)
+    extra_prefix_dir = Path.home() / ".local" / "share" / "wineprefixes"
+    if extra_prefix_dir.exists():
+        for child in extra_prefix_dir.iterdir():
+            if child.is_dir() and (child / "drive_c").exists():
+                wine_prefixes.append(child)
+    for prefix in wine_prefixes:
+        sdk_roots.append(prefix / "drive_c" / "Program Files (x86)" / "Windows Kits" / "10" / "bin")
+        sdk_roots.append(prefix / "drive_c" / "Program Files" / "Windows Kits" / "10" / "bin")
 
     for root in sdk_roots:
         if not root.exists():
@@ -102,11 +129,99 @@ def find_fxc(explicit_fxc, explicit_wine):
                         [explicit_wine or "wine", str(candidate)])
 
     sys.stderr.write(
-        "error: fxc.exe not found. Install the Windows 10 SDK (or a newer\n"
-        "       Windows SDK that still ships fxc.exe), or pass --fxc PATH\n"
-        "       pointing at a working fxc.exe binary. On Linux pass --wine\n"
-        "       PATH if `wine` isn't on PATH.\n")
+        "error: fxc.exe not found. The Microsoft Windows 10/11 SDK ships\n"
+        "       it under <SDK>/bin/<version>/x64/fxc.exe. See\n"
+        "       data/shaders/d3d12/README.md for installation steps,\n"
+        "       including how to set up the SDK under a Wine prefix\n"
+        "       for Linux contributors. If you have fxc.exe elsewhere,\n"
+        "       pass --fxc PATH. On Linux pass --wine PATH if `wine`\n"
+        "       isn't on PATH.\n"
+        "\n"
+        "       Wine's bundled d3dcompiler_47.dll (vkd3d-shader\n"
+        "       reimplementation) is NOT a substitute - its DXBC output\n"
+        "       fails Microsoft D3D12 PSO validation. See da20f5b for\n"
+        "       a worked example.\n")
     sys.exit(1)
+
+
+def extract_rdef_creator(data):
+    # Inspect the DXBC RDEF chunk and pull out the compiler-creator
+    # string. The DXBC container is:
+    #     [0:4]     magic "DXBC"
+    #     [4:20]    16-byte content hash
+    #     [20:24]   container version
+    #     [24:28]   total size
+    #     [28:32]   chunk count
+    #     [32:..]   uint32 offsets, one per chunk
+    # Each chunk header is 8 bytes (4-byte magic + 4-byte size) and
+    # is followed by chunk-type-specific payload. The RDEF chunk
+    # body lays out as:
+    #     [0:4]   constant_buffer_count
+    #     [4:8]   constant_buffer_offset
+    #     [8:12]  resource_binding_count
+    #     [12:16] resource_binding_offset
+    #     [16:20] shader_version (program_type | major | minor)
+    #     [20:24] compiler_flags
+    #     [24:28] creator_offset  (relative to body_start)
+    # Offsets in the RDEF body are relative to the START of the
+    # chunk body, NOT the start of the file - that's the same
+    # convention DXBC uses internally for SGN tables.
+    chunk_count_bytes = data[28:32]
+    if len(chunk_count_bytes) != 4:
+        return None
+    chunk_count = struct.unpack("<I", chunk_count_bytes)[0]
+    chunk_offsets_bytes = data[32:32 + 4 * chunk_count]
+    if len(chunk_offsets_bytes) != 4 * chunk_count:
+        return None
+    chunk_offsets = struct.unpack(f"<{chunk_count}I", chunk_offsets_bytes)
+    for off in chunk_offsets:
+        if off + 8 > len(data):
+            continue
+        magic = data[off:off + 4]
+        if magic != b"RDEF":
+            continue
+        body_start = off + 8
+        if body_start + 28 > len(data):
+            return None
+        creator_offset = struct.unpack("<I", data[body_start + 24:body_start + 28])[0]
+        creator_addr = body_start + creator_offset
+        # Creator string is null-terminated ASCII.
+        end = data.find(b"\0", creator_addr)
+        if end == -1:
+            return None
+        return data[creator_addr:end].decode("ascii", errors="replace")
+    return None
+
+
+def check_microsoft_creator(data, hlsl_path):
+    # Reject anything that isn't from Microsoft's fxc.exe. The
+    # creator string lives in the RDEF chunk and is what the
+    # compiler stamps as its identifier:
+    #
+    #   Microsoft fxc:     "Microsoft (R) HLSL Shader Compiler 10.1"
+    #                      (or similar - version trails the prefix)
+    #   Wine vkd3d-shader: "vkd3d-shader 1.10 (Wine bundled)"
+    #
+    # Microsoft fxc.exe is the only compiler whose DXBC output is
+    # known to pass D3D12 PSO validation for the shaders this
+    # backend uses. Other compilers may produce bytecode that's
+    # technically valid DXBC but trips PSO creation with E_FAIL.
+    # cd971cd / da20f5b is the worked example.
+    creator = extract_rdef_creator(data)
+    if creator is None:
+        sys.stderr.write(
+            f"error: could not parse RDEF / creator string from output\n"
+            f"       for {hlsl_path.name}. The DXBC structure may be\n"
+            f"       malformed; refusing to write .inc.\n")
+        sys.exit(1)
+    if "Microsoft" not in creator:
+        sys.stderr.write(
+            f"error: {hlsl_path.name} compiled with non-Microsoft fxc.\n"
+            f"       Creator string: {creator!r}\n"
+            f"       Microsoft's fxc.exe is required - see\n"
+            f"       data/shaders/d3d12/README.md. da20f5b chronicles\n"
+            f"       the failure mode when other compilers are used.\n")
+        sys.exit(1)
 
 
 def sanitize_identifier(stem):
@@ -152,6 +267,10 @@ def compile_one(fxc_cmd, hlsl_path, target, defines=None):
             f"error: {hlsl_path.name} produced output with bad magic "
             f"(0x{magic:08x}, expected 0x43425844)\n")
         sys.exit(1)
+    # Reject non-Microsoft compilers. The check parses the RDEF chunk
+    # for the creator string; Wine's bundled d3dcompiler_47.dll
+    # (vkd3d-shader) gets refused here.
+    check_microsoft_creator(data, hlsl_path)
     return data
 
 
