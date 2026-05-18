@@ -659,20 +659,45 @@ void GPU_HW_D3D11::UpdateSettings()
       // effectively "only filter changed"). m_batch_pixel_shaders is
       // filter-dimensioned: the previous filter's sub-cube remains
       // populated and reachable, so DestroyShaders would just throw
-      // away valid pixel shaders. Skip it and just call
-      // CompileShaders, which lazy-populates the new filter's
-      // sub-cube on top: in Enabled mode the precompile_sync loop
-      // walks the matrix calling GetBatchPixelShader with the new
-      // m_texture_filtering, so the other sub-cubes are untouched.
-      // In Lazy / Disabled the new sub-cube stays empty until first
-      // draw / the worker reaches each cell.
+      // away valid pixel shaders.
       //
       // Cycling back to a previously-visited filter is instant -
       // no D3DCompile, no CreatePixelShader, just an atomic load of
       // an already-filled slot. State objects (blend / depth /
       // input layout) are filter-independent and also stay valid;
       // CreateStateObjects is skipped on this branch.
-      CompileShaders();
+      //
+      // The non-batch pixel shaders (copy / VRAM ops / display /
+      // downsample), the vertex shaders, and the input layout are
+      // also all filter-independent - none of them read
+      // m_texture_filter inside shadergen (see
+      // gpu_hw_shadergen.cpp where m_texture_filter is only ever
+      // referenced from GenerateBatchFragmentShader and the
+      // WriteBatchTextureFilter helper it calls). They keep working
+      // with the handles they already have, so calling
+      // CompileShaders here just to rebuild them via the disk-
+      // backed DXBC shader cache (which hits as cache lookups on
+      // the same HLSL hashes) would be ~10-50ms of pure ComPtr
+      // churn per filter toggle for no functional benefit.
+      // Instead, reconstruct m_shadergen so future calls into it
+      // see current settings, build a progress tracker sized for
+      // the batch matrix only, and call PrecompileBatchShaders
+      // directly. PrecompileBatchShaders walks the new filter sub-
+      // cube via GetBatchPixelShader (which is dim-cache aware -
+      // already-populated cells from a previous visit short-circuit
+      // on the lock-free atomic load) and relaunches the Lazy
+      // worker for the new filter.
+      m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
+        m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+        m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+        m_supports_dual_source_blend);
+
+      const uint32_t batch_progress_units =
+        (g_settings.gpu_shader_precompile_mode == GPUShaderPrecompileMode::Enabled)
+          ? CountReachableBatchShaders(m_supports_dual_source_blend)
+          : 0u;
+      ShaderCompileProgressTracker progress("Compiling Shaders", batch_progress_units);
+      (void)PrecompileBatchShaders(progress);
     }
     else
     {
@@ -1099,67 +1124,17 @@ bool GPU_HW_D3D11::CompileShaders()
     progress.Increment();
   }
 
-  // Batch fragment shader matrix. Behaviour depends on
-  // g_settings.gpu_shader_precompile_mode:
-  //
-  //   - Enabled : compile every slot right here, like before. Old
-  //               behaviour preserved.
-  //   - Lazy    : leave the matrix empty for now; spawn a worker at
-  //               the end of CompileShaders that fills it in
-  //               background.
-  //   - Disabled: leave the matrix empty. GetBatchPixelShader will
-  //               fault each combo in synchronously the first time
-  //               the game dispatches a draw using it.
-  //
-  // GetBatchPixelShader handles the Reserved_*Direct16Bit dedup
-  // internally, so the precompile loop here doesn't need to special-
-  // case those - it'll call GetBatchPixelShader and the second
-  // duplicate will be a cheap cache hit / pointer copy.
-  //
-  // Structurally unreachable cells (reserved texture modes, two-pass
-  // fallback modes for untextured polys, single-pass dual-source on
-  // hardware that lacks it) are skipped via IsBatchShaderReachable.
-  // batch_progress_units is sized to the same reachable count so the
-  // progress bar lands at 100%.
-  if (precompile_sync)
-  {
-    const bool dual_source = m_supports_dual_source_blend;
-    // The dim cache makes m_batch_pixel_shaders filter-dimensioned.
-    // precompile_sync walks ONLY the current m_texture_filtering
-    // sub-cube, not the full 7-filter matrix - pre-filling six
-    // unused sub-cubes would multiply the cold-cache D3DCompile
-    // pass by 7x for no gain (the game can only be running under
-    // one filter at a time, and the other sub-cubes get faulted in
-    // on demand if the user later flips the filter setting and
-    // UpdateSettings calls CompileShaders again).
-    const GPUTextureFilter cur_filter = m_texture_filtering;
-    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
-    {
-      for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
-      {
-        if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
-          continue;
-
-        for (uint8_t dithering = 0; dithering < 2; dithering++)
-        {
-          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
-          {
-            ID3D11PixelShader* shader = GetBatchPixelShader(cur_filter, render_mode, texture_mode,
-                                                            static_cast<bool>(dithering),
-                                                            static_cast<bool>(interlacing));
-            if (!shader)
-              return false;
-
-            progress.Increment();
-          }
-        }
-      }
-    }
-  }
-  // For Lazy and Disabled: m_batch_pixel_shaders stays empty here;
-  // each slot fills in on first use via GetBatchPixelShader. The
-  // background-thread launch for Lazy happens after the rest of the
-  // non-batch shaders are built, near the end of this function.
+  // Batch fragment shader matrix - see PrecompileBatchShaders for
+  // the Enabled / Lazy / Disabled behaviour, the
+  // Reserved_*Direct16Bit dedup, the IsBatchShaderReachable filter,
+  // and the dim cache's "walk current m_texture_filtering sub-cube
+  // only" rule. progress is sized so the bar lands at 100% across
+  // the reachable cell count (CountReachableBatchShaders).
+  if (!PrecompileBatchShaders(progress))
+    return false;
+  // Lazy worker launch lives inside PrecompileBatchShaders now -
+  // safe to start before the non-batch builds below because the
+  // worker only walks m_batch_pixel_shaders.
 
   m_copy_pixel_shader = shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateCopyFragmentShader());
   if (!m_copy_pixel_shader)
@@ -1240,20 +1215,6 @@ bool GPU_HW_D3D11::CompileShaders()
   progress.Increment();
 
 #undef UPDATE_PROGRESS
-
-  if (precompile_mode == GPUShaderPrecompileMode::Lazy)
-  {
-    // Kick off the background-thread batch-fragment-shader fill so
-    // gameplay can start while the rest of the matrix compiles. The
-    // worker just walks the (render, texture, dither, interlace)
-    // matrix in order, calling the same GetBatchPixelShader helper
-    // the draw path uses, so any slot the game touches in the
-    // meantime is just skipped here (the recheck under the mutex
-    // sees it's already filled). DestroyShaders signals
-    // m_shader_compile_thread_quit and joins.
-    m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
-    m_shader_compile_thread = std::thread(&GPU_HW_D3D11::ShaderCompileThreadEntryPoint, this);
-  }
 
   return true;
 }
@@ -1511,6 +1472,90 @@ bool GPU_HW_D3D11::RebuildDisplayPixelShaders()
         return false;
     }
   }
+  return true;
+}
+
+bool GPU_HW_D3D11::PrecompileBatchShaders(ShaderCompileProgressTracker& progress)
+{
+  // Walk the current m_texture_filtering sub-cube of
+  // m_batch_pixel_shaders synchronously in Enabled mode; launch the
+  // background-thread batch-fragment-shader fill in Lazy mode; do
+  // nothing in Disabled. Caller is responsible for joining any
+  // previous worker (StopShaderCompileThread), opening
+  // m_shader_cache, and constructing m_shadergen.
+  //
+  // Extracted from CompileShaders so the only_dim_changed fast path
+  // in UpdateSettings can call just this helper without paying the
+  // ~10-50ms of cache-hit-but-still-wasted ComPtr churn that
+  // CompileShaders' non-batch shader rebuild block incurs on every
+  // filter flip. None of the non-batch pixel shaders (copy / VRAM
+  // ops / display / downsample) or vertex shaders depend on filter,
+  // so the existing ID3D11PixelShader / ID3D11VertexShader handles
+  // in those slots stay valid across a filter toggle - dropping
+  // them just to rebuild equivalent ones via the shader cache's
+  // disk-backed DXBC blob path is pure overhead. See gpu_hw_
+  // shadergen.cpp - GenerateBatchFragmentShader and
+  // WriteBatchTextureFilter (lines ~706, ~728, ~839) are the only
+  // callers that read m_texture_filter from the shadergen state.
+  //
+  // Structurally unreachable cells (reserved texture modes, two-pass
+  // fallback modes for untextured polys, single-pass dual-source
+  // on hardware that lacks it) are skipped via IsBatchShaderReachable.
+  // Progress is ticked once per reachable cell so the bar lands at
+  // batch_progress_units = CountReachableBatchShaders(dual_source).
+  const GPUShaderPrecompileMode precompile_mode = g_settings.gpu_shader_precompile_mode;
+  const bool precompile_sync = (precompile_mode == GPUShaderPrecompileMode::Enabled);
+
+  if (precompile_sync)
+  {
+    const bool dual_source = m_supports_dual_source_blend;
+    // The dim cache makes m_batch_pixel_shaders filter-dimensioned.
+    // precompile_sync walks ONLY the current m_texture_filtering
+    // sub-cube, not the full 7-filter matrix - pre-filling six
+    // unused sub-cubes would multiply the cold-cache D3DCompile
+    // pass by 7x for no gain (the game can only be running under
+    // one filter at a time, and the other sub-cubes get faulted in
+    // on demand if the user later flips the filter setting and
+    // UpdateSettings calls into this helper again).
+    const GPUTextureFilter cur_filter = m_texture_filtering;
+    for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
+    {
+      for (uint8_t texture_mode = 0; texture_mode < 9; texture_mode++)
+      {
+        if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
+          continue;
+
+        for (uint8_t dithering = 0; dithering < 2; dithering++)
+        {
+          for (uint8_t interlacing = 0; interlacing < 2; interlacing++)
+          {
+            ID3D11PixelShader* shader = GetBatchPixelShader(cur_filter, render_mode, texture_mode,
+                                                            static_cast<bool>(dithering),
+                                                            static_cast<bool>(interlacing));
+            if (!shader)
+              return false;
+
+            progress.Increment();
+          }
+        }
+      }
+    }
+  }
+
+  if (precompile_mode == GPUShaderPrecompileMode::Lazy)
+  {
+    // Kick off the background-thread batch-fragment-shader fill so
+    // gameplay can start while the rest of the matrix compiles. The
+    // worker just walks the (render, texture, dither, interlace)
+    // matrix in order, calling the same GetBatchPixelShader helper
+    // the draw path uses, so any slot the game touches in the
+    // meantime is just skipped here (the recheck under the mutex
+    // sees it's already filled). DestroyShaders signals
+    // m_shader_compile_thread_quit and joins.
+    m_shader_compile_thread_quit.store(false, std::memory_order_relaxed);
+    m_shader_compile_thread = std::thread(&GPU_HW_D3D11::ShaderCompileThreadEntryPoint, this);
+  }
+
   return true;
 }
 

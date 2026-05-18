@@ -138,6 +138,22 @@ private:
   void DestroyShaders();
   bool RebuildDisplayPixelShaders();
 
+  // Fast-path companion to CompileShaders for the dim-cache
+  // filter-only flip in UpdateSettings: walks just the current
+  // m_texture_filtering sub-cube of m_batch_pixel_shaders and
+  // launches the Lazy worker, without touching the filter-
+  // independent non-batch shaders (input layout, vertex shaders,
+  // copy / VRAM ops / display / downsample pixel shaders). All
+  // those stay valid through a filter toggle because none of them
+  // bake filter into their HLSL source - filter only affects the
+  // batch FS via FilteredSampleFromVRAM. Caller must have already
+  // joined any previous worker (StopShaderCompileThread) and
+  // populated m_shader_cache + m_shadergen. Called from
+  // CompileShaders itself for the initial / full-rebuild path, and
+  // directly from UpdateSettings's only_dim_changed branch to
+  // bypass the non-batch rebuild on warm filter cycling.
+  bool PrecompileBatchShaders(ShaderCompileProgressTracker& progress);
+
   // Lazy batch-fragment-shader compile path. The shader matrix
   // starts all-null; GetBatchPixelShader fills a slot on demand
   // (the first time the game dispatches a draw using that
