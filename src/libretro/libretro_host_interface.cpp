@@ -590,15 +590,39 @@ void HostInterface::retro_get_system_av_info(struct retro_system_av_info* info)
 
 void HostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale)
 {
-  const uint32_t resolution_scale = use_resolution_scale ? GetResolutionScale() : 1u;
+  // base reflects the current output texture size, which CAN change
+  // with downsample mode (Box pre-scales internal rendering down to
+  // 1x so the frontend texture is base_width = display * 1, while
+  // Disabled / Adaptive keep the upscaled output at display *
+  // gpu_resolution_scale). base changes are picked up by
+  // UpdateGeometry via RETRO_ENVIRONMENT_SET_GEOMETRY which the
+  // libretro spec guarantees will NOT reinitialise drivers.
+  //
+  // max reflects the upper bound on the texture handed to the
+  // frontend across the entire session. Critically, max is keyed
+  // ONLY off gpu_resolution_scale, not the downsample-aware
+  // GetResolutionScale() helper. Box mode could in principle hand
+  // back a smaller texture (VRAM_WIDTH * 1) than max
+  // (VRAM_WIDTH * gpu_resolution_scale), and that is perfectly
+  // legal libretro behaviour - the frontend allocates the larger
+  // backing texture, the core fills only the lower-left
+  // base_width x base_height region. Locking max to
+  // gpu_resolution_scale means toggling downsample mode does NOT
+  // change max and therefore does NOT require
+  // RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO (which forces a libretro
+  // hw context reinit and a multi-second freeze). Only an actual
+  // gpu_resolution_scale change needs SET_SYSTEM_AV_INFO; downsample
+  // mode changes route through SET_GEOMETRY instead.
+  const uint32_t base_scale = use_resolution_scale ? GetResolutionScale() : 1u;
+  const uint32_t max_scale = use_resolution_scale ? std::max<uint32_t>(g_settings.gpu_resolution_scale, 1u) : 1u;
 
   std::memset(info, 0, sizeof(*info));
 
-  info->geometry.base_width = (m_display ? m_display->GetDisplayWidth() : GPU_MAX_DISPLAY_WIDTH) * resolution_scale;
-  info->geometry.base_height = (m_display ? m_display->GetDisplayHeight() : GPU_MAX_DISPLAY_HEIGHT) * resolution_scale;
+  info->geometry.base_width = (m_display ? m_display->GetDisplayWidth() : GPU_MAX_DISPLAY_WIDTH) * base_scale;
+  info->geometry.base_height = (m_display ? m_display->GetDisplayHeight() : GPU_MAX_DISPLAY_HEIGHT) * base_scale;
   info->geometry.aspect_ratio = (m_display ? m_display->GetDisplayAspectRatio() : (g_gpu ? g_gpu->GetDisplayAspectRatio() : g_settings.GetDisplayAspectRatioValue()));
-  info->geometry.max_width = VRAM_WIDTH * resolution_scale;
-  info->geometry.max_height = VRAM_HEIGHT * resolution_scale;
+  info->geometry.max_width = VRAM_WIDTH * max_scale;
+  info->geometry.max_height = VRAM_HEIGHT * max_scale;
 
   info->timing.fps = (System::IsValid()) ? System::GetThrottleFrequency() : 60.0;
   info->timing.sample_rate = static_cast<double>(LibretroAudioStream::SAMPLE_RATE);
@@ -1312,19 +1336,55 @@ void HostInterface::UpdateSettings()
 
   if (System::IsValid())
   {
-    if ((g_settings.gpu_resolution_scale != old_settings.gpu_resolution_scale || g_settings.gpu_downsample_mode != old_settings.gpu_downsample_mode) &&
+    const bool resolution_scale_changed =
+      (g_settings.gpu_resolution_scale != old_settings.gpu_resolution_scale);
+    const bool downsample_mode_changed =
+      (g_settings.gpu_downsample_mode != old_settings.gpu_downsample_mode);
+
+    if ((resolution_scale_changed || downsample_mode_changed) &&
         g_settings.gpu_renderer != GPURenderer::Software)
     {
-      ReportMessage("Resolution changed, updating system AV info...");
-
-      UpdateSystemAVInfo(true);
-
-      if (!g_settings.IsUsingSoftwareRenderer())
+      // RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO is heavy: most libretro
+      // frontends respond to it by tearing down the hardware
+      // rendering context (swapchain, FBOs, the lot) and asking the
+      // core to rebuild from scratch. On Vulkan with the new
+      // dimensioned batch pipeline cache, that is catastrophic - it
+      // wipes every filter / true_color / scaled_dithering sub-cube
+      // the worker has built up and forces a several-second cold-
+      // cache warm-up.
+      //
+      // We only need the heavy path when geometry.max_width /
+      // max_height ACTUALLY change. Per libretro spec
+      // SET_SYSTEM_AV_INFO is the only way to grow those.
+      // SET_GEOMETRY explicitly ignores max changes but updates base
+      // dimensions and aspect ratio without driver reinit.
+      //
+      // GetSystemAVInfo locks max to gpu_resolution_scale, so only
+      // a true resolution_scale change moves max. Downsample mode
+      // moves base only (Box -> base / N, otherwise base * N). The
+      // SET_GEOMETRY path is correct - and crucial - for any
+      // downsample-only change.
+      if (resolution_scale_changed)
       {
-        if (!m_hw_render_callback_valid)
-          RequestHardwareRendererContext();
-        else if (!m_using_hardware_renderer)
-          SwitchToHardwareRenderer();
+        ReportMessage("Resolution changed, updating system AV info...");
+        UpdateSystemAVInfo(true);
+
+        if (!g_settings.IsUsingSoftwareRenderer())
+        {
+          if (!m_hw_render_callback_valid)
+            RequestHardwareRendererContext();
+          else if (!m_using_hardware_renderer)
+            SwitchToHardwareRenderer();
+        }
+      }
+      else
+      {
+        // Downsample-only change. Just update base / aspect via
+        // SET_GEOMETRY; no driver reinit, no swapchain rebuild, no
+        // batch pipeline cache wipe. GPU_HW_Vulkan::UpdateSettings
+        // handles the downsample resource swap in <2 ms via
+        // CreateDownsampleResources / DestroyDownsampleResources.
+        UpdateGeometry();
       }
 
       // Don't let the base class mess with the GPU.
