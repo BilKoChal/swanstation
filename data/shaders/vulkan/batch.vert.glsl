@@ -40,21 +40,28 @@
 //                    Drives the 1x-resolution vertex-offset gate, the
 //                    upscaled texcoord scaling, and the texpage
 //                    base-coordinate scaling.
-//   constant_id = 3  PGXP_DEPTH       (bool, common-knob convention).
-//                    Selects between mask-bit Z (a_pos.z) and the
-//                    PGXP-replayed perspective-correct depth
-//                    (a_pos.w).
 //
-// Bindings: vertex inputs only - no descriptor sets, no push
-// constants. The pipeline layout is m_batch_pipeline_layout which
-// declares one UBO at set=0 binding=0 for the FS; the VS does not
-// read it.
+// PGXP_DEPTH used to be a second spec const at constant_id = 3 driving
+// the pos_z source selection (a_pos.z mask-bit-Z vs a_pos.w PGXP-
+// replayed perspective-correct depth). It is now read from the batch
+// UBO (u_pgxp_depth at offset 52) and the body uses a runtime ternary
+// on the cbuffer scalar instead. Spec const wasn't a structural axis -
+// the SPIR-V was a single blob with two PSO substitutions per VS - so
+// the win is small (one less spec const per VS pipeline build, no PSO
+// rebuild on PGXP flip for the VS portion). Matches the C++ shadergen
+// VS routing (49c0f82) and the Vulkan FS routing in the preceding
+// commit so the entire PGXP_DEPTH axis is cbuffer-routed end-to-end on
+// both pipeline-emission paths.
+//
+// Bindings: vertex inputs and the batch UBO at set=0 binding=0 (which
+// the pipeline layout m_batch_pipeline_layout already exposes for the
+// FS; this VS reads u_pgxp_depth from the same descriptor). No push
+// constants.
 
 #version 450 core
 
 // ---- Specialisation constants (body-level knobs) -------------------
 layout(constant_id = 0) const uint RESOLUTION_SCALE = 1u;
-layout(constant_id = 3) const bool PGXP_DEPTH       = false;
 
 // ---- Interpolation qualifier macros --------------------------------
 #if defined(INTERP_SAMPLE)
@@ -99,6 +106,19 @@ layout(location = 0) out VertexData {
 #endif
 };
 
+// ---- Batch UBO -----------------------------------------------------
+// VS only reads u_pgxp_depth (at offset 52). The pipeline layout has
+// the UBO at set=0 binding=0 already - the FS reads more fields from
+// the same descriptor. The std140 layout's preceding 32 bytes
+// (u_texture_window_*, u_src/dst_alpha_factor, u_interlaced_*,
+// u_set_mask_while_drawing) and the spec-const-handled slots between
+// offset 32 and 51 are not redeclared here; the explicit
+// layout(offset=52) is the GL_ARB_enhanced_layouts core-since-4.40
+// way to jump past unused fields.
+layout(std140, set = 0, binding = 0) uniform BatchUBOData {
+  layout(offset = 52) uint u_pgxp_depth;
+};
+
 // --------------------------------------------------------------------
 
 void main()
@@ -120,8 +140,11 @@ void main()
   // Depth source selection. With PGXP enabled and the depth-buffer
   // option on, the PGXP path replays a perspective-correct depth in
   // a_pos.w and the mask-bit Z slot (a_pos.z) is ignored. Otherwise
-  // use the conventional mask-bit Z.
-  float pos_z = PGXP_DEPTH ? a_pos.w : a_pos.z;
+  // use the conventional mask-bit Z. u_pgxp_depth is a uniform
+  // cbuffer scalar so this branch is uniform across the warp - the
+  // driver collapses it to a single conditional move at compile
+  // time, same shape as the C++ shadergen VS routing in 49c0f82.
+  float pos_z = (u_pgxp_depth != 0u) ? a_pos.w : a_pos.z;
   float pos_w = a_pos.w;
 
   gl_Position = vec4(pos_x * pos_w, pos_y * pos_w, pos_z * pos_w, pos_w);

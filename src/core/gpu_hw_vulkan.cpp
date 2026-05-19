@@ -2263,12 +2263,15 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, bool true_co
   // worker is spawned, so a relaxed load is sufficient - we're
   // strictly after that store in happens-before order.
   //
-  // Spec constants on the pre-baked batch VS: id=0 RESOLUTION_SCALE,
-  // id=3 PGXP_DEPTH. Both are per-session, so the values are constant
-  // across every batch pipeline in this session.
+  // Spec constants on the pre-baked batch VS: id=0 RESOLUTION_SCALE
+  // only. PGXP_DEPTH used to be id=3 but is now routed through the
+  // batch UBO (u_pgxp_depth at offset 52) - the VS reads the field
+  // at runtime via a uniform-flow branch and the spec const slot is
+  // no longer declared in batch.vert.glsl. Setting an undeclared
+  // spec const is permitted by the Vulkan spec (it gets ignored)
+  // but pointless, so we drop the AddBool too.
   Vulkan::SpecConstants vs_spec;
   vs_spec.AddUInt(0, static_cast<uint32_t>(m_resolution_scale));    // RESOLUTION_SCALE
-  vs_spec.AddBool(3, m_pgxp_depth_buffer);                          // PGXP_DEPTH
   gpbuilder.SetVertexShader(
     m_batch_vertex_shaders[static_cast<uint8_t>(textured)].load(std::memory_order_relaxed), vs_spec.GetInfo());
 
