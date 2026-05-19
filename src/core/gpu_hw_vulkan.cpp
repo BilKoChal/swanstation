@@ -1651,7 +1651,7 @@ bool GPU_HW_Vulkan::CompilePipelines()
     }
 
     const Vulkan::EmbeddedShaders::EmbeddedShaderBlob& blob =
-      Vulkan::EmbeddedShaders::GetBatchVertexShaderBlob(textured != 0, m_using_uv_limits, msaa, per_sample_shading,
+      Vulkan::EmbeddedShaders::GetBatchVertexShaderBlob(textured != 0, msaa, per_sample_shading,
                                                         noperspective_col);
     VkShaderModule shader = Vulkan::EmbeddedShaders::CreateShaderModule(blob.spv, blob.size_bytes);
     if (shader == VK_NULL_HANDLE)
@@ -2244,8 +2244,18 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, bool true_co
   {
     gpbuilder.AddVertexAttribute(2, 0, VK_FORMAT_R32_UINT, offsetof(BatchVertex, u));
     gpbuilder.AddVertexAttribute(3, 0, VK_FORMAT_R32_UINT, offsetof(BatchVertex, texpage));
-    if (m_using_uv_limits)
-      gpbuilder.AddVertexAttribute(4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(BatchVertex, uv_limits));
+    // ATTR4 / a_uv_limits is bound unconditionally when textured.
+    // Pre-UV_LIMITS-routing this was gated on m_using_uv_limits to
+    // match the conditional a_uv_limits declaration in the
+    // batch_vs_textured / batch_vs_textured_uvlim SPIR-V variants;
+    // post-collapse (the batch_vs_textured_uvlim variants are gone -
+    // the single textured variant always declares a_uv_limits) the
+    // input layout matches the always-emitted shader input. The
+    // BatchVertex uv_limits field is always populated by every
+    // BatchVertex::Set call site (gpu_hw.h:47), so the binding always
+    // points at a valid 4-byte slot regardless of whether
+    // ComputePolygonUVLimits ran on the vertex.
+    gpbuilder.AddVertexAttribute(4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(BatchVertex, uv_limits));
   }
 
   gpbuilder.SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);

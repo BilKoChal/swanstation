@@ -167,12 +167,6 @@ namespace Vulkan::EmbeddedShaders {
 #include "embedded_spirv/batch_vs_textured_none_persp.inc"
 #include "embedded_spirv/batch_vs_textured_sample_noperp.inc"
 #include "embedded_spirv/batch_vs_textured_sample_persp.inc"
-#include "embedded_spirv/batch_vs_textured_uvlim_centroid_noperp.inc"
-#include "embedded_spirv/batch_vs_textured_uvlim_centroid_persp.inc"
-#include "embedded_spirv/batch_vs_textured_uvlim_none_noperp.inc"
-#include "embedded_spirv/batch_vs_textured_uvlim_none_persp.inc"
-#include "embedded_spirv/batch_vs_textured_uvlim_sample_noperp.inc"
-#include "embedded_spirv/batch_vs_textured_uvlim_sample_persp.inc"
 #include "embedded_spirv/batch_vs_untextured_centroid_noperp.inc"
 #include "embedded_spirv/batch_vs_untextured_centroid_persp.inc"
 #include "embedded_spirv/batch_vs_untextured_none_noperp.inc"
@@ -199,16 +193,16 @@ namespace Vulkan::EmbeddedShaders {
 // Batch VS blob lookup table. Index encoding (must match
 // GetBatchVertexShaderBlob below):
 //
-//   attr   = !textured ? 0 : (uv_limits ? 2 : 1)    // 0..2
-//   interp = per_sample_shading ? 2 : (msaa ? 1 : 0) // 0..2
-//   persp  = noperspective_color ? 1 : 0             // 0..1
+//   attr   = textured ? 1 : 0                          // 0..1
+//   interp = per_sample_shading ? 2 : (msaa ? 1 : 0)   // 0..2
+//   persp  = noperspective_color ? 1 : 0               // 0..1
 //
-//   index  = attr * 6 + interp * 2 + persp           // 0..17
+//   index  = attr * 6 + interp * 2 + persp             // 0..11
 //
 // Macro keeps the table readable and ensures the symbol and size
 // stay in lock-step.
 #define BLOB(name) { k_##name, k_##name##_size_bytes }
-const EmbeddedShaderBlob k_batch_vs_blobs[18] = {
+const EmbeddedShaderBlob k_batch_vs_blobs[12] = {
   // attr = 0 (untextured)
   BLOB(batch_vs_untextured_none_persp),         // [ 0] interp=none,     persp=true
   BLOB(batch_vs_untextured_none_noperp),        // [ 1] interp=none,     persp=false
@@ -216,30 +210,26 @@ const EmbeddedShaderBlob k_batch_vs_blobs[18] = {
   BLOB(batch_vs_untextured_centroid_noperp),    // [ 3] interp=centroid, persp=false
   BLOB(batch_vs_untextured_sample_persp),       // [ 4] interp=sample,   persp=true
   BLOB(batch_vs_untextured_sample_noperp),      // [ 5] interp=sample,   persp=false
-  // attr = 1 (textured, no UV limits)
+  // attr = 1 (textured, always with UV limits since the UV_LIMITS-
+  // routing commit lifted the axis to the FS-side u_uv_limits
+  // cbuffer scalar - the VS now unconditionally emits a_uv_limits +
+  // v_uv_limits when textured, the FS decides at runtime whether to
+  // consume it).
   BLOB(batch_vs_textured_none_persp),           // [ 6]
   BLOB(batch_vs_textured_none_noperp),          // [ 7]
   BLOB(batch_vs_textured_centroid_persp),       // [ 8]
   BLOB(batch_vs_textured_centroid_noperp),      // [ 9]
   BLOB(batch_vs_textured_sample_persp),         // [10]
   BLOB(batch_vs_textured_sample_noperp),        // [11]
-  // attr = 2 (textured + UV limits)
-  BLOB(batch_vs_textured_uvlim_none_persp),     // [12]
-  BLOB(batch_vs_textured_uvlim_none_noperp),    // [13]
-  BLOB(batch_vs_textured_uvlim_centroid_persp), // [14]
-  BLOB(batch_vs_textured_uvlim_centroid_noperp),// [15]
-  BLOB(batch_vs_textured_uvlim_sample_persp),   // [16]
-  BLOB(batch_vs_textured_uvlim_sample_noperp),  // [17]
 };
 #undef BLOB
 
 const EmbeddedShaderBlob& GetBatchVertexShaderBlob(bool textured,
-                                                   bool uv_limits,
                                                    bool msaa,
                                                    bool per_sample_shading,
                                                    bool noperspective_color)
 {
-  const unsigned attr   = !textured ? 0u : (uv_limits ? 2u : 1u);
+  const unsigned attr   = textured ? 1u : 0u;
   const unsigned interp = per_sample_shading ? 2u : (msaa ? 1u : 0u);
   const unsigned persp  = noperspective_color ? 1u : 0u;
   const unsigned index  = attr * 6u + interp * 2u + persp;

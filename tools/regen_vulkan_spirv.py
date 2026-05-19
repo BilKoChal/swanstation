@@ -43,11 +43,12 @@ STAGE_FROM_SUFFIX = {
 # For each entry: filename -> [(variant_suffix, [-D defines]), ...]
 def _batch_vs_variants():
     out = []
-    # Attribute layout: untextured / textured / textured + UV limits.
+    # Attribute layout: untextured / textured (the latter always with
+    # UV limits since the UV_LIMITS-routing commit lifted the axis to
+    # the FS-side u_uv_limits cbuffer scalar). 2 layouts now.
     attr_axes = [
         ("untextured",       []),
         ("textured",         ["TEXTURED"]),
-        ("textured_uvlim",   ["TEXTURED", "UV_LIMITS"]),
     ]
     # Output interpolation: standard / centroid (MSAA) / sample (SSAA).
     interp_axes = [

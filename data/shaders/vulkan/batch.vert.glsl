@@ -5,10 +5,13 @@
 // has THREE structurally distinct axes that SPIR-V decorations cannot
 // be specialised across:
 //
-//   - Vertex attribute layout. 2 input attributes (untextured), 4
-//     (textured without UV limits) or 5 (textured with UV limits).
-//     The 'in <type> <name>' declarations are part of the SPIR-V
-//     module interface, not a spec-constant-controlled knob.
+//   - Vertex attribute layout. 2 input attributes (untextured) or 5
+//     (textured: pos, col, texcoord, texpage, uv_limits). UV_LIMITS
+//     used to be a third attribute-layout variant gating a_uv_limits;
+//     it is now routed via the FS-side u_uv_limits cbuffer scalar so
+//     the VS unconditionally emits a_uv_limits + v_uv_limits when
+//     textured. The 'in <type> <name>' declarations are part of the
+//     SPIR-V module interface, not a spec-constant-controlled knob.
 //
 //   - Output interpolation qualifier. The fragment shader pairs with
 //     these and the qualifiers compile to OpMemberDecorate Sample /
@@ -21,15 +24,15 @@
 //     spec-constant-controllable. Two states, selected per session by
 //     m_disable_color_perspective.
 //
-// Total structural variant count: 3 (attribute layouts) x 3
-// (interpolation) x 2 (perspective) = 18. Body-level knobs that do
+// Total structural variant count: 2 (attribute layouts) x 3
+// (interpolation) x 2 (perspective) = 12. Body-level knobs that do
 // not affect decorations (PGXP_DEPTH, RESOLUTION_SCALE) are handled
 // as specialisation constants on every blob.
 //
 // This file is the SINGLE GLSL source. The regen tool compiles it
-// eighteen times with different -D combinations to produce the
+// twelve times with different -D combinations to produce the
 // matching .inc blobs; the manifest of variants lives in
-// tools/regen_vulkan_spirv.py. The C++ side picks one of the 18 at
+// tools/regen_vulkan_spirv.py. The C++ side picks one of the 12 at
 // pipeline-create time via the helper in embedded_shaders.cpp.
 //
 // Spec constants (every blob):
@@ -74,9 +77,16 @@ layout(location = 1) in vec4 a_col0;
 #if defined(TEXTURED)
 layout(location = 2) in uint a_texcoord;
 layout(location = 3) in uint a_texpage;
-#  if defined(UV_LIMITS)
+// a_uv_limits emitted unconditionally when TEXTURED. UV_LIMITS used
+// to gate this declaration, matching a separate attribute layout
+// variant; routed via the FS-side u_uv_limits cbuffer scalar now,
+// so the VS just always passes the value through to v_uv_limits and
+// the FS decides at runtime whether to consume it. BatchVertex
+// always carries the uv_limits field (gpu_hw.h:47), so the C++
+// input layout always has a valid offset to bind ATTR4 to - the
+// values are zero when ComputePolygonUVLimits didn't run and the
+// FS short-circuits on u_uv_limits in that case.
 layout(location = 4) in vec4 a_uv_limits;
-#  endif
 #endif
 
 // ---- Vertex outputs (interpolation + perspective axis) -------------
@@ -85,9 +95,7 @@ layout(location = 0) out VertexData {
 #if defined(TEXTURED)
   INTERP vec2 v_tex0;
   flat uvec4 v_texpage;
-#  if defined(UV_LIMITS)
   flat vec4 v_uv_limits;
-#  endif
 #endif
 };
 
@@ -137,9 +145,10 @@ void main()
   v_texpage.z = ((a_texpage >> 16) & 63u ) * 16u  * RESOLUTION_SCALE;
   v_texpage.w = ((a_texpage >> 22) & 511u)        * RESOLUTION_SCALE;
 
-#  if defined(UV_LIMITS)
   // UV limits are sent normalised; expand to 0..255 PSX-native here.
+  // Always written when textured (UV_LIMITS guard dropped at the
+  // collapse commit); the FS-side u_uv_limits gates whether to
+  // consume the value.
   v_uv_limits = a_uv_limits * vec4(255.0, 255.0, 255.0, 255.0);
-#  endif
 #endif
 }

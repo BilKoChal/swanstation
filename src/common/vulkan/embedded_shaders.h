@@ -175,27 +175,33 @@ extern const size_t k_vram_update_depth_msaa_fs_size_bytes;
 //   3. Color output perspective. Standard / noperspective, compiled
 //      to OpMemberDecorate NoPerspective on v_col0.
 //
-// 3 x 3 x 2 = 18 blobs. Body-level knobs (RESOLUTION_SCALE, PGXP_DEPTH)
-// are common-knob specialisation constants on every blob.
+// 2 x 3 x 2 = 12 blobs. UV_LIMITS used to be a third attribute-layout
+// axis (textured-with vs textured-without v_uv_limits) but it has
+// been collapsed - the VS always emits a_uv_limits + v_uv_limits when
+// textured, with the FS-side u_uv_limits cbuffer scalar deciding
+// whether to consume the value. Body-level knobs (RESOLUTION_SCALE,
+// PGXP_DEPTH) are common-knob specialisation constants on every
+// blob.
 //
 // The blobs are addressed via the EmbeddedShaderBlob array
 // k_batch_vs_blobs and the helper GetBatchVertexShaderBlob below
-// rather than via 36 individual extern declarations.
+// rather than via 24 individual extern declarations.
 struct EmbeddedShaderBlob
 {
   const uint32_t* spv;
   size_t          size_bytes;
 };
 
-extern const EmbeddedShaderBlob k_batch_vs_blobs[18];
+extern const EmbeddedShaderBlob k_batch_vs_blobs[12];
 
 // Pick the right batch VS blob from the per-call and per-session state
 // the C++ side already has at pipeline-creation time. The 'textured'
 // argument is the m_batch_vertex_shaders[] index; the rest are direct
-// reads of GPU_HW members (m_uv_limits, derived UsingMSAA() /
-// UsingPerSampleShading(), m_disable_color_perspective).
+// reads of GPU_HW members (derived UsingMSAA() /
+// UsingPerSampleShading(), m_disable_color_perspective). uv_limits is
+// no longer an axis - the VS always emits a_uv_limits / v_uv_limits
+// when textured, the FS gates consumption via u_uv_limits.
 const EmbeddedShaderBlob& GetBatchVertexShaderBlob(bool textured,
-                                                   bool uv_limits,
                                                    bool msaa,
                                                    bool per_sample_shading,
                                                    bool noperspective_color);
