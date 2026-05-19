@@ -55,6 +55,67 @@
 //
 namespace D3DCommon::EmbeddedShaders {
 
+// Backend-neutral (data, size) aggregate for the pre-baked DXBC
+// blobs. Both backends consume the same byte stream but wrap it
+// differently at the API hand-off:
+//   D3D12: D3D12_SHADER_BYTECODE { pShaderBytecode, BytecodeLength }
+//          passed to GraphicsPipelineBuilder::SetPixelShader at PSO
+//          creation time.
+//   D3D11: ID3D11Device::CreatePixelShader(bytecode, size, nullptr,
+//          &out) wrapped by D3D11::ShaderCompiler::CreatePixelShader.
+//
+// Picker functions below return this struct. Each caller converts
+// to the native API type at the call site - we deliberately don't
+// pull d3d12.h or d3d11.h into this header.
+struct Bytecode {
+  const uint8_t* data;
+  size_t size;
+};
+
+// ---- Batch FS pre-bake pickers -------------------------------------
+//
+// Each picker covers one slice of the batch FS variant matrix.
+// Mirror of the runtime shadergen output for the same slice
+// (texture_mode + filter combo). Inputs are the 4 session-level
+// flags that the pre-baked variant matrix is indexed by:
+//
+//   use_dual_source            from the shadergen formula
+//                              m_supports_dual_source_blend &&
+//                              ((render_mode != TransparencyDisabled
+//                                && render_mode != OnlyOpaque) ||
+//                               filter != Nearest)
+//                              Same bit drives the PSO blend state's
+//                              SRC1_* references; pre-compute at the
+//                              caller and pass both consumers.
+//   multisamples               raw m_multisamples (1 / 2 / 4 / 8 /
+//                              16 / 32). The picker collapses to
+//                              (multisamples > 1) for the interp
+//                              qualifier choice.
+//   per_sample_shading         raw m_per_sample_shading. Wins over
+//                              the multisamples-driven centroid
+//                              qualifier when set.
+//   disable_color_perspective  raw m_disable_color_perspective.
+//                              Selects the noperspective variant.
+//
+// The textured-Nearest picker additionally takes lookup_mode (the
+// post-Reserved-dedup texture_mode value, 0/1/2/4/5/6 reachable).
+// The Reserved_Direct16Bit / Reserved_RawDirect16Bit dedup must be
+// applied by the caller before invoking; the picker assumes 3 and
+// 7 are unreachable.
+
+// Untextured batch FS variant picker. Selects from the 12 blobs at
+// embedded_dxbc/batch_untextured_ps_*.inc.
+Bytecode PickBatchUntexturedFS(bool use_dual_source, uint32_t multisamples,
+                                bool per_sample_shading, bool disable_color_perspective);
+
+// Textured + Nearest-filter batch FS variant picker. Selects from
+// the 72 blobs at embedded_dxbc/batch_textured_nearest_ps_*.inc.
+Bytecode PickBatchTexturedNearestFS(uint8_t lookup_mode, bool use_dual_source,
+                                     uint32_t multisamples, bool per_sample_shading,
+                                     bool disable_color_perspective);
+
+// --------------------------------------------------------------------
+
 // Fullscreen-quad vertex shader. Emits a fullscreen triangle in NDC
 // from SV_VertexID 0..2 via the standard bit-shift trick - equivalent
 // to ShaderGen::GenerateScreenQuadVertexShader() in D3D12 mode. Used

@@ -1149,400 +1149,6 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   }
 }
 
-namespace {
-
-// Untextured batch FS pre-baked variant picker. Returns the matching
-// DXBC blob from the 12-entry table at
-// src/common/d3d12/embedded_dxbc/batch_untextured_ps_*.inc, indexed
-// by the 3 axes the regen tool bakes at compile time
-// (post-c532a34 TRANSPARENCY routing):
-//
-//   use_dual_source   driven by the call-site formula:
-//                       supports_dual_source_blend &&
-//                       ((render_mode != TransparencyDisabled &&
-//                         render_mode != OnlyOpaque) ||
-//                        filter != Nearest)
-//                     The caller (GPU_HW_D3D12::GetBatchPipeline)
-//                     computes this in one place because the PSO
-//                     blend state needs the same bit - we just
-//                     receive it pre-computed so the variant lookup
-//                     matches the PSO's SRC1_* expectations.
-//   interp            (per_sample_shading > MSAA > none; mirror of
-//                      ShaderGen::GetInterpolationQualifier)
-//   noperspective     (m_disable_color_perspective)
-//
-// The former transparency axis (4 BatchRenderMode enum values) is
-// now read from the batch UBO at offset 60 (u_render_mode) by the
-// shader body itself - the DXBC is invariant across render_mode
-// post-routing, so a single PickBatchUntexturedFSBytecode call
-// covers all 4 render_modes for a given (use_dual_source, interp,
-// persp) cell. The C++ caller still passes render_mode through to
-// GetBatchPipeline for PSO blend-state selection at the matrix
-// level - just no longer to this picker.
-//
-// Interp / persp are session-level - they only change via
-// UpdateHWSettings which triggers full PSO rebuild.
-static D3D12_SHADER_BYTECODE PickBatchUntexturedFSBytecode(
-    bool use_dual_source, uint32_t multisamples, bool per_sample_shading,
-    bool disable_color_perspective)
-{
-  // 0 = none, 1 = centroid, 2 = sample. Mirror of
-  // ShaderGen::GetInterpolationQualifier: sample wins over centroid
-  // when per-sample-shading is enabled.
-  const unsigned interp_idx =
-    per_sample_shading ? 2u : ((multisamples > 1u) ? 1u : 0u);
-  const unsigned persp_idx = disable_color_perspective ? 1u : 0u;
-
-  // 3-D table: [dual_source][interp][persp]. Nested brace-init keeps
-  // the structural correspondence with the regen tool's
-  // TEMPLATE_VARIANTS table visible to readers - the
-  // outermost-to-innermost iteration order matches the alphabetical
-  // .inc filenames. Each entry is a
-  // D3D12_SHADER_BYTECODE { pShaderBytecode, BytecodeLength }
-  // aggregate; the extern declarations in
-  // src/common/d3d_common/embedded_shaders.h supply both halves.
-  static const D3D12_SHADER_BYTECODE k_blobs[2][3][2] = {
-    // dual = 0
-    {
-      // interp = none
-      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p0,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p0_size_bytes},
-       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p1,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p1_size_bytes}},
-      // interp = centroid
-      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p0,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p0_size_bytes},
-       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p1,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p1_size_bytes}},
-      // interp = sample
-      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p0,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p0_size_bytes},
-       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p1,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p1_size_bytes}},
-    },
-    // dual = 1
-    {
-      // interp = none
-      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p0,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p0_size_bytes},
-       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p1,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p1_size_bytes}},
-      // interp = centroid
-      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p0,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p0_size_bytes},
-       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p1,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p1_size_bytes}},
-      // interp = sample
-      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p0,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p0_size_bytes},
-       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p1,
-        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p1_size_bytes}},
-    },
-  };
-
-  return k_blobs[use_dual_source ? 1 : 0][interp_idx][persp_idx];
-}
-
-
-// Textured + Nearest-filter batch FS pre-baked variant picker.
-// Returns the matching DXBC blob from the 72-entry table at
-// src/common/d3d12/embedded_dxbc/batch_textured_nearest_ps_*.inc,
-// indexed by the 4 axes the regen tool bakes:
-//
-//   texture_mode      6 combos (Palette4Bit / Palette8Bit /
-//                     Direct16Bit each in non-raw / raw form). The
-//                     Reserved_Direct16Bit / Reserved_RawDirect16Bit
-//                     enum values are deduped to their non-Reserved
-//                     counterparts at the GPU_HW_D3D12 caller via
-//                     the `lookup_mode` parameter.
-//   use_dual_source   driven by the same call-site formula as the
-//                     untextured picker - the caller computes once
-//                     and hands the bit to both this picker AND the
-//                     PSO blend-state setup that references SRC1_*.
-//   interp            (per_sample_shading > MSAA > none; mirror of
-//                      ShaderGen::GetInterpolationQualifier)
-//   noperspective     (m_disable_color_perspective)
-//
-// As with the untextured slice (c01f8ae), the former TRANSPARENCY
-// axis (4 BatchRenderMode enum values) is now read from
-// u_render_mode in the cbuffer - the DXBC is invariant across
-// render_mode post-c532a34, so a single set of 72 variants covers
-// all 4 render_modes.
-static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
-    uint8_t lookup_mode, bool use_dual_source, uint32_t multisamples,
-    bool per_sample_shading, bool disable_color_perspective)
-{
-  // texture_mode dim: derived from lookup_mode (Reserved_* already
-  // deduped by the caller). lookup_mode is a 3-bit value with
-  //   bits 0..1 = actual_mode (0 = Palette4Bit, 1 = Palette8Bit,
-  //               2 = Direct16Bit; 3 is Reserved_Direct16Bit but
-  //               the caller maps it to 2 before invoking us)
-  //   bit  2    = RawTextureBit
-  // The 6 reachable combos map to a 6-slot 1-D table:
-  //   0: p0r0 Direct16Bit          (actual=2, raw=0)
-  //   1: p0r1 RawDirect16Bit       (actual=2, raw=1)
-  //   2: p4r0 Palette4Bit          (actual=0, raw=0)
-  //   3: p4r1 RawPalette4Bit       (actual=0, raw=1)
-  //   4: p8r0 Palette8Bit          (actual=1, raw=0)
-  //   5: p8r1 RawPalette8Bit       (actual=1, raw=1)
-  const uint8_t actual_mode = lookup_mode & 0x3u;
-  const bool raw = (lookup_mode & 0x4u) != 0;
-  unsigned tm_idx;
-  if (actual_mode == 2u)        // Direct16Bit family
-    tm_idx = raw ? 1u : 0u;
-  else if (actual_mode == 0u)   // Palette4Bit family
-    tm_idx = raw ? 3u : 2u;
-  else                          // actual_mode == 1u (Palette8Bit family)
-    tm_idx = raw ? 5u : 4u;
-
-  // 0 = none, 1 = centroid, 2 = sample. Same shape as the untextured
-  // picker - mirror of ShaderGen::GetInterpolationQualifier.
-  const unsigned interp_idx =
-    per_sample_shading ? 2u : ((multisamples > 1u) ? 1u : 0u);
-  const unsigned persp_idx = disable_color_perspective ? 1u : 0u;
-
-  static const D3D12_SHADER_BYTECODE k_blobs[6][2][3][2] = {
-    // tm = p0r0 (Direct16Bit)
-    {
-      // no dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1_size_bytes}},
-      },
-      // dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1_size_bytes}},
-      },
-    },
-    // tm = p0r1 (RawDirect16Bit)
-    {
-      // no dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1_size_bytes}},
-      },
-      // dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1_size_bytes}},
-      },
-    },
-    // tm = p4r0 (Palette4Bit)
-    {
-      // no dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1_size_bytes}},
-      },
-      // dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1_size_bytes}},
-      },
-    },
-    // tm = p4r1 (RawPalette4Bit)
-    {
-      // no dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1_size_bytes}},
-      },
-      // dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1_size_bytes}},
-      },
-    },
-    // tm = p8r0 (Palette8Bit)
-    {
-      // no dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1_size_bytes}},
-      },
-      // dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1_size_bytes}},
-      },
-    },
-    // tm = p8r1 (RawPalette8Bit)
-    {
-      // no dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1_size_bytes}},
-      },
-      // dual
-      {
-        // interp = none
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1_size_bytes}},
-        // interp = centroid
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1_size_bytes}},
-        // interp = sample
-        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0_size_bytes},
-         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1,
-          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1_size_bytes}},
-      },
-    },
-  };
-
-  return k_blobs[tm_idx][use_dual_source ? 1 : 0][interp_idx][persp_idx];
-}
-
-} // anonymous namespace
-
 GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode)
 {
   // Reserved_*Direct16Bit shader-source dedup is applied at the
@@ -1687,15 +1293,16 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   // cache dedups internally via its own double-check.
   //
   // Untextured slice (lookup_mode == GPUTextureMode::Disabled) takes
-  // the pre-baked fast path - PickBatchUntexturedFSBytecode picks
-  // the right .inc-supplied DXBC blob from the 24-variant table.
-  // Textured slices fall through to GetBatchFragmentShader which
-  // does the shadergen + D3DCompile dance and caches via
-  // m_batch_fragment_shader_blobs. The matrix slot for untextured
-  // stays empty across all sessions; nothing reads from it on this
-  // path. As subsequent commits land the 4 textured filter
-  // templates (Nearest / Bilinear / JINC2 / xBR), the textured
-  // branch shrinks until every batch FS variant is pre-baked.
+  // the pre-baked fast path - D3DCommon::EmbeddedShaders::PickBatchUntexturedFS
+  // picks the right .inc-supplied DXBC blob from the 12-variant
+  // table. Textured slices fall through to either the pre-baked
+  // Nearest picker (a7f5717) or GetBatchFragmentShader (shadergen
+  // + D3DCompile) for the remaining 3 filters. The matrix slot for
+  // untextured stays empty across all sessions; nothing reads from
+  // it on this path. As subsequent commits land the remaining 3
+  // textured filter templates (Bilinear / JINC2 / xBR), the
+  // shadergen branch shrinks until every batch FS variant is
+  // pre-baked.
   const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
 
   // Mirror of the shadergen formula in
@@ -1718,13 +1325,17 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   {
     if (filter == GPUTextureFilter::Nearest)
     {
-      // Second pre-baked batch FS slice (9e4c33d + this commit).
-      // Picker selects from 72 .inc blobs at
-      // src/common/d3d12/embedded_dxbc/batch_textured_nearest_ps_*.inc;
-      // no D3DCompile, no shader-cache lookup.
-      fs_bc = PickBatchTexturedNearestFSBytecode(lookup_mode, use_dual_source,
-                                                 m_multisamples, m_per_sample_shading,
-                                                 m_disable_color_perspective);
+      // Second pre-baked batch FS slice (9e4c33d + a7f5717).
+      // Shared picker in D3DCommon::EmbeddedShaders selects from 72
+      // .inc blobs at src/common/d3d_common/embedded_dxbc/
+      // batch_textured_nearest_ps_*.inc; no D3DCompile, no
+      // shader-cache lookup. The Bytecode -> D3D12_SHADER_BYTECODE
+      // conversion is a 2-field copy.
+      const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedNearestFS(
+        lookup_mode, use_dual_source, m_multisamples, m_per_sample_shading,
+        m_disable_color_perspective);
+      fs_bc.pShaderBytecode = bc.data;
+      fs_bc.BytecodeLength = bc.size;
     }
     else
     {
@@ -1740,9 +1351,11 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   }
   else
   {
-    fs_bc = PickBatchUntexturedFSBytecode(use_dual_source, m_multisamples,
-                                          m_per_sample_shading,
-                                          m_disable_color_perspective);
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchUntexturedFS(
+      use_dual_source, m_multisamples, m_per_sample_shading,
+      m_disable_color_perspective);
+    fs_bc.pShaderBytecode = bc.data;
+    fs_bc.BytecodeLength = bc.size;
   }
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
