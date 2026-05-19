@@ -141,15 +141,15 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
   // session is a single 4-byte cbuffer write picked up on the next
   // FlushRender on the VS side - the VS source is now invariant
   // under the m_pgxp_depth member.
-  // The FS still captures m_pgxp_depth: it gates SV_Depth declaration
-  // in the FS entry-point signature (DeclareFragmentEntryPoint's
-  // `depth_output` parameter), which is a signature change that
-  // can't be cbuffer-routed without always-emitting SV_Depth and
-  // taking the early-Z hit unconditionally. Routing the FS side is
-  // a future commit pending perf measurement. Until then, PGXP
-  // toggle still triggers a FS / PSO matrix rebuild via the
-  // shader_source_changed path - it just doesn't trigger a VS
-  // rebuild anymore.
+  // The FS-side PGXP_DEPTH routing also exists now (this commit's
+  // sibling): the FS unconditionally declares SV_Depth and the four
+  // per-branch o_depth writes in the body collapse to a single
+  // runtime-branch ternary at the end of main(). Both VS and FS
+  // bytecode are invariant under m_pgxp_depth post-routing. PSO
+  // depth comparison func still depends on m_pgxp_depth_buffer
+  // (LESS_EQUAL vs GREATER_EQUAL set at PSO build), so a PGXP flip
+  // still triggers PSO rebuild for the depth-comp swap - but the
+  // FS bytecode is cache-served and the variant count is halved.
 
   // Order matters: WriteBatchUniformBuffer must emit before
   // WriteCommonFunctions so the #define aliases for RESOLUTION_SCALE
@@ -804,7 +804,27 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
   // so u_uv_limits is guaranteed 1 here) and the non-filtered path
   // (gated by runtime branch on u_uv_limits).
   DefineMacro(ss, "USE_DUAL_SOURCE", use_dual_source);
-  DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
+  // PGXP_DEPTH used to live as a compile-time #define driving four
+  // `#if !PGXP_DEPTH / o_depth = oalpha * v_pos.z / #endif` writes in
+  // the body and the depth_output argument to
+  // DeclareFragmentEntryPoint (which gates SV_Depth declaration). It
+  // is now routed through the batch UBO (u_uv_limits's neighbour
+  // u_pgxp_depth, added to the cbuffer for the VS-side routing in
+  // 49c0f82); the FS unconditionally declares SV_Depth and writes a
+  // single ternary expression at the end of main() that picks
+  // v_pos.z when u_pgxp_depth != 0 (pass-through of the PGXP-replayed
+  // depth from the VS) or oalpha * v_pos.z when u_pgxp_depth == 0
+  // (mask-bit encoding for the legacy non-PGXP depth-buffer use).
+  // m_pgxp_depth at shadergen ctor capture is now unused for the FS
+  // body / signature. The PSO depth comparison func still depends on
+  // m_pgxp_depth_buffer (LESS_EQUAL vs GREATER_EQUAL) and that
+  // dependency is OUTSIDE the shader source - it lives in the
+  // backend's SetDepthState call at PSO build time - so flipping
+  // PGXP still triggers a PSO rebuild for the depth-comp swap, just
+  // not a shader recompile (the FS bytecode is identical across
+  // flips post-routing). The pre-bake win is that FS bytecode loses
+  // PGXP_DEPTH as a variant axis - 9408 / 2 = 4704 variants for the
+  // eventual full bake.
 
   // Same ordering rule as in GenerateBatchVertexShader: cbuffer
   // declaration before helpers, so RESOLUTION_SCALE / VRAM_SIZE /
@@ -921,14 +941,31 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     // to u_uv_limits=1 via ShouldUseUVLimits(), so the
     // FilteredSampleFromVRAM path can rely on v_uv_limits being
     // valid without an explicit runtime check there.
+    //
+    // depth_output is now passed unconditionally true (was: !m_pgxp_depth).
+    // Pre-routing, the PGXP-on path omitted SV_Depth so the rasterizer-
+    // interpolated v_pos.z passed through to the depth buffer
+    // unmodified, while the PGXP-off path declared SV_Depth and wrote
+    // (oalpha * v_pos.z) to encode the PSX mask bit. Post-routing,
+    // SV_Depth is always declared; the body picks v_pos.z or
+    // oalpha * v_pos.z via a single runtime ternary on u_pgxp_depth at
+    // the end of main(). The PGXP-on path was the only batch FS
+    // variant that still had early-Z TEST (every other variant lost it
+    // to SV_Depth already, and they all lost early-Z WRITEBACK to
+    // discard); this commit loses that one remaining early-Z TEST
+    // path. For PSX on modern GPUs the cost is sub-noise: native
+    // framebuffer is half a megapixel, overdraw is low (painter's-
+    // algorithm sorting in stock content), the FS itself is cheap,
+    // and the depth buffer is mask-bit storage with random values
+    // that Hi-Z can't compress anyway.
     DeclareFragmentEntryPoint(ss, 1, 1,
                               {{"nointerpolation", "uint4 v_texpage"}, {"nointerpolation", "float4 v_uv_limits"}},
-                              true, use_dual_source ? 2 : 1, !m_pgxp_depth, UsingMSAA(), UsingPerSampleShading(),
+                              true, use_dual_source ? 2 : 1, true, UsingMSAA(), UsingPerSampleShading(),
                               false, m_disable_color_perspective);
   }
   else
   {
-    DeclareFragmentEntryPoint(ss, 1, 0, {}, true, use_dual_source ? 2 : 1, !m_pgxp_depth, UsingMSAA(),
+    DeclareFragmentEntryPoint(ss, 1, 0, {}, true, use_dual_source ? 2 : 1, true, UsingMSAA(),
                               UsingPerSampleShading(), false, m_disable_color_perspective);
   }
 
@@ -1090,10 +1127,6 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
         o_col0 = float4(color, oalpha);
       #endif
 
-      #if !PGXP_DEPTH
-        o_depth = oalpha * v_pos.z;
-      #endif
-
       #if TRANSPARENCY_ONLY_OPAQUE
         discard;
       #endif
@@ -1105,10 +1138,6 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
         o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
       #else
         o_col0 = float4(color, oalpha);
-      #endif
-
-      #if !PGXP_DEPTH
-        o_depth = oalpha * v_pos.z;
       #endif
 
       #if TRANSPARENCY_ONLY_TRANSPARENT
@@ -1123,10 +1152,6 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     #else
       o_col0 = float4(color, oalpha);
     #endif
-
-    #if !PGXP_DEPTH
-      o_depth = oalpha * v_pos.z;
-    #endif
   #else
     // Non-transparency won't enable blending so we can write the mask here regardless.
     o_col0 = float4(color, oalpha);
@@ -1134,11 +1159,30 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     #if USE_DUAL_SOURCE
       o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
     #endif
-
-    #if !PGXP_DEPTH
-      o_depth = oalpha * v_pos.z;
-    #endif
   #endif
+
+  // SV_Depth output (always declared now - was conditional on !PGXP_DEPTH
+  // pre-routing). The four per-branch `#if !PGXP_DEPTH / o_depth = oalpha *
+  // v_pos.z / #endif` writes that used to live inside each transparency
+  // arm above collapse to this single runtime-branch write at the end of
+  // main(). All four old sites wrote the same expression with the same
+  // operand values in scope (oalpha, v_pos.z), so hoisting is
+  // value-equivalent; the discards inside the transparency-only-opaque /
+  // transparency-only-transparent arms above end the FS before this line
+  // runs, just as they ended the FS before the per-branch writes ran
+  // pre-routing.
+  //
+  // u_pgxp_depth != 0: PGXP-perspective-correct depth mode. The
+  // rasterizer interpolates v_pos.z from a_pos.w (PGXP-replayed), so
+  // writing v_pos.z back is a pass-through that matches what the
+  // pre-routing PGXP-on path got from omitting SV_Depth entirely. The
+  // PSO depth comparison func is LESS_EQUAL in this mode (set in the
+  // backend at PSO build time per m_pgxp_depth_buffer).
+  // u_pgxp_depth == 0: legacy mask-bit depth mode. The
+  // (oalpha * v_pos.z) expression encodes the PSX mask bit into the
+  // depth buffer (oalpha is 0 or 1 in this mode, so depth is either 0
+  // or v_pos.z). The PSO depth comparison func is GREATER_EQUAL.
+  o_depth = (u_pgxp_depth != 0u) ? v_pos.z : (oalpha * v_pos.z);
 }
 )";
 
