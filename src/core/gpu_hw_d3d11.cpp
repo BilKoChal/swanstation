@@ -1397,6 +1397,9 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
     (static_cast<GPUTextureMode>(lookup_mode) == GPUTextureMode::Disabled);
   const bool textured_nearest =
     !untextured && (filter == GPUTextureFilter::Nearest);
+  const bool textured_bilinear =
+    !untextured && (filter == GPUTextureFilter::Bilinear ||
+                    filter == GPUTextureFilter::BilinearBinAlpha);
 
   ComPtr<ID3D11PixelShader> fresh;
   if (untextured)
@@ -1413,8 +1416,26 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
       m_disable_color_perspective);
     fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
   }
+  else if (textured_bilinear)
+  {
+    // Third pre-baked batch FS slice. Mirror of the D3D12 branch
+    // at GetBatchPipeline (gpu_hw_d3d12.cpp; same picker, same
+    // input set). binalpha drives the BINALPHA -D macro arm of
+    // the Bilinear template: BilinearBinAlpha => true (b1 suffix),
+    // Bilinear => false (b0 suffix).
+    const bool binalpha = (filter == GPUTextureFilter::BilinearBinAlpha);
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedBilinearFS(
+      lookup_mode, binalpha, use_dual_source, m_multisamples,
+      m_per_sample_shading, m_disable_color_perspective);
+    fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   else
   {
+    // JINC2 / JINC2BinAlpha / xBR / xBRBinAlpha still go through
+    // shadergen + D3DCompile. The else arm will keep shrinking as
+    // the remaining 2 filter templates land their foundation +
+    // activation pairs.
+    //
     // Construct a per-call shadergen bound to the requested filter
     // rather than reusing m_shadergen (which is pinned to the
     // runtime-current m_texture_filtering for the non-batch helpers).

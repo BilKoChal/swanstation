@@ -897,14 +897,19 @@ bool GPU_HW_D3D12::CompilePipelines()
         // D3DCompile to run. Pre-baked templates so far:
         //   - Untextured (texture_mode == Disabled): commits
         //     9e6f933 / b6d1903 / c01f8ae (re-bake).
-        //   - Textured + Nearest: commits 9e4c33d + this one.
-        // The three remaining textured filter templates (Bilinear /
-        // JINC2 / xBR) are still runtime-compiled and land in
-        // subsequent commits. progress.Increment ticks regardless so
-        // the user-facing progress bar reads the same count.
+        //   - Textured + Nearest: commits 9e4c33d + a7f5717.
+        //   - Textured + Bilinear / BilinearBinAlpha: commits
+        //     269a2a0 + this one.
+        // The two remaining textured filter templates (JINC2 /
+        // xBR and their *BinAlpha variants) are still runtime-
+        // compiled and land in subsequent commits. progress.Increment
+        // ticks regardless so the user-facing progress bar reads the
+        // same count.
         const bool pre_baked =
           (static_cast<GPUTextureMode>(texture_mode) == GPUTextureMode::Disabled) ||
-          (cur_filter == GPUTextureFilter::Nearest);
+          (cur_filter == GPUTextureFilter::Nearest) ||
+          (cur_filter == GPUTextureFilter::Bilinear) ||
+          (cur_filter == GPUTextureFilter::BilinearBinAlpha);
         if (!pre_baked)
         {
           ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode);
@@ -1337,11 +1342,32 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
       fs_bc.pShaderBytecode = bc.data;
       fs_bc.BytecodeLength = bc.size;
     }
+    else if (filter == GPUTextureFilter::Bilinear ||
+             filter == GPUTextureFilter::BilinearBinAlpha)
+    {
+      // Third pre-baked batch FS slice (269a2a0 foundation + this
+      // commit's activation). The two enum values share a single
+      // HLSL template + 144-blob table via a BINALPHA -D macro;
+      // the picker takes the binalpha bool to select between the
+      // sub-cubes (BilinearBinAlpha => binalpha=true, b1 .inc
+      // suffix; Bilinear => binalpha=false, b0 .inc suffix). Same
+      // shape as the Nearest picker; the use_dual_source bit is
+      // identical between Nearest and Bilinear because the
+      // use_dual_source formula above already collapses
+      // `filter != Nearest` to a single true for every
+      // non-Nearest filter.
+      const bool binalpha = (filter == GPUTextureFilter::BilinearBinAlpha);
+      const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedBilinearFS(
+        lookup_mode, binalpha, use_dual_source, m_multisamples,
+        m_per_sample_shading, m_disable_color_perspective);
+      fs_bc.pShaderBytecode = bc.data;
+      fs_bc.BytecodeLength = bc.size;
+    }
     else
     {
-      // Bilinear / JINC2 / xBR (and their *BinAlpha variants) still
-      // go through shadergen + D3DCompile. Pre-bake commits for the
-      // 3 remaining filter templates land subsequently.
+      // JINC2 / JINC2BinAlpha / xBR / xBRBinAlpha still go through
+      // shadergen + D3DCompile. Pre-bake commits for the 2 remaining
+      // filter templates land subsequently.
       fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
       if (!fs_blob)
         return {};
