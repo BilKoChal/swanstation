@@ -1199,14 +1199,37 @@ bool GPU_HW_D3D11::CompileShaders()
 
   if (m_downsample_mode == GPUDownsampleMode::Adaptive)
   {
-    m_downsample_first_pass_pixel_shader =
-      shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateAdaptiveDownsampleMipFragmentShader(true));
-    m_downsample_mid_pass_pixel_shader =
-      shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateAdaptiveDownsampleMipFragmentShader(false));
-    m_downsample_blur_pass_pixel_shader =
-      shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateAdaptiveDownsampleBlurFragmentShader());
-    m_downsample_composite_pixel_shader =
-      shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateAdaptiveDownsampleCompositeFragmentShader());
+    // Pre-baked path. 4 picker calls + 4 CreatePixelShader calls
+    // replace the shadergen + D3DCompile + shader_cache lookup
+    // pattern used pre-this-commit. The pickers consult the .inc
+    // blobs at src/common/d3d_common/embedded_dxbc/ via
+    // D3DCommon::EmbeddedShaders. No on-disk shader-cache entry
+    // is produced for these passes - the bytecode is statically
+    // linked and the device-object refcount is cheap to acquire
+    // per session. The Adaptive composite picker takes
+    // m_resolution_scale as input; the Adaptive mip picker takes
+    // the FIRST_PASS bool (one true, one false to populate the
+    // first / mid slots). The blur picker has no inputs.
+    {
+      const auto bc = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleMipFS(true);
+      m_downsample_first_pass_pixel_shader =
+        D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+    }
+    {
+      const auto bc = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleMipFS(false);
+      m_downsample_mid_pass_pixel_shader =
+        D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+    }
+    {
+      const auto bc = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleBlurFS();
+      m_downsample_blur_pass_pixel_shader =
+        D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+    }
+    {
+      const auto bc = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleCompositeFS(m_resolution_scale);
+      m_downsample_composite_pixel_shader =
+        D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+    }
 
     if (!m_downsample_first_pass_pixel_shader || !m_downsample_mid_pass_pixel_shader ||
         !m_downsample_blur_pass_pixel_shader || !m_downsample_composite_pixel_shader)
@@ -1216,8 +1239,12 @@ bool GPU_HW_D3D11::CompileShaders()
   }
   else if (m_downsample_mode == GPUDownsampleMode::Box)
   {
+    // Pre-baked Box-filter downsample. resolution_scale is the
+    // only variant axis; the picker returns the matching .inc
+    // blob from the 15-entry [scale=2..16] table.
+    const auto bc = D3DCommon::EmbeddedShaders::PickBoxSampleDownsampleFS(m_resolution_scale);
     m_downsample_first_pass_pixel_shader =
-      shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateBoxSampleDownsampleFragmentShader());
+      D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
     if (!m_downsample_first_pass_pixel_shader)
       return false;
   }

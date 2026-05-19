@@ -116,6 +116,47 @@ Bytecode PickBatchTexturedNearestFS(uint8_t lookup_mode, bool use_dual_source,
 
 // --------------------------------------------------------------------
 
+// ---- Downsample pre-bake pickers -----------------------------------
+//
+// Selection helpers for the 4 downsample fragment shader templates.
+// Each picker returns a Bytecode struct from a small static table.
+// Inputs are the runtime knobs each template depends on:
+//
+//   adaptive_downsample_blur     no inputs (1 blob covers all)
+//   adaptive_downsample_mip      first_pass (bool)
+//   adaptive_downsample_composite resolution_scale (uint, power of
+//                                  2 in [2, 16] - Adaptive forces
+//                                  pow2 via
+//                                  GPU_HW::CalculateResolutionScale)
+//   box_sample_downsample        resolution_scale (uint, in
+//                                  [2, 16] - Box accepts any scale
+//                                  >= 2 up to the cap)
+//
+// Out-of-range resolution_scale on either picker is a contract
+// violation; the picker asserts and returns the closest in-range
+// variant (clamped to the table index range) to avoid an outright
+// crash in release builds. The caller is expected to filter
+// resolution_scale through GetDownsampleMode + CalculateResolution
+// Scale so only reachable values arrive here.
+
+// Adaptive downsample blur pass. Single variant, no inputs.
+Bytecode PickAdaptiveDownsampleBlurFS();
+
+// Adaptive downsample mip-energy pass. 2 variants on the FIRST_PASS
+// boolean (mirror of the runtime
+// GenerateAdaptiveDownsampleMipFragmentShader(first_pass) parameter).
+Bytecode PickAdaptiveDownsampleMipFS(bool first_pass);
+
+// Adaptive downsample composite (resolve) pass. 4 variants on
+// resolution_scale ∈ {2, 4, 8, 16}.
+Bytecode PickAdaptiveDownsampleCompositeFS(uint32_t resolution_scale);
+
+// Box-filter downsample pass. 15 variants on resolution_scale ∈
+// [2, 16]. Box mode doesn't require power-of-2 scaling.
+Bytecode PickBoxSampleDownsampleFS(uint32_t resolution_scale);
+
+// --------------------------------------------------------------------
+
 // Fullscreen-quad vertex shader. Emits a fullscreen triangle in NDC
 // from SV_VertexID 0..2 via the standard bit-shift trick - equivalent
 // to ShaderGen::GenerateScreenQuadVertexShader() in D3D12 mode. Used
@@ -641,6 +682,82 @@ extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_sample_n0[];
 extern const size_t k_batch_textured_nearest_ps_p8r1_d1_sample_n0_size_bytes;
 extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_sample_n1[];
 extern const size_t k_batch_textured_nearest_ps_p8r1_d1_sample_n1_size_bytes;
+
+// Downsample fragment shaders. Backport of the 4 Vulkan downsample
+// templates (data/shaders/vulkan/{box_sample_downsample,
+// adaptive_downsample_blur, adaptive_downsample_mip,
+// adaptive_downsample_composite}.frag.glsl) to HLSL for the D3D
+// backends. Consumed today by GPU_HW_D3D11::CompileShaders for
+// runtime downsample-pass shader selection in place of the
+// shadergen + D3DCompile calls. D3D12 has no downsample
+// implementation yet; when phase 2 adds one, it consumes these
+// same blobs directly without going through a shadergen path.
+//
+// Variant axes (4 templates, 22 reachable variants total):
+//
+//   adaptive_downsample_blur        no axes                1 blob
+//   adaptive_downsample_mip         FIRST_PASS (0/1)       2 blobs
+//   adaptive_downsample_composite   RESOLUTION_SCALE in    4 blobs
+//                                   {2, 4, 8, 16}
+//                                   (Adaptive forces pow2
+//                                    via CalculateResolutionScale)
+//   box_sample_downsample           RESOLUTION_SCALE in    15 blobs
+//                                   [2, 16]
+//                                   (Box accepts any scale
+//                                    >= 2 up to the D3D11/
+//                                    D3D12 cap of 16)
+//
+// Scale=1 disables downsampling entirely (GetDownsampleMode in
+// gpu_hw.cpp:399), so no variant covers it.
+//
+// Source: data/shaders/d3d_common/{adaptive_downsample_blur,
+//         adaptive_downsample_mip, adaptive_downsample_composite,
+//         box_sample_downsample}.ps.hlsl
+extern const uint8_t k_adaptive_downsample_blur_ps[];
+extern const size_t k_adaptive_downsample_blur_ps_size_bytes;
+extern const uint8_t k_adaptive_downsample_composite_ps_s16[];
+extern const size_t k_adaptive_downsample_composite_ps_s16_size_bytes;
+extern const uint8_t k_adaptive_downsample_composite_ps_s2[];
+extern const size_t k_adaptive_downsample_composite_ps_s2_size_bytes;
+extern const uint8_t k_adaptive_downsample_composite_ps_s4[];
+extern const size_t k_adaptive_downsample_composite_ps_s4_size_bytes;
+extern const uint8_t k_adaptive_downsample_composite_ps_s8[];
+extern const size_t k_adaptive_downsample_composite_ps_s8_size_bytes;
+extern const uint8_t k_adaptive_downsample_mip_ps_f0[];
+extern const size_t k_adaptive_downsample_mip_ps_f0_size_bytes;
+extern const uint8_t k_adaptive_downsample_mip_ps_f1[];
+extern const size_t k_adaptive_downsample_mip_ps_f1_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s10[];
+extern const size_t k_box_sample_downsample_ps_s10_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s11[];
+extern const size_t k_box_sample_downsample_ps_s11_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s12[];
+extern const size_t k_box_sample_downsample_ps_s12_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s13[];
+extern const size_t k_box_sample_downsample_ps_s13_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s14[];
+extern const size_t k_box_sample_downsample_ps_s14_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s15[];
+extern const size_t k_box_sample_downsample_ps_s15_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s16[];
+extern const size_t k_box_sample_downsample_ps_s16_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s2[];
+extern const size_t k_box_sample_downsample_ps_s2_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s3[];
+extern const size_t k_box_sample_downsample_ps_s3_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s4[];
+extern const size_t k_box_sample_downsample_ps_s4_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s5[];
+extern const size_t k_box_sample_downsample_ps_s5_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s6[];
+extern const size_t k_box_sample_downsample_ps_s6_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s7[];
+extern const size_t k_box_sample_downsample_ps_s7_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s8[];
+extern const size_t k_box_sample_downsample_ps_s8_size_bytes;
+extern const uint8_t k_box_sample_downsample_ps_s9[];
+extern const size_t k_box_sample_downsample_ps_s9_size_bytes;
+
 
 
 } // namespace D3DCommon::EmbeddedShaders

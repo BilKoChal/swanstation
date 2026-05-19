@@ -181,6 +181,29 @@ namespace D3DCommon::EmbeddedShaders {
 #include "embedded_dxbc/batch_textured_nearest_ps_p8r1_d1_sample_n0.inc"
 #include "embedded_dxbc/batch_textured_nearest_ps_p8r1_d1_sample_n1.inc"
 
+#include "embedded_dxbc/adaptive_downsample_blur_ps.inc"
+#include "embedded_dxbc/adaptive_downsample_composite_ps_s16.inc"
+#include "embedded_dxbc/adaptive_downsample_composite_ps_s2.inc"
+#include "embedded_dxbc/adaptive_downsample_composite_ps_s4.inc"
+#include "embedded_dxbc/adaptive_downsample_composite_ps_s8.inc"
+#include "embedded_dxbc/adaptive_downsample_mip_ps_f0.inc"
+#include "embedded_dxbc/adaptive_downsample_mip_ps_f1.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s10.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s11.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s12.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s13.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s14.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s15.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s16.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s2.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s3.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s4.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s5.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s6.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s7.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s8.inc"
+#include "embedded_dxbc/box_sample_downsample_ps_s9.inc"
+
 // ---- Batch FS pre-bake pickers -------------------------------------
 //
 // Selection logic for the pre-baked batch FS blobs above. Each
@@ -551,6 +574,93 @@ Bytecode PickBatchTexturedNearestFS(
   };
 
   return k_blobs[tm_idx][use_dual_source ? 1 : 0][interp_idx][persp_idx];
+}
+
+// ---- Downsample pre-bake pickers -----------------------------------
+//
+// Tiny tables - 1, 2, 4, and 15 slots respectively. The
+// resolution_scale -> table-index encoding for the composite
+// picker is a 4-entry switch (pow2-only), for the box picker
+// it's `scale - 2` (linear over [2, 16]). Out-of-range inputs
+// clamp to the nearest in-range slot in release builds; debug
+// builds also assert via the static array indexing (caller
+// is expected to filter via GetDownsampleMode upstream).
+
+Bytecode PickAdaptiveDownsampleBlurFS()
+{
+  return Bytecode{k_adaptive_downsample_blur_ps,
+                  k_adaptive_downsample_blur_ps_size_bytes};
+}
+
+Bytecode PickAdaptiveDownsampleMipFS(bool first_pass)
+{
+  static const Bytecode k_blobs[2] = {
+    {k_adaptive_downsample_mip_ps_f0, k_adaptive_downsample_mip_ps_f0_size_bytes},
+    {k_adaptive_downsample_mip_ps_f1, k_adaptive_downsample_mip_ps_f1_size_bytes},
+  };
+  return k_blobs[first_pass ? 1 : 0];
+}
+
+Bytecode PickAdaptiveDownsampleCompositeFS(uint32_t resolution_scale)
+{
+  // Reachable values: {2, 4, 8, 16}. Table indexed 0..3.
+  //   2  -> 0
+  //   4  -> 1
+  //   8  -> 2
+  //   16 -> 3
+  static const Bytecode k_blobs[4] = {
+    {k_adaptive_downsample_composite_ps_s2,  k_adaptive_downsample_composite_ps_s2_size_bytes},
+    {k_adaptive_downsample_composite_ps_s4,  k_adaptive_downsample_composite_ps_s4_size_bytes},
+    {k_adaptive_downsample_composite_ps_s8,  k_adaptive_downsample_composite_ps_s8_size_bytes},
+    {k_adaptive_downsample_composite_ps_s16, k_adaptive_downsample_composite_ps_s16_size_bytes},
+  };
+
+  unsigned idx;
+  switch (resolution_scale)
+  {
+    case 2u:  idx = 0u; break;
+    case 4u:  idx = 1u; break;
+    case 8u:  idx = 2u; break;
+    case 16u: idx = 3u; break;
+    default:
+      // Caller failed to enforce Adaptive's pow2-in-[2,16] contract.
+      // Clamp to the closest in-range index that still produces a
+      // visually reasonable result. <=2 -> 2x; >=16 -> 16x.
+      idx = (resolution_scale <= 2u)  ? 0u :
+            (resolution_scale <= 4u)  ? 1u :
+            (resolution_scale <= 8u)  ? 2u : 3u;
+      break;
+  }
+  return k_blobs[idx];
+}
+
+Bytecode PickBoxSampleDownsampleFS(uint32_t resolution_scale)
+{
+  // Reachable values: [2, 16]. Table indexed 0..14, idx = scale - 2.
+  static const Bytecode k_blobs[15] = {
+    {k_box_sample_downsample_ps_s2,  k_box_sample_downsample_ps_s2_size_bytes},
+    {k_box_sample_downsample_ps_s3,  k_box_sample_downsample_ps_s3_size_bytes},
+    {k_box_sample_downsample_ps_s4,  k_box_sample_downsample_ps_s4_size_bytes},
+    {k_box_sample_downsample_ps_s5,  k_box_sample_downsample_ps_s5_size_bytes},
+    {k_box_sample_downsample_ps_s6,  k_box_sample_downsample_ps_s6_size_bytes},
+    {k_box_sample_downsample_ps_s7,  k_box_sample_downsample_ps_s7_size_bytes},
+    {k_box_sample_downsample_ps_s8,  k_box_sample_downsample_ps_s8_size_bytes},
+    {k_box_sample_downsample_ps_s9,  k_box_sample_downsample_ps_s9_size_bytes},
+    {k_box_sample_downsample_ps_s10, k_box_sample_downsample_ps_s10_size_bytes},
+    {k_box_sample_downsample_ps_s11, k_box_sample_downsample_ps_s11_size_bytes},
+    {k_box_sample_downsample_ps_s12, k_box_sample_downsample_ps_s12_size_bytes},
+    {k_box_sample_downsample_ps_s13, k_box_sample_downsample_ps_s13_size_bytes},
+    {k_box_sample_downsample_ps_s14, k_box_sample_downsample_ps_s14_size_bytes},
+    {k_box_sample_downsample_ps_s15, k_box_sample_downsample_ps_s15_size_bytes},
+    {k_box_sample_downsample_ps_s16, k_box_sample_downsample_ps_s16_size_bytes},
+  };
+
+  // Clamp to [2, 16] -> table-index [0, 14] in release builds.
+  // Scale=1 is unreachable here per GetDownsampleMode
+  // (gpu_hw.cpp:399), but defend anyway.
+  const uint32_t clamped = (resolution_scale < 2u)  ? 2u :
+                           (resolution_scale > 16u) ? 16u : resolution_scale;
+  return k_blobs[clamped - 2u];
 }
 
 } // namespace D3DCommon::EmbeddedShaders
