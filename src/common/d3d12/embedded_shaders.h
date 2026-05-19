@@ -381,4 +381,189 @@ extern const size_t k_batch_untextured_ps_d1_sample_p0_size_bytes;
 extern const uint8_t k_batch_untextured_ps_d1_sample_p1[];
 extern const size_t k_batch_untextured_ps_d1_sample_p1_size_bytes;
 
+// Batch fragment shader, textured + Nearest-filter slice. Equivalent
+// to GPU_HW_ShaderGen::GenerateBatchFragmentShader invoked with
+// texture_mode != GPUTextureMode::Disabled AND m_texture_filter ==
+// GPUTextureFilter::Nearest. Used by GPU_HW_D3D12::GetBatchPipeline's
+// textured-Nearest branch in place of the runtime shadergen +
+// D3DCompile path for the same slice. Second batch FS template
+// pre-baked, after batch_untextured. The remaining three textured
+// filter templates (Bilinear / JINC2 / xBR) land in subsequent
+// commits.
+//
+// Variant axes (4 dimensions, 6+2+3+2 = 72 blobs):
+//
+//   * Texture mode (6 combos via PALETTE_4_BIT / PALETTE_8_BIT /
+//     RAW_TEXTURE -D macros). Palette4Bit / Palette8Bit are mutually
+//     exclusive in the shadergen #elif chain - no variant has both
+//     set. Reserved_Direct16Bit / Reserved_RawDirect16Bit dedup to
+//     Direct16Bit / RawDirect16Bit at the C++ picker level.
+//   * USE_DUAL_SOURCE (0/1)
+//   * INTERP_CENTROID / INTERP_SAMPLE (mutually exclusive tri-state)
+//   * NOPERSP (0/1)
+//
+// 6 (tex_mode) x 2 (dual) x 3 (interp) x 2 (persp) = 72 blobs.
+// MSAA cardinality does not multiply this slice - the batch FS reads
+// from the single-sample shadow VRAM regardless of m_multisamples.
+//
+// Runtime selection at the GetBatchPipeline call site:
+//   tm_idx           = derived from lookup_mode (Reserved_* deduped):
+//                       0: p0r0 (Direct16Bit)
+//                       1: p0r1 (RawDirect16Bit)
+//                       2: p4r0 (Palette4Bit)
+//                       3: p4r1 (RawPalette4Bit)
+//                       4: p8r0 (Palette8Bit)
+//                       5: p8r1 (RawPalette8Bit)
+//   dual_idx         = use_dual_source ? 1 : 0
+//   interp_idx       = m_per_sample_shading ? 2 :
+//                      (m_multisamples > 1 ? 1 : 0)
+//   persp_idx        = m_disable_color_perspective ? 1 : 0
+//
+// Source: data/shaders/d3d12/batch_textured_nearest.ps.hlsl
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d0_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d0_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d0_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d0_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d1_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d1_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d1_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d1_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d1_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d1_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d1_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d1_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d1_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d1_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r0_d1_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r0_d1_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d0_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d0_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d0_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d0_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d0_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d0_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d0_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d0_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d0_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d0_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d0_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d0_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d1_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d1_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d1_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d1_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d1_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d1_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d1_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d1_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d1_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d1_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p0r1_d1_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p0r1_d1_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d0_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d0_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d0_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d0_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d0_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d0_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d0_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d0_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d0_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d0_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d0_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d0_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d1_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d1_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d1_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d1_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d1_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d1_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d1_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d1_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d1_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d1_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r0_d1_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r0_d1_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d0_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d0_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d0_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d0_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d0_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d0_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d0_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d0_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d0_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d0_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d0_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d0_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d1_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d1_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d1_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d1_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d1_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d1_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d1_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d1_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d1_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d1_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p4r1_d1_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p4r1_d1_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d0_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d0_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d0_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d0_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d0_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d0_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d0_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d0_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d0_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d0_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d0_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d0_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d1_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d1_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d1_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d1_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d1_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d1_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d1_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d1_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d1_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d1_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r0_d1_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r0_d1_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d0_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d0_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d0_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d0_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d0_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d0_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d0_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d0_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d0_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d0_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d0_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d0_sample_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_centroid_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d1_centroid_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_centroid_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d1_centroid_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_none_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d1_none_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_none_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d1_none_n1_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_sample_n0[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d1_sample_n0_size_bytes;
+extern const uint8_t k_batch_textured_nearest_ps_p8r1_d1_sample_n1[];
+extern const size_t k_batch_textured_nearest_ps_p8r1_d1_sample_n1_size_bytes;
+
+
 } // namespace D3D12::EmbeddedShaders

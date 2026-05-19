@@ -894,13 +894,18 @@ bool GPU_HW_D3D12::CompilePipelines()
 
         // Pre-baked variants skip the GetBatchFragmentShader cache-
         // warm step - the bytecode is statically linked, no
-        // D3DCompile to run. Currently the untextured slice is the
-        // only pre-baked template (commits 9e6f933 + this one); the
-        // four textured filter templates are still runtime-compiled
-        // and land in subsequent commits. The progress.Increment
-        // below still ticks for visual continuity so the
-        // user-facing progress bar reads the same as pre-pre-bake.
-        if (static_cast<GPUTextureMode>(texture_mode) != GPUTextureMode::Disabled)
+        // D3DCompile to run. Pre-baked templates so far:
+        //   - Untextured (texture_mode == Disabled): commits
+        //     9e6f933 / b6d1903 / c01f8ae (re-bake).
+        //   - Textured + Nearest: commits 9e4c33d + this one.
+        // The three remaining textured filter templates (Bilinear /
+        // JINC2 / xBR) are still runtime-compiled and land in
+        // subsequent commits. progress.Increment ticks regardless so
+        // the user-facing progress bar reads the same count.
+        const bool pre_baked =
+          (static_cast<GPUTextureMode>(texture_mode) == GPUTextureMode::Disabled) ||
+          (cur_filter == GPUTextureFilter::Nearest);
+        if (!pre_baked)
         {
           ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode);
           if (!blob)
@@ -1238,6 +1243,304 @@ static D3D12_SHADER_BYTECODE PickBatchUntexturedFSBytecode(
   return k_blobs[use_dual_source ? 1 : 0][interp_idx][persp_idx];
 }
 
+
+// Textured + Nearest-filter batch FS pre-baked variant picker.
+// Returns the matching DXBC blob from the 72-entry table at
+// src/common/d3d12/embedded_dxbc/batch_textured_nearest_ps_*.inc,
+// indexed by the 4 axes the regen tool bakes:
+//
+//   texture_mode      6 combos (Palette4Bit / Palette8Bit /
+//                     Direct16Bit each in non-raw / raw form). The
+//                     Reserved_Direct16Bit / Reserved_RawDirect16Bit
+//                     enum values are deduped to their non-Reserved
+//                     counterparts at the GPU_HW_D3D12 caller via
+//                     the `lookup_mode` parameter.
+//   use_dual_source   driven by the same call-site formula as the
+//                     untextured picker - the caller computes once
+//                     and hands the bit to both this picker AND the
+//                     PSO blend-state setup that references SRC1_*.
+//   interp            (per_sample_shading > MSAA > none; mirror of
+//                      ShaderGen::GetInterpolationQualifier)
+//   noperspective     (m_disable_color_perspective)
+//
+// As with the untextured slice (c01f8ae), the former TRANSPARENCY
+// axis (4 BatchRenderMode enum values) is now read from
+// u_render_mode in the cbuffer - the DXBC is invariant across
+// render_mode post-c532a34, so a single set of 72 variants covers
+// all 4 render_modes.
+static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
+    uint8_t lookup_mode, bool use_dual_source, uint32_t multisamples,
+    bool per_sample_shading, bool disable_color_perspective)
+{
+  // texture_mode dim: derived from lookup_mode (Reserved_* already
+  // deduped by the caller). lookup_mode is a 3-bit value with
+  //   bits 0..1 = actual_mode (0 = Palette4Bit, 1 = Palette8Bit,
+  //               2 = Direct16Bit; 3 is Reserved_Direct16Bit but
+  //               the caller maps it to 2 before invoking us)
+  //   bit  2    = RawTextureBit
+  // The 6 reachable combos map to a 6-slot 1-D table:
+  //   0: p0r0 Direct16Bit          (actual=2, raw=0)
+  //   1: p0r1 RawDirect16Bit       (actual=2, raw=1)
+  //   2: p4r0 Palette4Bit          (actual=0, raw=0)
+  //   3: p4r1 RawPalette4Bit       (actual=0, raw=1)
+  //   4: p8r0 Palette8Bit          (actual=1, raw=0)
+  //   5: p8r1 RawPalette8Bit       (actual=1, raw=1)
+  const uint8_t actual_mode = lookup_mode & 0x3u;
+  const bool raw = (lookup_mode & 0x4u) != 0;
+  unsigned tm_idx;
+  if (actual_mode == 2u)        // Direct16Bit family
+    tm_idx = raw ? 1u : 0u;
+  else if (actual_mode == 0u)   // Palette4Bit family
+    tm_idx = raw ? 3u : 2u;
+  else                          // actual_mode == 1u (Palette8Bit family)
+    tm_idx = raw ? 5u : 4u;
+
+  // 0 = none, 1 = centroid, 2 = sample. Same shape as the untextured
+  // picker - mirror of ShaderGen::GetInterpolationQualifier.
+  const unsigned interp_idx =
+    per_sample_shading ? 2u : ((multisamples > 1u) ? 1u : 0u);
+  const unsigned persp_idx = disable_color_perspective ? 1u : 0u;
+
+  static const D3D12_SHADER_BYTECODE k_blobs[6][2][3][2] = {
+    // tm = p0r0 (Direct16Bit)
+    {
+      // no dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1_size_bytes}},
+      },
+      // dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1_size_bytes}},
+      },
+    },
+    // tm = p0r1 (RawDirect16Bit)
+    {
+      // no dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1_size_bytes}},
+      },
+      // dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1_size_bytes}},
+      },
+    },
+    // tm = p4r0 (Palette4Bit)
+    {
+      // no dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1_size_bytes}},
+      },
+      // dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1_size_bytes}},
+      },
+    },
+    // tm = p4r1 (RawPalette4Bit)
+    {
+      // no dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1_size_bytes}},
+      },
+      // dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1_size_bytes}},
+      },
+    },
+    // tm = p8r0 (Palette8Bit)
+    {
+      // no dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1_size_bytes}},
+      },
+      // dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1_size_bytes}},
+      },
+    },
+    // tm = p8r1 (RawPalette8Bit)
+    {
+      // no dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1_size_bytes}},
+      },
+      // dual
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1,
+          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1_size_bytes}},
+      },
+    },
+  };
+
+  return k_blobs[tm_idx][use_dual_source ? 1 : 0][interp_idx][persp_idx];
+}
+
 } // anonymous namespace
 
 GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode)
@@ -1395,29 +1698,48 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   // branch shrinks until every batch FS variant is pre-baked.
   const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
 
+  // Mirror of the shadergen formula in
+  // GPU_HW_ShaderGen::GenerateBatchFragmentShader. The bit drives
+  // both the FS variant choice (via PickBatch*FSBytecode below)
+  // AND the PSO blend state (via SetBlendState below for SRC1_*-
+  // using cells), so it must come from the same input set for
+  // both consumers. Identical for textured / untextured slices;
+  // pre-baked pickers and the shadergen GetBatchFragmentShader
+  // path all consume the same bit.
+  const bool use_dual_source =
+    m_supports_dual_source_blend &&
+    ((render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::TransparencyDisabled) &&
+      render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::OnlyOpaque)) ||
+     filter != GPUTextureFilter::Nearest);
+
   D3D12_SHADER_BYTECODE fs_bc;
   ComPtr<ID3DBlob> fs_blob;  // null on the pre-baked path; held for ref-life otherwise
   if (textured)
   {
-    fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
-    if (!fs_blob)
-      return {};
-    fs_bc.pShaderBytecode = fs_blob->GetBufferPointer();
-    fs_bc.BytecodeLength = fs_blob->GetBufferSize();
+    if (filter == GPUTextureFilter::Nearest)
+    {
+      // Second pre-baked batch FS slice (9e4c33d + this commit).
+      // Picker selects from 72 .inc blobs at
+      // src/common/d3d12/embedded_dxbc/batch_textured_nearest_ps_*.inc;
+      // no D3DCompile, no shader-cache lookup.
+      fs_bc = PickBatchTexturedNearestFSBytecode(lookup_mode, use_dual_source,
+                                                 m_multisamples, m_per_sample_shading,
+                                                 m_disable_color_perspective);
+    }
+    else
+    {
+      // Bilinear / JINC2 / xBR (and their *BinAlpha variants) still
+      // go through shadergen + D3DCompile. Pre-bake commits for the
+      // 3 remaining filter templates land subsequently.
+      fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
+      if (!fs_blob)
+        return {};
+      fs_bc.pShaderBytecode = fs_blob->GetBufferPointer();
+      fs_bc.BytecodeLength = fs_blob->GetBufferSize();
+    }
   }
   else
   {
-    // Mirror of the shadergen formula in
-    // GPU_HW_ShaderGen::GenerateBatchFragmentShader. The bit drives
-    // both the FS variant choice (via PickBatchUntexturedFSBytecode
-    // below) AND the PSO blend state (via SetBlendState below for
-    // SRC1_*-using cells), so it must come from the same input set
-    // for both consumers.
-    const bool use_dual_source =
-      m_supports_dual_source_blend &&
-      ((render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::TransparencyDisabled) &&
-        render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::OnlyOpaque)) ||
-       filter != GPUTextureFilter::Nearest);
     fs_bc = PickBatchUntexturedFSBytecode(use_dual_source, m_multisamples,
                                           m_per_sample_shading,
                                           m_disable_color_perspective);
