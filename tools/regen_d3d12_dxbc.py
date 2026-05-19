@@ -351,6 +351,73 @@ TEMPLATE_VARIANTS = {
         ("p8r1_d1_sample_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
         ("p8r1_d1_sample_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
     ],
+
+    # adaptive_downsample_blur.ps.hlsl is NOT listed here: no variant
+    # axes, so the script's no-variants fallback (compile once with
+    # no /D defines, emit a single .inc with the base identifier)
+    # produces the right output.
+
+    # Adaptive downsample mip pass (mipmap_energy.glsl from
+    # parallel-rsx, ported to HLSL). One -D axis:
+    #   FIRST_PASS (0/1): float3 vs float4 sampling at the 2x2
+    #     footprint. The Vulkan template uses spec constant id=100;
+    #     HLSL has no spec-constant equivalent so we use a -D macro
+    #     instead and fxc dead-strips the unused arm.
+    # Suffix: f{0,1}.
+    "adaptive_downsample_mip.ps.hlsl": [
+        ("f0", []),
+        ("f1", ["FIRST_PASS=1"]),
+    ],
+
+    # Adaptive downsample composite pass (mipmap_resolve.glsl from
+    # parallel-rsx, ported to HLSL). One -D axis:
+    #   RESOLUTION_SCALE: integer literal. Drives RCP_VRAM_SIZE
+    #     (= float2(1/1024, 1/512) / RESOLUTION_SCALE) and the mip
+    #     multiplier (RESOLUTION_SCALE - 1). The Adaptive
+    #     downsample path forces RESOLUTION_SCALE to a power of 2
+    #     in [2, m_max_resolution_scale] (gpu_hw.cpp:391); the cap
+    #     on D3D11/D3D12 is 16 (D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION
+    #     / VRAM_WIDTH = 16384 / 1024), so the reachable set is
+    #     {2, 4, 8, 16} - 4 variants. The Vulkan side uses spec
+    #     constant id=0; we use -D RESOLUTION_SCALE=N on HLSL.
+    # Suffix: s{2,4,8,16}.
+    "adaptive_downsample_composite.ps.hlsl": [
+        ("s2",  ["RESOLUTION_SCALE=2"]),
+        ("s4",  ["RESOLUTION_SCALE=4"]),
+        ("s8",  ["RESOLUTION_SCALE=8"]),
+        ("s16", ["RESOLUTION_SCALE=16"]),
+    ],
+
+    # Box downsample pass. One -D axis:
+    #   RESOLUTION_SCALE: integer literal. Drives the base_coords
+    #     scaling, the two inner loop bounds, and the averaging
+    #     divisor. The Box downsample mode accepts any
+    #     RESOLUTION_SCALE in [2, m_max_resolution_scale] (no
+    #     power-of-2 constraint, unlike Adaptive); the cap is 16,
+    #     so the reachable set is {2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+    #     12, 13, 14, 15, 16} - 15 variants. Scale=1 disables
+    #     downsampling entirely (GetDownsampleMode in
+    #     gpu_hw.cpp:399 returns Disabled), so we don't bake a
+    #     variant for it. The Vulkan side uses spec constant id=0;
+    #     we use -D RESOLUTION_SCALE=N on HLSL.
+    # Suffix: s{2..16}.
+    "box_sample_downsample.ps.hlsl": [
+        ("s2",  ["RESOLUTION_SCALE=2"]),
+        ("s3",  ["RESOLUTION_SCALE=3"]),
+        ("s4",  ["RESOLUTION_SCALE=4"]),
+        ("s5",  ["RESOLUTION_SCALE=5"]),
+        ("s6",  ["RESOLUTION_SCALE=6"]),
+        ("s7",  ["RESOLUTION_SCALE=7"]),
+        ("s8",  ["RESOLUTION_SCALE=8"]),
+        ("s9",  ["RESOLUTION_SCALE=9"]),
+        ("s10", ["RESOLUTION_SCALE=10"]),
+        ("s11", ["RESOLUTION_SCALE=11"]),
+        ("s12", ["RESOLUTION_SCALE=12"]),
+        ("s13", ["RESOLUTION_SCALE=13"]),
+        ("s14", ["RESOLUTION_SCALE=14"]),
+        ("s15", ["RESOLUTION_SCALE=15"]),
+        ("s16", ["RESOLUTION_SCALE=16"]),
+    ],
 }
 
 
