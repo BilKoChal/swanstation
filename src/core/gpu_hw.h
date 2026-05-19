@@ -146,15 +146,25 @@ protected:
     // updated on its own cadence (field LSB per frame, interlacing
     // on/off on display-mode changes).
     uint32_t u_interlacing;
+    // u_pgxp_depth: per-session PGXP-depth-buffer mode toggle (0 = off,
+    // 1 = on). Used to live as a compile-time PGXP_DEPTH macro in the
+    // batch VS source, selecting between a_pos.z (legacy mask-Z) and
+    // a_pos.w (PGXP-computed Z) as the depth source. Now a runtime
+    // ternary on the cbuffer field. The FS-side PGXP_DEPTH usage
+    // (gating SV_Depth declaration) is NOT yet routed - it still
+    // affects the FS entry-point signature - so toggling
+    // m_pgxp_depth_buffer mid-session still triggers a FS / PSO
+    // matrix rebuild via shader_source_changed. VS, however, stays
+    // bound across the flip.
+    uint32_t u_pgxp_depth;
     // Reserved cbuffer slots. The batch UBO has been progressively
     // growing as compile-time #defines move to runtime cbuffer
     // branches (RESOLUTION_SCALE, TRUE_COLOR, DITHERING_SCALED,
-    // DITHERING, INTERLACING). Pre-allocating the remaining slots
-    // in the 4th 16-byte row matches the layout HLSL would have
-    // padded to anyway, and lets follow-up commits route additional
-    // axes (PGXP_DEPTH, UV_LIMITS, etc.) into a named slot without
-    // changing the cbuffer's external size or alignment.
-    uint32_t u_pad0;
+    // DITHERING, INTERLACING, PGXP_DEPTH for VS). Pre-allocating
+    // the remaining slots in the 4th 16-byte row matches the layout
+    // HLSL would have padded to anyway, and lets follow-up commits
+    // route additional axes (UV_LIMITS, etc.) into a named slot
+    // without changing the cbuffer's external size or alignment.
     uint32_t u_pad1;
     uint32_t u_pad2;
   };

@@ -95,6 +95,7 @@ bool GPU_HW::Initialize(HostDisplay* host_display)
   m_batch_ubo_data.u_resolution_scale = m_resolution_scale;
   m_batch_ubo_data.u_true_color = m_true_color ? 1u : 0u;
   m_batch_ubo_data.u_scaled_dithering = m_scaled_dithering ? 1u : 0u;
+  m_batch_ubo_data.u_pgxp_depth = m_pgxp_depth_buffer ? 1u : 0u;
 
   UpdateSoftwareRenderer(false);
 
@@ -135,6 +136,7 @@ void GPU_HW::Reset(bool clear_vram)
   m_batch_ubo_data.u_resolution_scale = m_resolution_scale;
   m_batch_ubo_data.u_true_color = m_true_color ? 1u : 0u;
   m_batch_ubo_data.u_scaled_dithering = m_scaled_dithering ? 1u : 0u;
+  m_batch_ubo_data.u_pgxp_depth = m_pgxp_depth_buffer ? 1u : 0u;
 
   m_batch_ubo_dirty = true;
   m_current_depth = 1;
@@ -343,6 +345,16 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
     m_batch.use_depth_buffer = false;
     if (m_pgxp_depth_buffer)
       ClearDepthBuffer();
+    // The VS reads u_pgxp_depth from the batch UBO to select between
+    // a_pos.z and a_pos.w as the depth source. The dirty bit is
+    // already set in the bulk push above (line 336), so this update
+    // rides the existing upload at the next FlushRender. The FS
+    // still recompiles on this flip because PGXP_DEPTH gates
+    // SV_Depth in the FS entry-point signature - shader_source_changed
+    // upstream of this block has already triggered the rebuild path,
+    // and the new shadergen state will pick up the fresh
+    // m_pgxp_depth value when it generates the new FS source.
+    m_batch_ubo_data.u_pgxp_depth = m_pgxp_depth_buffer ? 1u : 0u;
   }
 
   UpdateSoftwareRenderer(true);

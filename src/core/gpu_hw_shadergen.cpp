@@ -85,7 +85,7 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
                         "float u_dst_alpha_factor", "uint u_interlaced_displayed_field",
                         "bool u_set_mask_while_drawing", "uint u_resolution_scale", "uint u_true_color",
                         "uint u_scaled_dithering", "uint u_dithering",
-                        "uint u_interlacing", "uint u_pad0", "uint u_pad1", "uint u_pad2"},
+                        "uint u_interlacing", "uint u_pgxp_depth", "uint u_pad1", "uint u_pad2"},
                        false);
 
   // Alias the historical compile-time constants to their cbuffer-
@@ -120,7 +120,22 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
   WriteHeader(ss);
   DefineMacro(ss, "TEXTURED", textured);
   DefineMacro(ss, "UV_LIMITS", m_uv_limits);
-  DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
+  // PGXP_DEPTH used to live as a compile-time #define driving the
+  // pos_z source selection in the VS body. It is now routed through
+  // the batch UBO (u_pgxp_depth) and the former #if/#else block is
+  // a uniform-control-flow ternary. Toggling PGXP-depth mode mid-
+  // session is a single 4-byte cbuffer write picked up on the next
+  // FlushRender on the VS side - the VS source is now invariant
+  // under the m_pgxp_depth member.
+  // The FS still captures m_pgxp_depth: it gates SV_Depth declaration
+  // in the FS entry-point signature (DeclareFragmentEntryPoint's
+  // `depth_output` parameter), which is a signature change that
+  // can't be cbuffer-routed without always-emitting SV_Depth and
+  // taking the early-Z hit unconditionally. Routing the FS side is
+  // a future commit pending perf measurement. Until then, PGXP
+  // toggle still triggers a FS / PSO matrix rebuild via the
+  // shader_source_changed path - it just doesn't trigger a VS
+  // rebuild anymore.
 
   // Order matters: WriteBatchUniformBuffer must emit before
   // WriteCommonFunctions so the #define aliases for RESOLUTION_SCALE
@@ -181,18 +196,21 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
   float pos_x = ((a_pos.x + vertex_offset) / 512.0) - 1.0;
   float pos_y = ((a_pos.y + vertex_offset) / -256.0) + 1.0;
 
-#if PGXP_DEPTH
-  // Ignore mask Z when using PGXP depth.
-  float pos_z = a_pos.w;
-  float pos_w = a_pos.w;
-#else
-  float pos_z = a_pos.z;
-  float pos_w = a_pos.w;
-#endif
-
 #if API_OPENGL || API_OPENGL_ES
   pos_y += POS_EPSILON;
+#endif
 
+  // PGXP-depth mode (u_pgxp_depth != 0) ignores mask Z and uses
+  // a_pos.w as the depth source; the legacy path reads a_pos.z.
+  // u_pgxp_depth is a cbuffer scalar so this is a uniform-control-
+  // flow select - the driver collapses it to a single conditional
+  // move at compile time. Was a compile-time #if PGXP_DEPTH /
+  // #else / #endif gate (m_pgxp_depth captured at shadergen ctor);
+  // now a runtime branch on the cbuffer field.
+  float pos_z = (u_pgxp_depth != 0u) ? a_pos.w : a_pos.z;
+  float pos_w = a_pos.w;
+
+#if API_OPENGL || API_OPENGL_ES
   // 0..1 to -1..1 depth range.
   pos_z = (pos_z * 2.0) - 1.0;
 #endif
