@@ -1295,8 +1295,17 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   {
     gpbuilder.AddVertexAttribute("ATTR", 2, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, u));
     gpbuilder.AddVertexAttribute("ATTR", 3, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, texpage));
-    if (m_using_uv_limits)
-      gpbuilder.AddVertexAttribute("ATTR", 4, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, uv_limits));
+    // ATTR4 / a_uv_limits is now bound unconditionally when
+    // textured. Pre-UV_LIMITS-routing this was gated on
+    // m_using_uv_limits because the shadergen only declared the
+    // input when m_uv_limits was true. Post-routing, the shadergen
+    // always emits the a_uv_limits VS input + v_uv_limits varying;
+    // the FS gates whether to consume the value via the
+    // u_uv_limits cbuffer scalar. BatchVertex always carries the
+    // uv_limits field (gpu_hw.h:47), so the binding always points
+    // at a valid 4-byte slot regardless of whether
+    // ComputePolygonUVLimits ran on the vertex.
+    gpbuilder.AddVertexAttribute("ATTR", 4, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, uv_limits));
   }
 
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);

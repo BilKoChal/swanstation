@@ -157,15 +157,29 @@ protected:
     // matrix rebuild via shader_source_changed. VS, however, stays
     // bound across the flip.
     uint32_t u_pgxp_depth;
-    // Reserved cbuffer slots. The batch UBO has been progressively
+    // u_uv_limits: per-session UV-clamping gate (0 = off, 1 = on).
+    // Used to live as a compile-time UV_LIMITS macro driving the
+    // a_uv_limits vertex input + v_uv_limits varying + body
+    // population. Now a runtime branch on the cbuffer field. The
+    // VS source is invariant under the bit (always writes
+    // v_uv_limits, always declares a_uv_limits); the FS source is
+    // invariant too (the texture-filtering arm uses v_uv_limits
+    // unconditionally thanks to the settings-layer coupling between
+    // TEXTURE_FILTERING != Nearest and m_using_uv_limits=true via
+    // ShouldUseUVLimits(); the non-filtered arm is the cbuffer
+    // runtime branch). D3D11 / D3D12 input layouts always bind
+    // ATTR4 when textured; OpenGL already did; Vulkan untouched
+    // (its own pre-baked SPIR-V path needs a separate regen).
+    uint32_t u_uv_limits;
+    // Reserved cbuffer slot. The batch UBO has been progressively
     // growing as compile-time #defines move to runtime cbuffer
     // branches (RESOLUTION_SCALE, TRUE_COLOR, DITHERING_SCALED,
-    // DITHERING, INTERLACING, PGXP_DEPTH for VS). Pre-allocating
-    // the remaining slots in the 4th 16-byte row matches the layout
-    // HLSL would have padded to anyway, and lets follow-up commits
-    // route additional axes (UV_LIMITS, etc.) into a named slot
-    // without changing the cbuffer's external size or alignment.
-    uint32_t u_pad1;
+    // DITHERING, INTERLACING, PGXP_DEPTH for VS, UV_LIMITS).
+    // Pre-allocating the remaining slot in the 4th 16-byte row
+    // matches the layout HLSL would have padded to anyway, and
+    // lets a follow-up commit route one more axis into a named
+    // slot without changing the cbuffer's external size or
+    // alignment.
     uint32_t u_pad2;
   };
 

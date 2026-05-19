@@ -85,7 +85,7 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
                         "float u_dst_alpha_factor", "uint u_interlaced_displayed_field",
                         "bool u_set_mask_while_drawing", "uint u_resolution_scale", "uint u_true_color",
                         "uint u_scaled_dithering", "uint u_dithering",
-                        "uint u_interlacing", "uint u_pgxp_depth", "uint u_pad1", "uint u_pad2"},
+                        "uint u_interlacing", "uint u_pgxp_depth", "uint u_uv_limits", "uint u_pad2"},
                        false);
 
   // Alias the historical compile-time constants to their cbuffer-
@@ -119,7 +119,21 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
   std::stringstream ss;
   WriteHeader(ss);
   DefineMacro(ss, "TEXTURED", textured);
-  DefineMacro(ss, "UV_LIMITS", m_uv_limits);
+  // UV_LIMITS used to live as a compile-time #define gating the
+  // a_uv_limits vertex input + v_uv_limits varying + body
+  // population in this VS. It is now routed through the batch UBO
+  // (u_uv_limits) and the VS source unconditionally declares
+  // a_uv_limits / v_uv_limits when textured. BatchVertex always
+  // carries the uv_limits field regardless of m_using_uv_limits
+  // (see gpu_hw.h:47), so the input layout always points at a
+  // valid 4-byte slot - the value is 0 in vertex paths that don't
+  // call ComputePolygonUVLimits, and the FS gates whether to read
+  // it via u_uv_limits. Toggling m_using_uv_limits is now a single
+  // 4-byte cbuffer write; the VS / FS sources are invariant. The
+  // D3D11 / D3D12 input layouts also become unconditional (always
+  // bind ATTR4 when textured); OpenGL was already unconditional;
+  // Vulkan untouched (its own pre-baked SPIR-V path lives in
+  // data/shaders/vulkan/batch.vert.glsl).
   // PGXP_DEPTH used to live as a compile-time #define driving the
   // pos_z source selection in the VS body. It is now routed through
   // the batch UBO (u_pgxp_depth) and the former #if/#else block is
@@ -165,19 +179,15 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
 
   if (textured)
   {
-    if (m_uv_limits)
-    {
-      DeclareVertexEntryPoint(
-        ss, {"float4 a_pos", "float4 a_col0", "uint a_texcoord", "uint a_texpage", "float4 a_uv_limits"}, 1, 1,
-        {{"nointerpolation", "uint4 v_texpage"}, {"nointerpolation", "float4 v_uv_limits"}}, false, "", UsingMSAA(),
-        UsingPerSampleShading(), m_disable_color_perspective);
-    }
-    else
-    {
-      DeclareVertexEntryPoint(ss, {"float4 a_pos", "float4 a_col0", "uint a_texcoord", "uint a_texpage"}, 1, 1,
-                              {{"nointerpolation", "uint4 v_texpage"}}, false, "", UsingMSAA(), UsingPerSampleShading(),
-                              m_disable_color_perspective);
-    }
+    // a_uv_limits / v_uv_limits emitted unconditionally now. The
+    // FS-side runtime branch on u_uv_limits gates whether the value
+    // is consumed; the VS just always passes it through. BatchVertex
+    // always carries the uv_limits field so the input layout's
+    // ATTR4 binding is always valid.
+    DeclareVertexEntryPoint(
+      ss, {"float4 a_pos", "float4 a_col0", "uint a_texcoord", "uint a_texpage", "float4 a_uv_limits"}, 1, 1,
+      {{"nointerpolation", "uint4 v_texpage"}, {"nointerpolation", "float4 v_uv_limits"}}, false, "", UsingMSAA(),
+      UsingPerSampleShading(), m_disable_color_perspective);
   }
   else
   {
@@ -233,9 +243,13 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
     v_texpage.z = ((a_texpage >> 16) & 63u) * 16u * RESOLUTION_SCALE;
     v_texpage.w = ((a_texpage >> 22) & 511u) * RESOLUTION_SCALE;
 
-    #if UV_LIMITS
-      v_uv_limits = a_uv_limits * float4(255.0, 255.0, 255.0, 255.0);
-    #endif
+    // v_uv_limits is always written when textured. When u_uv_limits=0
+    // at runtime the FS short-circuits and doesn't consume this
+    // value, so the (potentially-zero) contents of a_uv_limits are
+    // harmless. The unconditional write costs one MUL per vertex and
+    // one vec4 of interpolant bandwidth - sub-noise on PSX vertex
+    // throughput.
+    v_uv_limits = a_uv_limits * float4(255.0, 255.0, 255.0, 255.0);
   #endif
 }
 )";
@@ -781,7 +795,14 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
   // - the field LSB changes per frame, the interlacing on/off bit
   // changes on display-mode changes.
   DefineMacro(ss, "TEXTURE_FILTERING", m_texture_filter != GPUTextureFilter::Nearest);
-  DefineMacro(ss, "UV_LIMITS", m_uv_limits);
+  // UV_LIMITS: routed to the batch UBO (u_uv_limits) alongside the
+  // VS-side routing - see the GenerateBatchVertexShader prelude
+  // comment for the full reasoning. The FS body has two former
+  // #if UV_LIMITS sites: the texture-filtering path (always uses
+  // v_uv_limits because the settings-layer ShouldUseUVLimits()
+  // couples TEXTURE_FILTERING != Nearest to m_using_uv_limits=true,
+  // so u_uv_limits is guaranteed 1 here) and the non-filtered path
+  // (gated by runtime branch on u_uv_limits).
   DefineMacro(ss, "USE_DUAL_SOURCE", use_dual_source);
   DefineMacro(ss, "PGXP_DEPTH", m_pgxp_depth);
 
@@ -894,19 +915,16 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     if (m_texture_filter != GPUTextureFilter::Nearest)
       WriteBatchTextureFilter(ss, m_texture_filter);
 
-    if (m_uv_limits)
-    {
-      DeclareFragmentEntryPoint(ss, 1, 1,
-                                {{"nointerpolation", "uint4 v_texpage"}, {"nointerpolation", "float4 v_uv_limits"}},
-                                true, use_dual_source ? 2 : 1, !m_pgxp_depth, UsingMSAA(), UsingPerSampleShading(),
-                                false, m_disable_color_perspective);
-    }
-    else
-    {
-      DeclareFragmentEntryPoint(ss, 1, 1, {{"nointerpolation", "uint4 v_texpage"}}, true, use_dual_source ? 2 : 1,
-                                !m_pgxp_depth, UsingMSAA(), UsingPerSampleShading(), false,
-                                m_disable_color_perspective);
-    }
+    // v_uv_limits emitted unconditionally now; runtime branch on
+    // u_uv_limits inside the FS body decides whether to consume it
+    // for clamping. TEXTURE_FILTERING != Nearest is settings-coupled
+    // to u_uv_limits=1 via ShouldUseUVLimits(), so the
+    // FilteredSampleFromVRAM path can rely on v_uv_limits being
+    // valid without an explicit runtime check there.
+    DeclareFragmentEntryPoint(ss, 1, 1,
+                              {{"nointerpolation", "uint4 v_texpage"}, {"nointerpolation", "float4 v_uv_limits"}},
+                              true, use_dual_source ? 2 : 1, !m_pgxp_depth, UsingMSAA(), UsingPerSampleShading(),
+                              false, m_disable_color_perspective);
   }
   else
   {
@@ -946,27 +964,43 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
       coords /= float2(RESOLUTION_SCALE, RESOLUTION_SCALE);
     #endif
 
-    #if UV_LIMITS
+    float4 texcol;
+    #if TEXTURE_FILTERING
+      // TEXTURE_FILTERING != Nearest is settings-coupled to
+      // m_using_uv_limits=true via ShouldUseUVLimits(), so u_uv_limits
+      // is guaranteed 1 here and v_uv_limits is valid. No runtime
+      // gate needed for this path.
       float4 uv_limits = v_uv_limits;
       #if !PALETTE
-        // Extend the UV range to all "upscaled" pixels. This means 1-pixel-high polygon-based 
+        // Extend the UV range to all "upscaled" pixels. This means 1-pixel-high polygon-based
         // framebuffer effects won't be downsampled. (e.g. Mega Man Legends 2 haze effect)
         uv_limits *= float(RESOLUTION_SCALE);
         uv_limits.zw += float(RESOLUTION_SCALE - 1u);
       #endif
-    #endif
-
-    float4 texcol;
-    #if TEXTURE_FILTERING
       FilteredSampleFromVRAM(v_texpage, coords, uv_limits, texcol, ialpha);
       if (ialpha < 0.5)
         discard;
     #else
-      #if UV_LIMITS
+      // Non-filtered path: u_uv_limits gates whether to clamp. When
+      // PGXP is on (and texture filter is Nearest) the settings layer
+      // sets m_using_uv_limits=true and u_uv_limits=1; we sample with
+      // clamping. When both PGXP and filtering are off, u_uv_limits=0
+      // and we sample without clamping (and v_uv_limits contents are
+      // potentially-zero junk - which is fine because the runtime
+      // branch never reads them).
+      if (u_uv_limits != 0u)
+      {
+        float4 uv_limits = v_uv_limits;
+        #if !PALETTE
+          uv_limits *= float(RESOLUTION_SCALE);
+          uv_limits.zw += float(RESOLUTION_SCALE - 1u);
+        #endif
         texcol = SampleFromVRAM(v_texpage, clamp(coords, uv_limits.xy, uv_limits.zw));
-      #else
+      }
+      else
+      {
         texcol = SampleFromVRAM(v_texpage, coords);
-      #endif
+      }
       if (VECTOR_EQ(texcol, TRANSPARENT_PIXEL_COLOR))
         discard;
 

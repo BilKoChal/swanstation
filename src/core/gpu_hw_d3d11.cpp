@@ -1093,7 +1093,16 @@ bool GPU_HW_D3D11::CompileShaders()
     if (!vs_bytecode)
       return false;
 
-    const UINT num_attributes = static_cast<UINT>(attributes.size()) - (m_using_uv_limits ? 0 : 1);
+    // num_attributes is now unconditionally attributes.size(). Before
+    // the UV_LIMITS-to-cbuffer routing commit, this used to drop the
+    // ATTR4 / a_uv_limits binding when m_using_uv_limits was false
+    // (matching the shadergen's conditional emission of the input).
+    // Post-routing, the shadergen always emits a_uv_limits as a VS
+    // input when textured, and BatchVertex always carries the
+    // uv_limits field, so the input layout always binds ATTR4. The
+    // FS gates whether to actually consume the value via the
+    // u_uv_limits cbuffer scalar.
+    const UINT num_attributes = static_cast<UINT>(attributes.size());
     const HRESULT hr =
       m_device->CreateInputLayout(attributes.data(), num_attributes, vs_bytecode->GetBufferPointer(),
                                   vs_bytecode->GetBufferSize(), m_batch_input_layout.ReleaseAndGetAddressOf());
