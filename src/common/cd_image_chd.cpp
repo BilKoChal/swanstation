@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <optional>
@@ -38,6 +39,104 @@ static std::optional<CDImage::TrackMode> ParseTrackModeString(const char* str)
     return CDImage::TrackMode::Audio;
   else
     return std::nullopt;
+}
+
+// Lightweight parser for CHD track-metadata strings; avoids sscanf, which on
+// glibc walks strlen() over the entire input before each call and may also
+// allocate scratch buffers inside vsscanf. The formats we care about are:
+//   CDROM_TRACK_METADATA_FORMAT  = "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d"
+//   CDROM_TRACK_METADATA2_FORMAT = "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d "
+//                                  "PREGAP:%d PGTYPE:%s PGSUB:%s POSTGAP:%d"
+// In scanf terms, a literal space matches "any run of whitespace, possibly
+// empty"; %s matches a non-empty run of non-whitespace; %d matches an optional
+// sign followed by decimal digits, with leading whitespace skipped. The helpers
+// below mirror that.
+
+static const char* SkipWS(const char* p)
+{
+  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+    p++;
+  return p;
+}
+
+static const char* MatchLiteral(const char* p, const char* lit)
+{
+  p = SkipWS(p);
+  const std::size_t n = std::strlen(lit);
+  return (std::strncmp(p, lit, n) == 0) ? (p + n) : nullptr;
+}
+
+static const char* ParseDecInt(const char* p, int* out)
+{
+  p = SkipWS(p);
+  char* endp = nullptr;
+  const long v = std::strtol(p, &endp, 10);
+  if (endp == p)
+    return nullptr;
+  *out = static_cast<int>(v);
+  return endp;
+}
+
+static const char* ParseToken(const char* p, char* dst, std::size_t dst_size)
+{
+  if (dst_size == 0)
+    return nullptr;
+  p = SkipWS(p);
+  const char* const start = p;
+  while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r')
+    p++;
+  const std::size_t len = static_cast<std::size_t>(p - start);
+  if (len == 0)
+    return nullptr;
+  const std::size_t copy = (len < dst_size - 1) ? len : (dst_size - 1);
+  std::memcpy(dst, start, copy);
+  dst[copy] = '\0';
+  return p;
+}
+
+static bool ParseChdTrackMetadataV1(const char* s, int* track_num,
+                                    char* type_str, std::size_t type_size,
+                                    char* subtype_str, std::size_t subtype_size,
+                                    int* frames)
+{
+  const char* p = s;
+  if (!(p = MatchLiteral(p, "TRACK:")))   return false;
+  if (!(p = ParseDecInt(p, track_num)))   return false;
+  if (!(p = MatchLiteral(p, "TYPE:")))    return false;
+  if (!(p = ParseToken(p, type_str, type_size)))       return false;
+  if (!(p = MatchLiteral(p, "SUBTYPE:"))) return false;
+  if (!(p = ParseToken(p, subtype_str, subtype_size))) return false;
+  if (!(p = MatchLiteral(p, "FRAMES:")))  return false;
+  if (!(p = ParseDecInt(p, frames)))      return false;
+  return true;
+}
+
+static bool ParseChdTrackMetadataV2(const char* s, int* track_num,
+                                    char* type_str, std::size_t type_size,
+                                    char* subtype_str, std::size_t subtype_size,
+                                    int* frames, int* pregap_frames,
+                                    char* pgtype_str, std::size_t pgtype_size,
+                                    char* pgsub_str, std::size_t pgsub_size,
+                                    int* postgap_frames)
+{
+  const char* p = s;
+  if (!(p = MatchLiteral(p, "TRACK:")))    return false;
+  if (!(p = ParseDecInt(p, track_num)))    return false;
+  if (!(p = MatchLiteral(p, "TYPE:")))     return false;
+  if (!(p = ParseToken(p, type_str, type_size)))       return false;
+  if (!(p = MatchLiteral(p, "SUBTYPE:")))  return false;
+  if (!(p = ParseToken(p, subtype_str, subtype_size))) return false;
+  if (!(p = MatchLiteral(p, "FRAMES:")))   return false;
+  if (!(p = ParseDecInt(p, frames)))       return false;
+  if (!(p = MatchLiteral(p, "PREGAP:")))   return false;
+  if (!(p = ParseDecInt(p, pregap_frames))) return false;
+  if (!(p = MatchLiteral(p, "PGTYPE:")))   return false;
+  if (!(p = ParseToken(p, pgtype_str, pgtype_size)))   return false;
+  if (!(p = MatchLiteral(p, "PGSUB:")))    return false;
+  if (!(p = ParseToken(p, pgsub_str, pgsub_size)))     return false;
+  if (!(p = MatchLiteral(p, "POSTGAP:")))  return false;
+  if (!(p = ParseDecInt(p, postgap_frames))) return false;
+  return true;
 }
 
 class CDImageCHD : public CDImage
@@ -144,8 +243,10 @@ bool CDImageCHD::Open(const char* filename, Common::Error* error)
                            &metadata_length, nullptr, nullptr);
     if (err == CHDERR_NONE)
     {
-      if (std::sscanf(metadata_str, CDROM_TRACK_METADATA2_FORMAT, &track_num, type_str, subtype_str, &frames,
-                      &pregap_frames, pgtype_str, pgsub_str, &postgap_frames) != 8)
+      if (!ParseChdTrackMetadataV2(metadata_str, &track_num, type_str, sizeof(type_str),
+                                   subtype_str, sizeof(subtype_str), &frames, &pregap_frames,
+                                   pgtype_str, sizeof(pgtype_str), pgsub_str, sizeof(pgsub_str),
+                                   &postgap_frames))
       {
         Log_ErrorPrintf("Invalid track v2 metadata: '%s'", metadata_str);
         if (error)
@@ -165,7 +266,8 @@ bool CDImageCHD::Open(const char* filename, Common::Error* error)
         break;
       }
 
-      if (std::sscanf(metadata_str, CDROM_TRACK_METADATA_FORMAT, &track_num, type_str, subtype_str, &frames) != 4)
+      if (!ParseChdTrackMetadataV1(metadata_str, &track_num, type_str, sizeof(type_str),
+                                   subtype_str, sizeof(subtype_str), &frames))
       {
         Log_ErrorPrintf("Invalid track metadata: '%s'", metadata_str);
         if (error)

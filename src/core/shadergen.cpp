@@ -1,5 +1,6 @@
 #include "shadergen.h"
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <glad.h>
 
@@ -50,7 +51,26 @@ void ShaderGen::SetGLSLVersionString()
     glsl_version_start++;
 
   int major_version = 0, minor_version = 0;
-  if (std::sscanf(glsl_version_start, "%d.%d", &major_version, &minor_version) == 2)
+  // Parse "<maj>.<min>" without sscanf (avoids strlen-of-whole-string and
+  // internal allocations some libcs do for vsscanf).
+  bool parsed = false;
+  {
+    char* endp = nullptr;
+    const long maj = std::strtol(glsl_version_start, &endp, 10);
+    if (endp != glsl_version_start && *endp == '.')
+    {
+      const char* const min_start = endp + 1;
+      char* endp2 = nullptr;
+      const long min = std::strtol(min_start, &endp2, 10);
+      if (endp2 != min_start)
+      {
+        major_version = static_cast<int>(maj);
+        minor_version = static_cast<int>(min);
+        parsed = true;
+      }
+    }
+  }
+  if (parsed)
   {
     // Cap at GLSL 4.3, we're not using anything newer for now.
     if (!glsl_es && (major_version > 4 || (major_version == 4 && minor_version > 30)))
