@@ -37,14 +37,14 @@ The core build (`Makefile.libretro` and `src/common/CMakeLists.txt`) must
 never invoke `fxc.exe` or any other external shader compiler. The `.inc`
 files under `src/common/d3d12/embedded_dxbc/` are checked into the
 repository and compiled like any other C++ source. The
-`tools/regen_d3d12_dxbc.py` helper exists for contributors who edit the
+`tools/regen_d3d_common_dxbc.py` helper exists for contributors who edit the
 `.hlsl` sources in this directory; it is not part of the build.
 
 ## Regenerating the DXBC blobs
 
 After editing a `.hlsl` file here, run:
 
-    python3 tools/regen_d3d12_dxbc.py
+    python3 tools/regen_d3d_common_dxbc.py
 
 This invokes `fxc.exe` (Shader Model 5.0, `/O3`, `/E main`) on each `.hlsl`
 file and rewrites the matching `.inc` under `src/common/d3d12/embedded_dxbc/`.
@@ -117,7 +117,7 @@ prior to the pre-bake migration).
 
 Shaders that need multiple pre-baked variants (e.g. one per `BatchRenderMode`
 or per `GPUTextureFilter`) are listed in the `TEMPLATE_VARIANTS` dict at the
-top of `tools/regen_d3d12_dxbc.py`. Each entry maps an `.hlsl` filename to
+top of `tools/regen_d3d_common_dxbc.py`. Each entry maps an `.hlsl` filename to
 the list of `(variant_suffix, [/D defines])` tuples that the regen script
 should produce.
 

@@ -9,18 +9,18 @@
 
 // Pre-compiled DXBC blobs shared between the D3D11 and D3D12 backends.
 //
-// Each blob is generated offline by tools/regen_d3d12_dxbc.py from the
-// matching HLSL source under data/shaders/d3d12/, and checked into
+// Each blob is generated offline by tools/regen_d3d_common_dxbc.py from the
+// matching HLSL source under data/shaders/d3d_common/, and checked into
 // src/common/d3d_common/embedded_dxbc/. Nothing in the build system
 // invokes fxc.exe / D3DCompile - the .inc files are consumed as plain
-// C++ arrays. See data/shaders/d3d12/README.md for the editing
+// C++ arrays. See data/shaders/d3d_common/README.md for the editing
 // workflow.
 //
 // fxc emits DXBC bytecode at the ps_5_0 / vs_5_0 / cs_5_0 / gs_5_0
 // targets that both D3D11 (CreatePixelShader from raw bytecode, same
 // signature as src/common/display.hlsl.h's pre-baked precedent) and
 // D3D12 (ID3D12PipelineState's D3D12_SHADER_BYTECODE aggregate)
-// consume identically. The HLSL in data/shaders/d3d12/ uses no
+// consume identically. The HLSL in data/shaders/d3d_common/ uses no
 // API-version-specific constructs - register binding declarations
 // (cbuffer at b0, Texture2D at t0, SamplerState at s0) are honoured
 // by both backends and live in the DXBC reflection metadata.
@@ -41,7 +41,7 @@
 //
 // (or _vs / _cs / _gs depending on stage). Blob variants with /D
 // defines get a suffix per the TEMPLATE_VARIANTS table in
-// tools/regen_d3d12_dxbc.py.
+// tools/regen_d3d_common_dxbc.py.
 //
 // Constructing a D3D12_SHADER_BYTECODE at the PSO creation site is a
 // direct aggregate-initialiser - no wrapper helper needed:
@@ -124,7 +124,7 @@ Bytecode PickBatchTexturedNearestFS(uint8_t lookup_mode, bool use_dual_source,
 // display / copy). Zero state dependency, so a single pre-baked
 // variant covers all call sites.
 //
-// Source: data/shaders/d3d12/fullscreen_quad.vs.hlsl
+// Source: data/shaders/d3d_common/fullscreen_quad.vs.hlsl
 extern const uint8_t k_fullscreen_quad_vs[];
 extern const size_t k_fullscreen_quad_vs_size_bytes;
 
@@ -135,7 +135,7 @@ extern const size_t k_fullscreen_quad_vs_size_bytes;
 // no preprocessor variant axes). Used by GetCopyPipeline for full-
 // frame blits (presentation copies, downscaling).
 //
-// Source: data/shaders/d3d12/copy.ps.hlsl
+// Source: data/shaders/d3d_common/copy.ps.hlsl
 extern const uint8_t k_copy_ps[];
 extern const size_t k_copy_ps_size_bytes;
 
@@ -148,7 +148,7 @@ extern const size_t k_copy_ps_size_bytes;
 // u_resolution_scale (post-e56d4d4 refactor), so the same DXBC serves
 // every resolution-scale value.
 //
-// Source: data/shaders/d3d12/vram_copy.ps.hlsl
+// Source: data/shaders/d3d_common/vram_copy.ps.hlsl
 extern const uint8_t k_vram_copy_ps_pgxp0[];
 extern const size_t k_vram_copy_ps_pgxp0_size_bytes;
 extern const uint8_t k_vram_copy_ps_pgxp1[];
@@ -164,7 +164,7 @@ extern const size_t k_vram_copy_ps_pgxp1_size_bytes;
 // gets pre-baked. u_resolution_scale lives in the cbuffer (post-
 // 9d2b49d), so one blob per PGXP value serves every resolution scale.
 //
-// Source: data/shaders/d3d12/vram_write.ps.hlsl
+// Source: data/shaders/d3d_common/vram_write.ps.hlsl
 extern const uint8_t k_vram_write_ps_pgxp0[];
 extern const size_t k_vram_write_ps_pgxp0_size_bytes;
 extern const uint8_t k_vram_write_ps_pgxp1[];
@@ -185,7 +185,7 @@ extern const size_t k_vram_write_ps_pgxp1_size_bytes;
 // shadergen body references VRAM_SIZE here for the y-flip). So no
 // scale-refactor was needed before pre-baking.
 //
-// Source: data/shaders/d3d12/vram_fill.ps.hlsl
+// Source: data/shaders/d3d_common/vram_fill.ps.hlsl
 extern const uint8_t k_vram_fill_ps_p0w0i0[];
 extern const size_t k_vram_fill_ps_p0w0i0_size_bytes;
 extern const uint8_t k_vram_fill_ps_p0w0i1[];
@@ -217,7 +217,7 @@ extern const size_t k_vram_fill_ps_p1w1i1_size_bytes;
 // shader's per-sample-shading expectation matches the PSO's MSAA
 // configuration.
 //
-// Source: data/shaders/d3d12/vram_update_depth.ps.hlsl
+// Source: data/shaders/d3d_common/vram_update_depth.ps.hlsl
 extern const uint8_t k_vram_update_depth_ps_msaa0[];
 extern const size_t k_vram_update_depth_ps_msaa0_size_bytes;
 extern const uint8_t k_vram_update_depth_ps_msaa1[];
@@ -247,7 +247,7 @@ extern const size_t k_vram_update_depth_ps_msaa1_size_bytes;
 // switch falls back to the m1 blob with a warn log if one
 // ever does.
 //
-// Source: data/shaders/d3d12/vram_read.ps.hlsl
+// Source: data/shaders/d3d_common/vram_read.ps.hlsl
 extern const uint8_t k_vram_read_ps_m1[];
 extern const size_t k_vram_read_ps_m1_size_bytes;
 extern const uint8_t k_vram_read_ps_m2[];
@@ -287,7 +287,7 @@ extern const size_t k_vram_read_ps_m32_size_bytes;
 // only reports power-of-2 counts as supported, so the fallback
 // shouldn't fire in practice).
 //
-// Source: data/shaders/d3d12/display.ps.hlsl
+// Source: data/shaders/d3d_common/display.ps.hlsl
 extern const uint8_t k_display_ps_d0i0c0m01[];
 extern const size_t k_display_ps_d0i0c0m01_size_bytes;
 extern const uint8_t k_display_ps_d0i0c0m02[];
@@ -432,7 +432,7 @@ extern const size_t k_display_ps_d1i2c1m32_size_bytes;
 //                      (m_multisamples > 1 ? 1 : 0)
 //   persp_idx        = m_disable_color_perspective ? 1 : 0
 //
-// Source: data/shaders/d3d12/batch_untextured.ps.hlsl
+// Source: data/shaders/d3d_common/batch_untextured.ps.hlsl
 extern const uint8_t k_batch_untextured_ps_d0_none_p0[];
 extern const size_t k_batch_untextured_ps_d0_none_p0_size_bytes;
 extern const uint8_t k_batch_untextured_ps_d0_none_p1[];
@@ -496,7 +496,7 @@ extern const size_t k_batch_untextured_ps_d1_sample_p1_size_bytes;
 //                      (m_multisamples > 1 ? 1 : 0)
 //   persp_idx        = m_disable_color_perspective ? 1 : 0
 //
-// Source: data/shaders/d3d12/batch_textured_nearest.ps.hlsl
+// Source: data/shaders/d3d_common/batch_textured_nearest.ps.hlsl
 extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n0[];
 extern const size_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n0_size_bytes;
 extern const uint8_t k_batch_textured_nearest_ps_p0r0_d0_centroid_n1[];

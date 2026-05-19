@@ -1488,8 +1488,8 @@ D3D12_SHADER_BYTECODE GPU_HW_D3D12::GetFullscreenQuadVertexShader()
 {
   // Pre-baked DXBC blob - no compile, no caching state, no mutex. The
   // blob is statically linked from src/common/d3d12/embedded_dxbc/
-  // (generated offline by tools/regen_d3d12_dxbc.py from
-  // data/shaders/d3d12/fullscreen_quad.vs.hlsl). All callers receive
+  // (generated offline by tools/regen_d3d_common_dxbc.py from
+  // data/shaders/d3d_common/fullscreen_quad.vs.hlsl). All callers receive
   // the same const view; the storage outlives every PSO that binds it.
   return D3D12_SHADER_BYTECODE{
     D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs,

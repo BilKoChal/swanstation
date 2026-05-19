@@ -21,7 +21,7 @@
 //
 // First multi-axis pre-bake exercise (vram_copy and vram_write each
 // had one axis only). The TEMPLATE_VARIANTS table in
-// tools/regen_d3d12_dxbc.py enumerates all 8 combinations.
+// tools/regen_d3d_common_dxbc.py enumerates all 8 combinations.
 //
 // No RESOLUTION_SCALE / VRAM_SIZE references in the body for D3D12
 // mode - fixYCoord is identity in HLSL (only flips on OpenGL's

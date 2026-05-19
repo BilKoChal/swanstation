@@ -45,7 +45,7 @@
 // gen output's #if at the entry point.
 
 #ifndef RESOLUTION_SCALE
-#  error "Compile with /D RESOLUTION_SCALE=<N>. See TEMPLATE_VARIANTS in tools/regen_d3d12_dxbc.py."
+#  error "Compile with /D RESOLUTION_SCALE=<N>. See TEMPLATE_VARIANTS in tools/regen_d3d_common_dxbc.py."
 #endif
 
 Texture2D    samp0    : register(t0);
