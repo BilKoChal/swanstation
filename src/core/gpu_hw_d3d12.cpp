@@ -1170,11 +1170,11 @@ static D3D12_SHADER_BYTECODE PickBatchUntexturedFSBytecode(
     uint32_t multisamples, bool per_sample_shading, bool disable_color_perspective)
 {
   const bool transparency =
-    (render_mode != static_cast<uint8_t>(BatchRenderMode::TransparencyDisabled));
+    (render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::TransparencyDisabled));
   const bool use_dual_source =
     supports_dual_source_blend &&
-    ((render_mode != static_cast<uint8_t>(BatchRenderMode::TransparencyDisabled) &&
-      render_mode != static_cast<uint8_t>(BatchRenderMode::OnlyOpaque)) ||
+    ((render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::TransparencyDisabled) &&
+      render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::OnlyOpaque)) ||
      filter != GPUTextureFilter::Nearest);
   // 0 = none, 1 = centroid, 2 = sample. Mirror of
   // ShaderGen::GetInterpolationQualifier: sample wins over centroid
