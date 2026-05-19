@@ -192,14 +192,9 @@ TEMPLATE_VARIANTS = {
 
     # batch_untextured_ps: first batch FS pre-bake template. Mirrors
     # the C++ shadergen GenerateBatchFragmentShader output for the
-    # texture_mode == GPUTextureMode::Disabled slice. 5 structural
-    # axes:
+    # texture_mode == GPUTextureMode::Disabled slice. 4 structural
+    # axes (post-c532a34 TRANSPARENCY routing):
     #
-    #   * TRANSPARENCY (0/1): drives the per-batch premultiply-alpha
-    #     formula and the output-arm choice. 2 values per the
-    #     untextured-slice shadergen path (TRANSPARENCY_ONLY_OPAQUE /
-    #     TRANSPARENCY_ONLY_TRANSPARENT never reach untextured per the
-    #     shadergen comment at gpu_hw_shadergen.cpp:1148).
     #   * USE_DUAL_SOURCE (0/1): drives o_col1 declaration + write.
     #   * INTERP_CENTROID / INTERP_SAMPLE: mutually exclusive booleans
     #     encoding the (none / centroid / sample) tri-state. Sample
@@ -207,42 +202,33 @@ TEMPLATE_VARIANTS = {
     #     never emit a variant where both are 1.
     #   * NOPERSP (0/1): `noperspective` qualifier on v_col0.
     #
-    # 2 (transparency) x 2 (dual) x 3 (interp) x 2 (persp) = 24 blobs.
-    # MSAA does NOT multiply this slice - the untextured FS body has
-    # no LOAD_TEXTURE_MS sample-resolve loop to unroll; MSAA only
-    # affects the input qualifier (centroid/sample), which the
-    # INTERP_* axes already cover.
+    # 2 (dual) x 3 (interp) x 2 (persp) = 12 blobs. The former
+    # TRANSPARENCY axis (2 values) collapsed onto the runtime branch
+    # on u_render_mode in the HLSL body at the premultiply +
+    # dual_source o_col1 sites - the DXBC is invariant under
+    # render_mode post-routing. MSAA does NOT multiply this slice -
+    # the untextured FS body has no LOAD_TEXTURE_MS sample-resolve
+    # loop to unroll; MSAA only affects the input qualifier
+    # (centroid/sample), which the INTERP_* axes already cover.
     #
-    # Variant suffix: t{0,1}d{0,1}_{none,centroid,sample}_p{0,1}.
+    # Variant suffix: d{0,1}_{none,centroid,sample}_p{0,1}.
     # Alphabetical sort matches the natural nested-loop iteration
     # order in the matching helper at embedded_shaders.cpp.
     "batch_untextured.ps.hlsl": [
-        # transparency=0
-        ("t0d0_none_p0",     []),
-        ("t0d0_none_p1",     ["NOPERSP=1"]),
-        ("t0d0_centroid_p0", ["INTERP_CENTROID=1"]),
-        ("t0d0_centroid_p1", ["INTERP_CENTROID=1", "NOPERSP=1"]),
-        ("t0d0_sample_p0",   ["INTERP_SAMPLE=1"]),
-        ("t0d0_sample_p1",   ["INTERP_SAMPLE=1", "NOPERSP=1"]),
-        ("t0d1_none_p0",     ["USE_DUAL_SOURCE=1"]),
-        ("t0d1_none_p1",     ["USE_DUAL_SOURCE=1", "NOPERSP=1"]),
-        ("t0d1_centroid_p0", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
-        ("t0d1_centroid_p1", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
-        ("t0d1_sample_p0",   ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
-        ("t0d1_sample_p1",   ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
-        # transparency=1
-        ("t1d0_none_p0",     ["TRANSPARENCY=1"]),
-        ("t1d0_none_p1",     ["TRANSPARENCY=1", "NOPERSP=1"]),
-        ("t1d0_centroid_p0", ["TRANSPARENCY=1", "INTERP_CENTROID=1"]),
-        ("t1d0_centroid_p1", ["TRANSPARENCY=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
-        ("t1d0_sample_p0",   ["TRANSPARENCY=1", "INTERP_SAMPLE=1"]),
-        ("t1d0_sample_p1",   ["TRANSPARENCY=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
-        ("t1d1_none_p0",     ["TRANSPARENCY=1", "USE_DUAL_SOURCE=1"]),
-        ("t1d1_none_p1",     ["TRANSPARENCY=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
-        ("t1d1_centroid_p0", ["TRANSPARENCY=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
-        ("t1d1_centroid_p1", ["TRANSPARENCY=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
-        ("t1d1_sample_p0",   ["TRANSPARENCY=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
-        ("t1d1_sample_p1",   ["TRANSPARENCY=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        # dual=0
+        ("d0_none_p0",     []),
+        ("d0_none_p1",     ["NOPERSP=1"]),
+        ("d0_centroid_p0", ["INTERP_CENTROID=1"]),
+        ("d0_centroid_p1", ["INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("d0_sample_p0",   ["INTERP_SAMPLE=1"]),
+        ("d0_sample_p1",   ["INTERP_SAMPLE=1", "NOPERSP=1"]),
+        # dual=1
+        ("d1_none_p0",     ["USE_DUAL_SOURCE=1"]),
+        ("d1_none_p1",     ["USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("d1_centroid_p0", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("d1_centroid_p1", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("d1_sample_p0",   ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("d1_sample_p1",   ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
     ],
 }
 

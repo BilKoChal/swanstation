@@ -15,16 +15,23 @@
 // ops shaders (vram_copy / vram_fill / vram_write / vram_read /
 // vram_update_depth / display) already work.
 //
-// Variant axes (5, all `-D` to fxc):
+// Post-TRANSPARENCY-routing variant matrix. The 4-state
+// BatchRenderMode enum (TransparencyDisabled / TransparentAndOpaque /
+// OnlyOpaque / OnlyTransparent) used to drive a compile-time
+// TRANSPARENCY `-D` axis on this template, but landed at commit
+// c532a34 ("core: route TRANSPARENCY through the batch UBO") as a
+// cbuffer scalar `u_render_mode` shared across all backends. The
+// runtime branch (u_render_mode != 0u) replaces the former
+// `#if TRANSPARENCY` body guards. The inner OnlyOpaque /
+// OnlyTransparent discards (former TRANSPARENCY_ONLY_OPAQUE /
+// TRANSPARENCY_ONLY_TRANSPARENT macros) are unreachable for
+// untextured per the shadergen long-standing rule "We shouldn't be
+// rendering opaque geometry only when untextured" (see
+// gpu_hw_shadergen.cpp). So this template emits a single colour
+// path with the only render-mode-dependent computation being the
+// premultiply factor.
 //
-//   * TRANSPARENCY: 0 or 1. The 4 BatchRenderMode enum values map
-//     onto 2 untextured DXBC variants here - the TRANSPARENCY_ONLY_*
-//     refinements never reach the untextured slice (per the shadergen
-//     comment at gpu_hw_shadergen.cpp:1148: "We shouldn't be rendering
-//     opaque geometry only when untextured, so no need to test /
-//     discard here"). The OnlyOpaque / OnlyTransparent enum values
-//     funnel into TRANSPARENCY=1 with no behavioural diff for
-//     untextured.
+// Variant axes (4, all `-D` to fxc):
 //
 //   * USE_DUAL_SOURCE: 0 or 1. Drives the second colour output
 //     declaration (o_col1 at location 0 index 1) and the matching
@@ -40,15 +47,16 @@
 //     Mutually exclusive booleans encoding the (none / centroid /
 //     sample) tri-state. INTERP_SAMPLE wins if both are set. Maps to
 //     ShaderGen::GetInterpolationQualifier with msaa /
-//     per_sample_shading derived from m_multisamples >1 and
+//     per_sample_shading derived from m_multisamples > 1 and
 //     m_per_sample_shading respectively.
 //
 //   * NOPERSP: 0 or 1. Adds `noperspective` to the v_col0 input
 //     qualifier. Set when m_disable_color_perspective is true (PGXP
 //     texture correction enabled without colour correction - niche).
 //
-// Total: 2 (transparency) x 2 (dual) x 3 (interp) x 2 (persp) = 24
-// blobs.
+// Total: 2 (dual) x 3 (interp) x 2 (persp) = 12 blobs. Down from
+// 24 pre-routing - the transparency axis collapsed onto the
+// single runtime branch on u_render_mode below.
 //
 // The MSAA axis (m_multisamples 1/2/4/8/16/32) does NOT multiply this
 // template because the untextured FS body has no LOAD_TEXTURE_MS
@@ -66,14 +74,11 @@ cbuffer UBOBlock : register(b0)
   // 64-byte cbuffer. C++ side is GPU_HW::BatchUBOData (gpu_hw.h:111);
   // field order MUST match the struct member order there.
   //
-  // The trailing u_uv_limits / u_pad2 are read by the textured-Nearest
-  // FS only (and only when u_uv_limits != 0u); on the untextured path
-  // they are present in the cbuffer but unused. The fields between
-  // offset 32 and offset 51 (u_resolution_scale, u_true_color,
-  // u_scaled_dithering, u_dithering, u_interlacing) all matter for
-  // the untextured body and are read at runtime via uniform-flow
-  // branches rather than baked into the DXBC as compile-time
-  // constants.
+  // The trailing u_uv_limits is read by the textured-Nearest FS only
+  // (and only when u_uv_limits != 0u); on the untextured path it's
+  // present in the cbuffer but unused. u_render_mode (former u_pad2
+  // pre-c532a34) is read at the premultiply site below as a runtime
+  // branch on the 4-state BatchRenderMode enum.
   uint2 u_texture_window_and;
   uint2 u_texture_window_or;
   float u_src_alpha_factor;
@@ -87,7 +92,7 @@ cbuffer UBOBlock : register(b0)
   uint  u_interlacing;
   uint  u_pgxp_depth;
   uint  u_uv_limits;
-  uint  u_pad2;
+  uint  u_render_mode;
 };
 
 // PSX dither matrix. Constant on every variant - the same 4x4 spread
@@ -190,13 +195,16 @@ void main(
   // bit-for-bit reproducibility).
   oalpha = float(u_set_mask_while_drawing);
 
-  // Premultiply alpha so we don't need a separate colour-output channel
-  // for it. TRANSPARENCY=1 multiplies by u_src_alpha_factor (the
-  // semitransparent-blend factor); TRANSPARENCY=0 keeps ialpha (1.0).
+  // Premultiply alpha so we don't need a separate colour-output
+  // channel for it. Pre-c532a34 this was a compile-time
+  // `#if TRANSPARENCY` branch (the macro encoded `render_mode !=
+  // TransparencyDisabled`). Post-routing it's the same runtime test
+  // on the u_render_mode cbuffer scalar - DXBC compiles to a single
+  // uniform-flow branch since every lane in a draw shares the same
+  // u_render_mode value.
   float premultiply_alpha = ialpha;
-#if TRANSPARENCY
-  premultiply_alpha = ialpha * (semitransparent ? u_src_alpha_factor : 1.0);
-#endif
+  if (u_render_mode != 0u)
+    premultiply_alpha = ialpha * (semitransparent ? u_src_alpha_factor : 1.0);
 
   float3 color;
   if (u_true_color != 0u)
@@ -215,24 +223,19 @@ void main(
 
   // Untextured output. The TRANSPARENCY && TEXTURED arm of the
   // shadergen original is unreachable here (we're the !TEXTURED
-  // slice); the elif TRANSPARENCY arm and the else arm map onto the
-  // two DXBC variants we emit.
-#if TRANSPARENCY
-  // Untextured + transparency: single colour arm. Untextured opaque-
-  // only is a documented no-op per the shadergen comment, so we
-  // don't gate this on TRANSPARENCY_ONLY_* (those macros are not
-  // referenced anywhere in this template).
+  // slice); the elif TRANSPARENCY arm and the else arm collapse onto
+  // a single colour-write site with the o_col1 expression chosen by
+  // the runtime u_render_mode branch when dual_source is on.
+  // Untextured opaque-only is a documented no-op per the shadergen
+  // comment ("We shouldn't be rendering opaque geometry only when
+  // untextured"), so we don't gate the colour write on
+  // (u_render_mode == 2u) - it'd be unreachable noise.
   o_col0 = float4(color, oalpha);
-#  if USE_DUAL_SOURCE
-  o_col1 = float4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
-#  endif
-#else
-  // Non-transparency arm. Blending is disabled by the PSO state in
-  // this mode so the mask alpha sits directly in the colour write.
-  o_col0 = float4(color, oalpha);
-#  if USE_DUAL_SOURCE
-  o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
-#  endif
+#if USE_DUAL_SOURCE
+  if (u_render_mode != 0u)
+    o_col1 = float4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
+  else
+    o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
 #endif
 
   // SV_Depth output - always declared (was conditional on !PGXP_DEPTH
