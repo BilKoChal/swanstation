@@ -350,6 +350,180 @@ TEMPLATE_VARIANTS = {
         ("p8r1_d1_sample_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
     ],
 
+    # batch_textured_bilinear_ps: third batch FS pre-bake template.
+    # Mirror of the C++ shadergen GenerateBatchFragmentShader output
+    # for the (texture_mode != Disabled, m_texture_filter in
+    # {Bilinear, BilinearBinAlpha}) slice. 5 structural axes:
+    #
+    #   * Texture mode (6 combos via 3 -D macros):
+    #     Same encoding as batch_textured_nearest - see that entry
+    #     for the (PALETTE_4_BIT, PALETTE_8_BIT, RAW_TEXTURE) tuple
+    #     mapping. PALETTE_4_BIT and PALETTE_8_BIT are mutually
+    #     exclusive.
+    #   * USE_DUAL_SOURCE (0/1): drives o_col1 declaration + write.
+    #   * INTERP_CENTROID / INTERP_SAMPLE: interp tri-state.
+    #   * NOPERSP (0/1): noperspective on v_col0.
+    #   * BINALPHA (0/1): NEW axis vs Nearest. Gates the ialpha
+    #     quantisation step at the end of FilteredSampleFromVRAM
+    #     (BINALPHA=1 => BilinearBinAlpha; BINALPHA=0 => standard
+    #     Bilinear). fxc dead-strips the unused arm.
+    #
+    # 6 (tex_mode) x 2 (dual) x 3 (interp) x 2 (persp) x 2 (BinAlpha)
+    # = 144 blobs. Double the Nearest count (72) because BINALPHA
+    # adds one dimension. MSAA cardinality does NOT multiply this
+    # template either - the batch FS reads the single-sample shadow
+    # VRAM regardless of m_multisamples.
+    #
+    # Variant suffix: pXrY_d{0,1}_{none,centroid,sample}_n{0,1}_b{0,1}
+    # where b{0,1} encodes BINALPHA. Alphabetical sort matches the
+    # natural nested-loop iteration order in the matching helper.
+    "batch_textured_bilinear.ps.hlsl": [
+        ("p0r0_d0_none_n0_b0", []),
+        ("p0r0_d0_none_n0_b1", ["BINALPHA=1"]),
+        ("p0r0_d0_none_n1_b0", ["NOPERSP=1"]),
+        ("p0r0_d0_none_n1_b1", ["NOPERSP=1", "BINALPHA=1"]),
+        ("p0r0_d0_centroid_n0_b0", ["INTERP_CENTROID=1"]),
+        ("p0r0_d0_centroid_n0_b1", ["INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p0r0_d0_centroid_n1_b0", ["INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r0_d0_centroid_n1_b1", ["INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r0_d0_sample_n0_b0", ["INTERP_SAMPLE=1"]),
+        ("p0r0_d0_sample_n0_b1", ["INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p0r0_d0_sample_n1_b0", ["INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r0_d0_sample_n1_b1", ["INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r0_d1_none_n0_b0", ["USE_DUAL_SOURCE=1"]),
+        ("p0r0_d1_none_n0_b1", ["USE_DUAL_SOURCE=1", "BINALPHA=1"]),
+        ("p0r0_d1_none_n1_b0", ["USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p0r0_d1_none_n1_b1", ["USE_DUAL_SOURCE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r0_d1_centroid_n0_b0", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p0r0_d1_centroid_n0_b1", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p0r0_d1_centroid_n1_b0", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r0_d1_centroid_n1_b1", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r0_d1_sample_n0_b0", ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p0r0_d1_sample_n0_b1", ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p0r0_d1_sample_n1_b0", ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r0_d1_sample_n1_b1", ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r1_d0_none_n0_b0", ["RAW_TEXTURE=1"]),
+        ("p0r1_d0_none_n0_b1", ["RAW_TEXTURE=1", "BINALPHA=1"]),
+        ("p0r1_d0_none_n1_b0", ["RAW_TEXTURE=1", "NOPERSP=1"]),
+        ("p0r1_d0_none_n1_b1", ["RAW_TEXTURE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r1_d0_centroid_n0_b0", ["RAW_TEXTURE=1", "INTERP_CENTROID=1"]),
+        ("p0r1_d0_centroid_n0_b1", ["RAW_TEXTURE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p0r1_d0_centroid_n1_b0", ["RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r1_d0_centroid_n1_b1", ["RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r1_d0_sample_n0_b0", ["RAW_TEXTURE=1", "INTERP_SAMPLE=1"]),
+        ("p0r1_d0_sample_n0_b1", ["RAW_TEXTURE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p0r1_d0_sample_n1_b0", ["RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r1_d0_sample_n1_b1", ["RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r1_d1_none_n0_b0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1"]),
+        ("p0r1_d1_none_n0_b1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "BINALPHA=1"]),
+        ("p0r1_d1_none_n1_b0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p0r1_d1_none_n1_b1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r1_d1_centroid_n0_b0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p0r1_d1_centroid_n0_b1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p0r1_d1_centroid_n1_b0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r1_d1_centroid_n1_b1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p0r1_d1_sample_n0_b0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p0r1_d1_sample_n0_b1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p0r1_d1_sample_n1_b0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r1_d1_sample_n1_b1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r0_d0_none_n0_b0", ["PALETTE_4_BIT=1"]),
+        ("p4r0_d0_none_n0_b1", ["PALETTE_4_BIT=1", "BINALPHA=1"]),
+        ("p4r0_d0_none_n1_b0", ["PALETTE_4_BIT=1", "NOPERSP=1"]),
+        ("p4r0_d0_none_n1_b1", ["PALETTE_4_BIT=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r0_d0_centroid_n0_b0", ["PALETTE_4_BIT=1", "INTERP_CENTROID=1"]),
+        ("p4r0_d0_centroid_n0_b1", ["PALETTE_4_BIT=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p4r0_d0_centroid_n1_b0", ["PALETTE_4_BIT=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r0_d0_centroid_n1_b1", ["PALETTE_4_BIT=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r0_d0_sample_n0_b0", ["PALETTE_4_BIT=1", "INTERP_SAMPLE=1"]),
+        ("p4r0_d0_sample_n0_b1", ["PALETTE_4_BIT=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p4r0_d0_sample_n1_b0", ["PALETTE_4_BIT=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r0_d0_sample_n1_b1", ["PALETTE_4_BIT=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r0_d1_none_n0_b0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1"]),
+        ("p4r0_d1_none_n0_b1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "BINALPHA=1"]),
+        ("p4r0_d1_none_n1_b0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p4r0_d1_none_n1_b1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r0_d1_centroid_n0_b0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p4r0_d1_centroid_n0_b1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p4r0_d1_centroid_n1_b0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r0_d1_centroid_n1_b1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r0_d1_sample_n0_b0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p4r0_d1_sample_n0_b1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p4r0_d1_sample_n1_b0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r0_d1_sample_n1_b1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r1_d0_none_n0_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1"]),
+        ("p4r1_d0_none_n0_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "BINALPHA=1"]),
+        ("p4r1_d0_none_n1_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "NOPERSP=1"]),
+        ("p4r1_d0_none_n1_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r1_d0_centroid_n0_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1"]),
+        ("p4r1_d0_centroid_n0_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p4r1_d0_centroid_n1_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r1_d0_centroid_n1_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r1_d0_sample_n0_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1"]),
+        ("p4r1_d0_sample_n0_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p4r1_d0_sample_n1_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r1_d0_sample_n1_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r1_d1_none_n0_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1"]),
+        ("p4r1_d1_none_n0_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "BINALPHA=1"]),
+        ("p4r1_d1_none_n1_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p4r1_d1_none_n1_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r1_d1_centroid_n0_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p4r1_d1_centroid_n0_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p4r1_d1_centroid_n1_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r1_d1_centroid_n1_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p4r1_d1_sample_n0_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p4r1_d1_sample_n0_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p4r1_d1_sample_n1_b0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r1_d1_sample_n1_b1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r0_d0_none_n0_b0", ["PALETTE_8_BIT=1"]),
+        ("p8r0_d0_none_n0_b1", ["PALETTE_8_BIT=1", "BINALPHA=1"]),
+        ("p8r0_d0_none_n1_b0", ["PALETTE_8_BIT=1", "NOPERSP=1"]),
+        ("p8r0_d0_none_n1_b1", ["PALETTE_8_BIT=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r0_d0_centroid_n0_b0", ["PALETTE_8_BIT=1", "INTERP_CENTROID=1"]),
+        ("p8r0_d0_centroid_n0_b1", ["PALETTE_8_BIT=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p8r0_d0_centroid_n1_b0", ["PALETTE_8_BIT=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r0_d0_centroid_n1_b1", ["PALETTE_8_BIT=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r0_d0_sample_n0_b0", ["PALETTE_8_BIT=1", "INTERP_SAMPLE=1"]),
+        ("p8r0_d0_sample_n0_b1", ["PALETTE_8_BIT=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p8r0_d0_sample_n1_b0", ["PALETTE_8_BIT=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r0_d0_sample_n1_b1", ["PALETTE_8_BIT=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r0_d1_none_n0_b0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1"]),
+        ("p8r0_d1_none_n0_b1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "BINALPHA=1"]),
+        ("p8r0_d1_none_n1_b0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p8r0_d1_none_n1_b1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r0_d1_centroid_n0_b0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p8r0_d1_centroid_n0_b1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p8r0_d1_centroid_n1_b0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r0_d1_centroid_n1_b1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r0_d1_sample_n0_b0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p8r0_d1_sample_n0_b1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p8r0_d1_sample_n1_b0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r0_d1_sample_n1_b1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r1_d0_none_n0_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1"]),
+        ("p8r1_d0_none_n0_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "BINALPHA=1"]),
+        ("p8r1_d0_none_n1_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "NOPERSP=1"]),
+        ("p8r1_d0_none_n1_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r1_d0_centroid_n0_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1"]),
+        ("p8r1_d0_centroid_n0_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p8r1_d0_centroid_n1_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r1_d0_centroid_n1_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r1_d0_sample_n0_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1"]),
+        ("p8r1_d0_sample_n0_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p8r1_d0_sample_n1_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r1_d0_sample_n1_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r1_d1_none_n0_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1"]),
+        ("p8r1_d1_none_n0_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "BINALPHA=1"]),
+        ("p8r1_d1_none_n1_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p8r1_d1_none_n1_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r1_d1_centroid_n0_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p8r1_d1_centroid_n0_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "BINALPHA=1"]),
+        ("p8r1_d1_centroid_n1_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r1_d1_centroid_n1_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1", "BINALPHA=1"]),
+        ("p8r1_d1_sample_n0_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p8r1_d1_sample_n0_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "BINALPHA=1"]),
+        ("p8r1_d1_sample_n1_b0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r1_d1_sample_n1_b1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1", "BINALPHA=1"]),
+    ],
+
     # adaptive_downsample_blur.ps.hlsl is NOT listed here: no variant
     # axes, so the script's no-variants fallback (compile once with
     # no /D defines, emit a single .inc with the base identifier)
@@ -594,6 +768,13 @@ def compile_one(fxc_cmd, hlsl_path, target, defines=None):
     # fxc /O3 /T <target> /E main /Fo <out> <in> [/D KEY=VALUE]...
     # Output to a temp .dxbc.tmp under INC_DIR so we don't pollute /tmp on
     # restricted-filesystem hosts. Matches the regen_vulkan_spirv.py pattern.
+    #
+    # Under wine, fxc occasionally exits 0 without writing the output file
+    # (wineserver flake under load - the wine32 subsystem is needed by
+    # fxc_lite's d3dcompiler_47.dll and can hang briefly). Retry up to 5
+    # times before giving up. Each retry is its own subprocess.run so a
+    # hung wineserver doesn't pin us forever; the calling shell can
+    # CTRL-C out cleanly.
     dxbc_path = INC_DIR / (hlsl_path.stem + ".dxbc.tmp")
     cmd = list(fxc_cmd) + [
         "/T", target,
@@ -605,14 +786,38 @@ def compile_one(fxc_cmd, hlsl_path, target, defines=None):
     ]
     for d in defines or ():
         cmd.append(f"/D{d}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        sys.stderr.write(f"fxc failed for {hlsl_path.name}:\n")
-        sys.stderr.write(result.stdout)
-        sys.stderr.write(result.stderr)
+
+    last_stdout = ""
+    last_stderr = ""
+    for attempt in range(5):
         if dxbc_path.exists():
             dxbc_path.unlink()
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        last_stdout = result.stdout
+        last_stderr = result.stderr
+        if result.returncode != 0:
+            # Hard fxc error (e.g. HLSL syntax). No point retrying.
+            sys.stderr.write(f"fxc failed for {hlsl_path.name}:\n")
+            sys.stderr.write(last_stdout)
+            sys.stderr.write(last_stderr)
+            if dxbc_path.exists():
+                dxbc_path.unlink()
+            sys.exit(1)
+        if dxbc_path.exists():
+            break
+        # fxc returned 0 but produced no output. Wine flake; retry.
+        sys.stderr.write(
+            f"warning: fxc returned 0 but no output for {hlsl_path.name} "
+            f"(defines={list(defines or ())!r}); retry attempt "
+            f"{attempt + 1}/5\n")
+    else:
+        sys.stderr.write(
+            f"error: fxc never produced output for {hlsl_path.name} "
+            f"after 5 attempts. Last stdout/stderr follow.\n")
+        sys.stderr.write(last_stdout)
+        sys.stderr.write(last_stderr)
         sys.exit(1)
+
     data = dxbc_path.read_bytes()
     dxbc_path.unlink()
     if len(data) < 4:
