@@ -7,20 +7,23 @@
 // gate in GetBatchFragmentShader on the C++ side picks this template
 // for nearest-only sessions.
 //
-// Four SPIR-V-structural axes for this template:
+// Three SPIR-V-structural axes for this template:
 //
 //   - Input interpolation qualifier (none / centroid / sample). 3.
 //   - Color input perspective (standard / noperspective). 2.
 //   - Dual-source output (1 vs 2 outputs). 2.
-//   - PGXP depth output (writes gl_FragDepth or omits it). 2.
 //
-// 3 x 2 x 2 x 2 = 24 blobs.
+// 3 x 2 x 2 = 12 blobs.
 //
 // UV_LIMITS used to be a fifth axis (without / with v_uv_limits flat
 // input) but has been collapsed to a runtime branch on the
 // u_uv_limits cbuffer scalar - v_uv_limits is now always declared
 // (the batch VS always emits it when textured, see the matching VS
 // collapse) and consumed iff u_uv_limits != 0 at runtime.
+// PGXP_DEPTH used to be a fourth axis (writes gl_FragDepth or omits
+// it) but has also been collapsed to a runtime branch on the
+// u_pgxp_depth cbuffer scalar - gl_FragDepth is always written, with
+// the expression chosen at runtime.
 //
 // Per-call specialisation constants (collapse onto each blob):
 //
@@ -83,14 +86,14 @@ layout(constant_id = 109) const bool RAW_TEXTURE                   = false;
 // ---- Batch UBO -----------------------------------------------------
 // First six fields mirror the C++ BatchUBOData declaration head
 // (gpu_hw.h:111) verbatim. The std140 offsets are 0..31. The trailing
-// C++ struct fields between offset 32 and 55 (u_resolution_scale,
-// u_true_color, u_scaled_dithering, u_dithering, u_interlacing,
-// u_pgxp_depth) are handled on the Vulkan path via specialisation
-// constants on every pipeline blob and so are not redeclared here.
-// u_uv_limits at offset 56 is read at runtime; the explicit
-// layout(offset=56) is the GL_ARB_enhanced_layouts core-since-4.40
-// way to skip past the spec-const-handled fields without redeclaring
-// them.
+// C++ struct fields between offset 32 and 51 (u_resolution_scale,
+// u_true_color, u_scaled_dithering, u_dithering, u_interlacing) are
+// handled on the Vulkan path via specialisation constants on every
+// pipeline blob and so are not redeclared here. u_pgxp_depth at
+// offset 52 and u_uv_limits at offset 56 are read at runtime; the
+// explicit layout(offset = N) is the GL_ARB_enhanced_layouts core-
+// since-4.40 way to skip past the spec-const-handled fields without
+// redeclaring them.
 layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   uvec2 u_texture_window_and;
   uvec2 u_texture_window_or;
@@ -98,6 +101,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   float u_dst_alpha_factor;
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
+  layout(offset = 52) uint u_pgxp_depth;
   layout(offset = 56) uint u_uv_limits;
 };
 
@@ -350,7 +354,8 @@ void main()
 #endif
   }
 
-#if !defined(PGXP_DEPTH)
-  gl_FragDepth = oalpha * gl_FragCoord.z;
-#endif
+  // gl_FragDepth: always written now. See untextured FS comment for
+  // the routing notes - same shape across all 5 FS templates after
+  // the PGXP_DEPTH collapse.
+  gl_FragDepth = (u_pgxp_depth != 0u) ? gl_FragCoord.z : (oalpha * gl_FragCoord.z);
 }

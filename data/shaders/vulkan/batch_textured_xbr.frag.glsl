@@ -2,13 +2,12 @@
 // GPU_HW_ShaderGen::GenerateBatchFragmentShader (texture_mode !=
 // Disabled AND m_texture_filter is xBR or xBRBinAlpha). Same
 // structural cube as the Bilinear / JINC2 families (UV_LIMITS implicit,
-// BINALPHA per-call spec const).
+// BINALPHA per-call spec const, PGXP_DEPTH routed via u_pgxp_depth).
 //
-// 3 (interp) x 2 (persp) x 2 (dual) x 2 (pgxp) = 24 blobs. Spec
-// constants are identical to the other filter families; the
-// FilteredSampleFromVRAM body is lifted from gpu_hw_shadergen.cpp
-// lines ~381-661 for xBR / xBRBinAlpha and is the largest body of
-// any of the filter templates.
+// 3 (interp) x 2 (persp) x 2 (dual) = 12 blobs. Spec constants are
+// identical to the other filter families; the FilteredSampleFromVRAM
+// body is lifted from gpu_hw_shadergen.cpp lines ~381-661 for xBR /
+// xBRBinAlpha and is the largest body of any of the filter templates.
 //
 // The xBR algorithm samples a 5x5 neighbourhood around the source
 // texel, computes YCbCr distances between adjacent samples, and
@@ -52,6 +51,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   float u_dst_alpha_factor;
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
+  layout(offset = 52) uint u_pgxp_depth;
 };
 
 layout(set = 0, binding = 1) uniform sampler2D samp0;
@@ -471,7 +471,5 @@ void main()
 #endif
   }
 
-#if !defined(PGXP_DEPTH)
-  gl_FragDepth = oalpha * gl_FragCoord.z;
-#endif
+  gl_FragDepth = (u_pgxp_depth != 0u) ? gl_FragCoord.z : (oalpha * gl_FragCoord.z);
 }

@@ -2127,7 +2127,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(GPUTextureFilter filter, ui
   {
     blob_ptr = &Vulkan::EmbeddedShaders::GetBatchUntexturedFragmentShaderBlob(
       m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-      dual_source, m_pgxp_depth_buffer);
+      dual_source);
   }
   else
   {
@@ -2136,25 +2136,25 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(GPUTextureFilter filter, ui
       case GPUTextureFilter::Nearest:
         blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedNearestFragmentShaderBlob(
           m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-          dual_source, m_pgxp_depth_buffer);
+          dual_source);
         break;
       case GPUTextureFilter::Bilinear:
       case GPUTextureFilter::BilinearBinAlpha:
         blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedBilinearFragmentShaderBlob(
           m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-          dual_source, m_pgxp_depth_buffer);
+          dual_source);
         break;
       case GPUTextureFilter::JINC2:
       case GPUTextureFilter::JINC2BinAlpha:
         blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedJINC2FragmentShaderBlob(
           m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-          dual_source, m_pgxp_depth_buffer);
+          dual_source);
         break;
       case GPUTextureFilter::xBR:
       case GPUTextureFilter::xBRBinAlpha:
         blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedXBRFragmentShaderBlob(
           m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-          dual_source, m_pgxp_depth_buffer);
+          dual_source);
         break;
       default:
         Log_ErrorPrintf("GetBatchFragmentShader: unknown texture filter %u",

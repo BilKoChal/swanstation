@@ -18,13 +18,15 @@
 //     that drives SRC1_COLOR / SRC1_ALPHA in the blend equation. The
 //     output declaration count is structural - the pipeline blend
 //     state references location-0-index-1 or it does not. (2 variants.)
-//   - PGXP depth output. With PGXP Depth Buffer enabled the FS does
-//     not declare gl_FragDepth (rasterizer-interpolated depth from the
-//     VS-replayed a_pos.w is used directly); without it, the FS writes
-//     gl_FragDepth = oalpha * v_pos.z. Splitting this structurally
-//     preserves early-Z on the PGXP-enabled path. (2 variants.)
 //
-// Total untextured structural blobs: 3 x 2 x 2 x 2 = 24.
+// Total untextured structural blobs: 3 x 2 x 2 = 12.
+//
+// PGXP_DEPTH used to be a fourth axis (writes gl_FragDepth or omits
+// it) but has been collapsed to a runtime branch on the u_pgxp_depth
+// cbuffer scalar - gl_FragDepth is always written now, with the
+// expression chosen at runtime. Brings the untextured cube into
+// parity with the other 4 FS templates after their parallel
+// collapses.
 //
 // Per-call and per-session knobs that DO NOT affect SPIR-V structure
 // collapse into specialisation constants on every blob:
@@ -79,7 +81,11 @@ layout(constant_id = 106) const bool TRUE_COLOR                    = false;
 
 // ---- Batch UBO -----------------------------------------------------
 // Layout matches WriteBatchUniformBuffer in the shadergen. Field order
-// is significant: the C++ side packs in this exact order.
+// is significant: the C++ side packs in this exact order. u_pgxp_depth
+// at offset 52 is read at runtime to decide the gl_FragDepth write
+// expression; the explicit layout(offset=52) skips past the spec-
+// const-handled fields between offset 32 and 51 (u_resolution_scale,
+// u_true_color, u_scaled_dithering, u_dithering, u_interlacing).
 layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   uvec2 u_texture_window_and;
   uvec2 u_texture_window_or;
@@ -87,6 +93,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   float u_dst_alpha_factor;
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
+  layout(offset = 52) uint u_pgxp_depth;
 };
 
 // ---- Inputs from the batch VS --------------------------------------
@@ -100,12 +107,10 @@ layout(location = 0, index = 0) out vec4 o_col0;
 layout(location = 0, index = 1) out vec4 o_col1;
 #endif
 
-// PGXP_DEPTH axis: when PGXP_DEPTH is set the FS does NOT declare
-// gl_FragDepth (rasterizer depth from the VS-replayed a_pos.w is used
-// directly, and early-Z stays available). When PGXP_DEPTH is unset we
-// fall through to gl_FragDepth as in the shadergen original. gl_FragDepth
-// is a built-in so there is no explicit declaration either way - we
-// simply gate the write below.
+// PGXP_DEPTH axis collapsed: gl_FragDepth is now always written, with
+// a runtime branch on u_pgxp_depth at the write site below choosing
+// between v_pos.z pass-through (PGXP mode) and oalpha * v_pos.z (mask-
+// bit encoding for legacy non-PGXP depth use).
 
 // ---- Dithering matrix (CONSTANT in shadergen) ----------------------
 // Same 4x4 Bayer values as DITHER_MATRIX in core/types.h.
@@ -187,7 +192,11 @@ void main()
   // geometry only when untextured"), but the original code did not
   // assert this so we mirror its silence rather than redirect.
 
-#if !defined(PGXP_DEPTH)
-  gl_FragDepth = oalpha * gl_FragCoord.z;
-#endif
+  // gl_FragDepth: always written (PGXP_DEPTH was a compile-time
+  // axis pre-routing). u_pgxp_depth != 0 picks gl_FragCoord.z
+  // pass-through (the rasterizer-interpolated VS depth IS the
+  // PGXP-replayed depth in this mode); u_pgxp_depth == 0 picks
+  // oalpha * gl_FragCoord.z to encode the PSX mask bit into the
+  // depth buffer for the legacy non-PGXP path.
+  gl_FragDepth = (u_pgxp_depth != 0u) ? gl_FragCoord.z : (oalpha * gl_FragCoord.z);
 }

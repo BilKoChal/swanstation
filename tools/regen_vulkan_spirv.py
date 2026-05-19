@@ -91,19 +91,15 @@ def _batch_fs_untextured_variants():
         ("nodual",  []),
         ("dual",    ["DUAL_SOURCE"]),
     ]
-    # PGXP depth axis: when set, the FS omits gl_FragDepth so the
-    # rasterizer-interpolated VS depth (a_pos.w under PGXP) is used
-    # directly and early-Z stays available. Per-session.
-    pgxp_axes = [
-        ("pgxpoff", []),
-        ("pgxpon",  ["PGXP_DEPTH"]),
-    ]
+    # PGXP_DEPTH used to be a fourth axis (gating gl_FragDepth
+    # declaration) - collapsed to a runtime branch on the u_pgxp_depth
+    # cbuffer scalar so the FS body unconditionally writes
+    # gl_FragDepth with a ternary on u_pgxp_depth.
     for i_name, i_defs in interp_axes:
         for p_name, p_defs in persp_axes:
             for d_name, d_defs in dual_axes:
-                for x_name, x_defs in pgxp_axes:
-                    suffix = f"{i_name}_{p_name}_{d_name}_{x_name}"
-                    out.append((suffix, i_defs + p_defs + d_defs + x_defs))
+                suffix = f"{i_name}_{p_name}_{d_name}"
+                out.append((suffix, i_defs + p_defs + d_defs))
     return out
 
 
@@ -116,19 +112,17 @@ def _batch_fs_textured_nearest_variants():
     ]
     persp_axes = [("persp", []), ("noperp", ["NOPERSP"])]
     dual_axes  = [("nodual", []), ("dual", ["DUAL_SOURCE"])]
-    pgxp_axes  = [("pgxpoff", []), ("pgxpon", ["PGXP_DEPTH"])]
-    # UV_LIMITS used to be a fifth axis here. The collapse commit lifted
-    # it to the u_uv_limits cbuffer scalar so the Nearest FS source
-    # always declares v_uv_limits and runtime-branches on the cbuffer
-    # value. Brings the Nearest FS cube into parity shape with the
-    # Bilinear / JINC2 / xBR families (UV_LIMITS implicit on those by
-    # settings-layer coupling).
+    # UV_LIMITS used to be a fifth axis here, PGXP_DEPTH a fourth.
+    # Both have been collapsed to runtime branches on the
+    # u_uv_limits / u_pgxp_depth cbuffer scalars - v_uv_limits is
+    # always declared (the batch VS always emits it when textured)
+    # and gl_FragDepth is always written. Brings the Nearest FS cube
+    # into parity shape with the Bilinear / JINC2 / xBR families.
     for i_name, i_defs in interp_axes:
         for p_name, p_defs in persp_axes:
             for d_name, d_defs in dual_axes:
-                for x_name, x_defs in pgxp_axes:
-                    suffix = f"{i_name}_{p_name}_{d_name}_{x_name}"
-                    out.append((suffix, i_defs + p_defs + d_defs + x_defs))
+                suffix = f"{i_name}_{p_name}_{d_name}"
+                out.append((suffix, i_defs + p_defs + d_defs))
     return out
 
 
@@ -136,8 +130,9 @@ def _batch_fs_textured_filter_variants():
     """Shared structural cube for non-Nearest filter templates.
 
     UV_LIMITS is implicit (ShouldUseUVLimits() forces it true for any
-    non-Nearest filter), so the cube collapses to 4 axes vs the 5
-    Nearest template uses. 3 x 2 x 2 x 2 = 24 blobs.
+    non-Nearest filter); PGXP_DEPTH used to be a fourth axis but has
+    been collapsed to a runtime branch on u_pgxp_depth. Cube
+    collapses to 3 x 2 x 2 = 12 blobs.
     """
     out = []
     interp_axes = [
@@ -147,13 +142,11 @@ def _batch_fs_textured_filter_variants():
     ]
     persp_axes = [("persp", []), ("noperp", ["NOPERSP"])]
     dual_axes  = [("nodual", []), ("dual", ["DUAL_SOURCE"])]
-    pgxp_axes  = [("pgxpoff", []), ("pgxpon", ["PGXP_DEPTH"])]
     for i_name, i_defs in interp_axes:
         for p_name, p_defs in persp_axes:
             for d_name, d_defs in dual_axes:
-                for x_name, x_defs in pgxp_axes:
-                    suffix = f"{i_name}_{p_name}_{d_name}_{x_name}"
-                    out.append((suffix, i_defs + p_defs + d_defs + x_defs))
+                suffix = f"{i_name}_{p_name}_{d_name}"
+                out.append((suffix, i_defs + p_defs + d_defs))
     return out
 
 

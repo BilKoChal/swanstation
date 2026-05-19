@@ -2,12 +2,12 @@
 // of GPU_HW_ShaderGen::GenerateBatchFragmentShader (texture_mode !=
 // Disabled AND m_texture_filter is JINC2 or JINC2BinAlpha). Same
 // structural cube as the Bilinear family (UV_LIMITS implicit, BINALPHA
-// per-call spec const).
+// per-call spec const, PGXP_DEPTH routed via u_pgxp_depth).
 //
-// 3 (interp) x 2 (persp) x 2 (dual) x 2 (pgxp) = 24 blobs. Spec
-// constants are identical to the Bilinear template; the FilteredSample-
-// FromVRAM body is the only difference, lifted from gpu_hw_shadergen
-// .cpp lines ~229-374 for JINC2 / JINC2BinAlpha.
+// 3 (interp) x 2 (persp) x 2 (dual) = 12 blobs. Spec constants are
+// identical to the Bilinear template; the FilteredSampleFromVRAM body
+// is the only difference, lifted from gpu_hw_shadergen.cpp lines
+// ~229-374 for JINC2 / JINC2BinAlpha.
 
 #version 450 core
 
@@ -46,6 +46,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   float u_dst_alpha_factor;
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
+  layout(offset = 52) uint u_pgxp_depth;
 };
 
 layout(set = 0, binding = 1) uniform sampler2D samp0;
@@ -363,7 +364,5 @@ void main()
 #endif
   }
 
-#if !defined(PGXP_DEPTH)
-  gl_FragDepth = oalpha * gl_FragCoord.z;
-#endif
+  gl_FragDepth = (u_pgxp_depth != 0u) ? gl_FragCoord.z : (oalpha * gl_FragCoord.z);
 }

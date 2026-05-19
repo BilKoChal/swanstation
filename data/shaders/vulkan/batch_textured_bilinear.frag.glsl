@@ -6,17 +6,17 @@
 // alpha-quantisation step at the end of FilteredSampleFromVRAM; the
 // SPIR-V structure is otherwise identical.
 //
-// Four SPIR-V-structural axes (UV limits is implicit for all non-
+// Three SPIR-V-structural axes (UV limits is implicit for all non-
 // Nearest filters - ShouldUseUVLimits() in gpu_hw.cpp forces
 // m_using_uv_limits true when the filter is non-Nearest, so we never
-// need a non-UV variant on this template):
+// need a non-UV variant on this template; PGXP_DEPTH was a fourth
+// axis but has been collapsed to a runtime branch on u_pgxp_depth):
 //
 //   - Input interpolation qualifier (none / centroid / sample). 3.
 //   - Color input perspective (standard / noperspective). 2.
 //   - Dual-source output (1 vs 2 outputs). 2.
-//   - PGXP depth output (writes gl_FragDepth or omits it). 2.
 //
-// 3 x 2 x 2 x 2 = 24 blobs.
+// 3 x 2 x 2 = 12 blobs.
 //
 // New per-call specialisation constant relative to textured Nearest:
 //
@@ -61,6 +61,10 @@ layout(constant_id = 110) const bool BINALPHA                      = false;
 #endif
 
 // ---- Batch UBO -----------------------------------------------------
+// See batch_textured_nearest.frag.glsl for the offset-based layout
+// explanation; same shape, minus u_uv_limits (filter templates always
+// use UV limits via the settings-layer coupling, so they read
+// v_uv_limits directly without a runtime gate).
 layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   uvec2 u_texture_window_and;
   uvec2 u_texture_window_or;
@@ -68,6 +72,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   float u_dst_alpha_factor;
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
+  layout(offset = 52) uint u_pgxp_depth;
 };
 
 // ---- VRAM atlas sampler --------------------------------------------
@@ -320,7 +325,5 @@ void main()
 #endif
   }
 
-#if !defined(PGXP_DEPTH)
-  gl_FragDepth = oalpha * gl_FragCoord.z;
-#endif
+  gl_FragDepth = (u_pgxp_depth != 0u) ? gl_FragCoord.z : (oalpha * gl_FragCoord.z);
 }

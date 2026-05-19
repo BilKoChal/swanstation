@@ -207,25 +207,24 @@ const EmbeddedShaderBlob& GetBatchVertexShaderBlob(bool textured,
                                                    bool noperspective_color);
 
 // Batch FS, untextured slice (texture_mode == GPUTextureMode::Disabled).
-// Four SPIR-V-structural axes:
+// Three SPIR-V-structural axes:
 //
 //   - Input interpolation qualifier (must match the batch VS this FS
 //     is bound with): none / centroid / sample. 3 variants.
 //   - Color input perspective: standard / noperspective. 2 variants.
 //   - Dual-source colour output: 1 location-0 output, or 2 outputs at
 //     (location 0 index 0) and (location 0 index 1). 2 variants.
-//   - PGXP depth output: present (writes gl_FragDepth) vs absent
-//     (rasterizer-interpolated depth from a_pos.w under PGXP). Split
-//     structurally to preserve early-Z on the PGXP path. 2 variants.
 //
-// 3 x 2 x 2 x 2 = 24 blobs. All per-call knobs (TRANSPARENCY tri-
+// 3 x 2 x 2 = 12 blobs. PGXP_DEPTH used to be a fourth axis (gating
+// gl_FragDepth declaration) - collapsed to a runtime branch on
+// u_pgxp_depth in the FS body. All per-call knobs (TRANSPARENCY tri-
 // state, DITHERING, INTERLACING) and the remaining per-session knobs
 // (TRUE_COLOR, DITHERING_SCALED, RESOLUTION_SCALE) collapse into
 // specialisation constants on every blob.
 //
 // Textured FS slices (one per texture filter) will land in subsequent
 // patches with their own k_batch_textured_*_fs_blobs arrays.
-extern const EmbeddedShaderBlob k_batch_untextured_fs_blobs[24];
+extern const EmbeddedShaderBlob k_batch_untextured_fs_blobs[12];
 
 // Pick the right untextured batch FS blob. dual_source is derived per-
 // call from m_supports_dual_source_blend AND render_mode (specifically
@@ -233,10 +232,9 @@ extern const EmbeddedShaderBlob k_batch_untextured_fs_blobs[24];
 const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
                                                                bool per_sample_shading,
                                                                bool noperspective_color,
-                                                               bool dual_source,
-                                                               bool pgxp_depth);
+                                                               bool dual_source);
 
-// Batch FS, textured-with-Nearest-filter slice. Four SPIR-V-structural
+// Batch FS, textured-with-Nearest-filter slice. Three SPIR-V-structural
 // axes (m_texture_filter == GPUTextureFilter::Nearest sessions only;
 // the four other filters land in subsequent patches with their own
 // blob arrays):
@@ -244,9 +242,8 @@ const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
 //   - Input interpolation qualifier (none / centroid / sample). 3.
 //   - Color input perspective (standard / noperspective). 2.
 //   - Dual-source output (1 vs 2 outputs). 2.
-//   - PGXP depth output (writes gl_FragDepth or omits it). 2.
 //
-// 3 x 2 x 2 x 2 = 24 blobs. New per-call specialisation constants
+// 3 x 2 x 2 = 12 blobs. New per-call specialisation constants
 // relative to the untextured slice:
 //
 //   id = 107 PALETTE_4_BIT  (bool, actual_texture_mode == 0)
@@ -255,63 +252,58 @@ const EmbeddedShaderBlob& GetBatchUntexturedFragmentShaderBlob(bool msaa,
 //
 // PALETTE is derived inside the shader as PALETTE_4_BIT ||
 // PALETTE_8_BIT. UV_LIMITS used to be a fifth axis (48 blobs prior) -
-// collapsed to the u_uv_limits cbuffer scalar so the Nearest FS body
-// runtime-branches on the cbuffer value rather than having two SPIR-V
-// shapes. Brings the Nearest cube into parity with the
-// Bilinear / JINC2 / xBR families (which already have UV_LIMITS
-// implicit via settings-layer coupling).
-extern const EmbeddedShaderBlob k_batch_textured_nearest_fs_blobs[24];
+// collapsed to the u_uv_limits cbuffer scalar. PGXP_DEPTH used to be
+// a fourth axis - collapsed to the u_pgxp_depth cbuffer scalar.
+// Brings the Nearest cube into full parity with the Bilinear / JINC2
+// / xBR families.
+extern const EmbeddedShaderBlob k_batch_textured_nearest_fs_blobs[12];
 
-// Pick the right textured-Nearest blob. uv_limits is no longer an axis
-// (lifted to the u_uv_limits cbuffer scalar); the rest mirror the
-// untextured helper.
+// Pick the right textured-Nearest blob. Neither uv_limits nor
+// pgxp_depth is an axis any more (both lifted to cbuffer scalars);
+// the rest mirror the untextured helper.
 const EmbeddedShaderBlob& GetBatchTexturedNearestFragmentShaderBlob(bool msaa,
                                                                     bool per_sample_shading,
                                                                     bool noperspective_color,
-                                                                    bool dual_source,
-                                                                    bool pgxp_depth);
+                                                                    bool dual_source);
 
 // Batch FS, textured-with-Bilinear / BilinearBinAlpha-filter slice.
-// Four structural axes (UV_LIMITS is implicit - all non-Nearest filter
+// Three structural axes (UV_LIMITS is implicit - all non-Nearest filter
 // sessions have m_using_uv_limits forced true by ShouldUseUVLimits, so
-// there is no non-UV variant):
+// there is no non-UV variant; PGXP_DEPTH was a fourth axis but has
+// been collapsed to a runtime branch on u_pgxp_depth):
 //
 //   - Input interpolation qualifier (none / centroid / sample). 3.
 //   - Color input perspective (standard / noperspective). 2.
 //   - Dual-source output. 2.
-//   - PGXP depth output. 2.
 //
-// 3 x 2 x 2 x 2 = 24 blobs. The Bilinear vs BilinearBinAlpha distinction
+// 3 x 2 x 2 = 12 blobs. The Bilinear vs BilinearBinAlpha distinction
 // is folded into a per-call BINALPHA specialisation constant (id=110).
-extern const EmbeddedShaderBlob k_batch_textured_bilinear_fs_blobs[24];
+extern const EmbeddedShaderBlob k_batch_textured_bilinear_fs_blobs[12];
 
 const EmbeddedShaderBlob& GetBatchTexturedBilinearFragmentShaderBlob(bool msaa,
                                                                      bool per_sample_shading,
                                                                      bool noperspective_color,
-                                                                     bool dual_source,
-                                                                     bool pgxp_depth);
+                                                                     bool dual_source);
 
 // Batch FS, textured-with-JINC2 / JINC2BinAlpha-filter slice. Same
-// structural cube as the Bilinear family (4 axes, 24 blobs). JINC2 vs
+// structural cube as the Bilinear family (3 axes, 12 blobs). JINC2 vs
 // JINC2BinAlpha collapsed via the BINALPHA spec const.
-extern const EmbeddedShaderBlob k_batch_textured_jinc2_fs_blobs[24];
+extern const EmbeddedShaderBlob k_batch_textured_jinc2_fs_blobs[12];
 
 const EmbeddedShaderBlob& GetBatchTexturedJINC2FragmentShaderBlob(bool msaa,
                                                                   bool per_sample_shading,
                                                                   bool noperspective_color,
-                                                                  bool dual_source,
-                                                                  bool pgxp_depth);
+                                                                  bool dual_source);
 
 // Batch FS, textured-with-xBR / xBRBinAlpha-filter slice. Same
-// structural cube as the Bilinear / JINC2 families (4 axes, 24 blobs).
+// structural cube as the Bilinear / JINC2 families (3 axes, 12 blobs).
 // xBR vs xBRBinAlpha collapsed via the BINALPHA spec const.
-extern const EmbeddedShaderBlob k_batch_textured_xbr_fs_blobs[24];
+extern const EmbeddedShaderBlob k_batch_textured_xbr_fs_blobs[12];
 
 const EmbeddedShaderBlob& GetBatchTexturedXBRFragmentShaderBlob(bool msaa,
                                                                 bool per_sample_shading,
                                                                 bool noperspective_color,
-                                                                bool dual_source,
-                                                                bool pgxp_depth);
+                                                                bool dual_source);
 
 
 // Create a VkShaderModule directly from a pre-compiled SPIR-V blob.
