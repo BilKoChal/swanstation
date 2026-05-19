@@ -108,6 +108,8 @@ if(WIN32)
     d3d11/stream_buffer.h
     d3d11/texture.cpp
     d3d11/texture.h
+    d3d_common/embedded_shaders.cpp
+    d3d_common/embedded_shaders.h
     display.hlsl.h
     windows_headers.h
   )
@@ -117,8 +119,6 @@ if(WIN32)
       d3d12/context.h
       d3d12/descriptor_heap_manager.cpp
       d3d12/descriptor_heap_manager.h
-      d3d12/embedded_shaders.cpp
-      d3d12/embedded_shaders.h
       d3d12/shader_cache.cpp
       d3d12/shader_cache.h
       d3d12/staging_texture.cpp

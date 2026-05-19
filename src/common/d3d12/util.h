@@ -112,7 +112,7 @@ public:
   // Convenience overloads for D3D12_SHADER_BYTECODE - the natural form
   // for pre-baked DXBC blobs from src/common/d3d12/embedded_dxbc/, which
   // are returned as { data, size } aggregates by the
-  // D3D12::EmbeddedShaders helpers and by GPU_HW_D3D12's pre-bake
+  // D3DCommon::EmbeddedShaders helpers and by GPU_HW_D3D12's pre-bake
   // accessors. Just unwraps to the (data, size) overload above.
   void SetVertexShader(const D3D12_SHADER_BYTECODE& bc);
   void SetGeometryShader(const D3D12_SHADER_BYTECODE& bc);

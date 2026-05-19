@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-# Regenerate embedded D3D12 DXBC blobs from HLSL sources.
+# Regenerate embedded DXBC blobs from HLSL sources.
 #
 # This script is NOT invoked by the core build. It is run by contributors who
 # edit shader sources under data/shaders/d3d12/. The build itself only sees
-# the resulting .inc files (checked into src/common/d3d12/embedded_dxbc/), so
-# the libretro core has zero fxc.exe / D3DCompile dependency at build time.
+# the resulting .inc files (checked into src/common/d3d_common/embedded_dxbc/),
+# so the libretro core has zero fxc.exe / D3DCompile dependency at build time.
+#
+# The .inc files are shared between the D3D11 and D3D12 backends - DXBC at
+# ps_5_0 / vs_5_0 etc. is consumed identically by both, and the shadergen
+# emits identical HLSL across the API_D3D11 / API_D3D12 macros (the macros
+# exist but no batch FS body references them). The HLSL sources live under
+# data/shaders/d3d12/ for historical naming reasons; the script name keeps
+# the "d3d12" tag for the same reason. Both could be renamed to d3d_common
+# in a future cleanup with no behavioural impact.
 #
 # Mirror of tools/regen_vulkan_spirv.py for the Vulkan backend. The same
 # editing workflow applies: edit .hlsl source -> rerun this script -> commit
@@ -30,7 +38,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HLSL_DIR = REPO_ROOT / "data" / "shaders" / "d3d12"
-INC_DIR = REPO_ROOT / "src" / "common" / "d3d12" / "embedded_dxbc"
+INC_DIR = REPO_ROOT / "src" / "common" / "d3d_common" / "embedded_dxbc"
 
 # Map HLSL filename suffix to (fxc target prefix, identifier suffix). The
 # first element is what we pass to fxc /T (e.g. "ps_5_0"); the second is the
@@ -47,7 +55,7 @@ STAGE_FROM_SUFFIX = {
 
 # Templates: shader sources that produce more than one .inc output, each
 # with a different combination of /D preprocessor defines. Index ordering
-# here MUST match the helper in src/common/d3d12/embedded_shaders.cpp that
+# here MUST match the helper in src/common/d3d_common/embedded_shaders.cpp that
 # picks the right blob at runtime - if you add a variant here, add the
 # matching entry there too.
 #
@@ -571,7 +579,7 @@ def emit_inc(identifier, hlsl_name, target, defines, data, out_path):
         f"// DO NOT EDIT. Regenerate with tools/regen_d3d12_dxbc.py.\n"
         f"// fxc /T {target} /E main /O3 {define_summary}\n"
         f"//\n"
-        f"// Included inside namespace D3D12::EmbeddedShaders in\n"
+        f"// Included inside namespace D3DCommon::EmbeddedShaders in\n"
         f"// embedded_shaders.cpp. The matching extern declaration lives in\n"
         f"// embedded_shaders.h.\n"
         f"\n"

@@ -3,7 +3,7 @@
 #include "common/d3d11/shader_compiler.h"
 #include "common/d3d12/context.h"
 #include "common/d3d12/descriptor_heap_manager.h"
-#include "common/d3d12/embedded_shaders.h"
+#include "common/d3d_common/embedded_shaders.h"
 #include "common/d3d12/shader_cache.h"
 #include "common/d3d12/util.h"
 #include "common/log.h"
@@ -1200,43 +1200,43 @@ static D3D12_SHADER_BYTECODE PickBatchUntexturedFSBytecode(
   // .inc filenames. Each entry is a
   // D3D12_SHADER_BYTECODE { pShaderBytecode, BytecodeLength }
   // aggregate; the extern declarations in
-  // src/common/d3d12/embedded_shaders.h supply both halves.
+  // src/common/d3d_common/embedded_shaders.h supply both halves.
   static const D3D12_SHADER_BYTECODE k_blobs[2][3][2] = {
     // dual = 0
     {
       // interp = none
-      {{D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_none_p0,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_none_p0_size_bytes},
-       {D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_none_p1,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_none_p1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p0,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p1,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_none_p1_size_bytes}},
       // interp = centroid
-      {{D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p0,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p0_size_bytes},
-       {D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p1,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p0,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p1,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_centroid_p1_size_bytes}},
       // interp = sample
-      {{D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p0,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p0_size_bytes},
-       {D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p1,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p0,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p1,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d0_sample_p1_size_bytes}},
     },
     // dual = 1
     {
       // interp = none
-      {{D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_none_p0,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_none_p0_size_bytes},
-       {D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_none_p1,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_none_p1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p0,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p1,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_none_p1_size_bytes}},
       // interp = centroid
-      {{D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p0,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p0_size_bytes},
-       {D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p1,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p0,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p1,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_centroid_p1_size_bytes}},
       // interp = sample
-      {{D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p0,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p0_size_bytes},
-       {D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p1,
-        D3D12::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p0,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p1,
+        D3DCommon::EmbeddedShaders::k_batch_untextured_ps_d1_sample_p1_size_bytes}},
     },
   };
 
@@ -1307,38 +1307,38 @@ static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
       // no dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d0_sample_n1_size_bytes}},
       },
       // dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r0_d1_sample_n1_size_bytes}},
       },
     },
     // tm = p0r1 (RawDirect16Bit)
@@ -1346,38 +1346,38 @@ static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
       // no dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d0_sample_n1_size_bytes}},
       },
       // dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p0r1_d1_sample_n1_size_bytes}},
       },
     },
     // tm = p4r0 (Palette4Bit)
@@ -1385,38 +1385,38 @@ static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
       // no dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d0_sample_n1_size_bytes}},
       },
       // dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r0_d1_sample_n1_size_bytes}},
       },
     },
     // tm = p4r1 (RawPalette4Bit)
@@ -1424,38 +1424,38 @@ static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
       // no dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d0_sample_n1_size_bytes}},
       },
       // dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p4r1_d1_sample_n1_size_bytes}},
       },
     },
     // tm = p8r0 (Palette8Bit)
@@ -1463,38 +1463,38 @@ static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
       // no dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d0_sample_n1_size_bytes}},
       },
       // dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r0_d1_sample_n1_size_bytes}},
       },
     },
     // tm = p8r1 (RawPalette8Bit)
@@ -1502,38 +1502,38 @@ static D3D12_SHADER_BYTECODE PickBatchTexturedNearestFSBytecode(
       // no dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d0_sample_n1_size_bytes}},
       },
       // dual
       {
         // interp = none
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_none_n1_size_bytes}},
         // interp = centroid
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_centroid_n1_size_bytes}},
         // interp = sample
-        {{D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0_size_bytes},
-         {D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1,
-          D3D12::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1_size_bytes}},
+        {{D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n0_size_bytes},
+         {D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1,
+          D3DCommon::EmbeddedShaders::k_batch_textured_nearest_ps_p8r1_d1_sample_n1_size_bytes}},
       },
     },
   };
@@ -1866,7 +1866,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
 // once the slot is filled.
 //
 // The shared fullscreen-quad vertex shader is pre-baked DXBC (see
-// GetFullscreenQuadVertexShader and src/common/d3d12/embedded_shaders.h),
+// GetFullscreenQuadVertexShader and src/common/d3d_common/embedded_shaders.h),
 // statically linked - no compile, no caching state, no mutex. PSO
 // helpers below treat it as a free dependency.
 // ----------------------------------------------------------------------
@@ -1879,8 +1879,8 @@ D3D12_SHADER_BYTECODE GPU_HW_D3D12::GetFullscreenQuadVertexShader()
   // data/shaders/d3d12/fullscreen_quad.vs.hlsl). All callers receive
   // the same const view; the storage outlives every PSO that binds it.
   return D3D12_SHADER_BYTECODE{
-    D3D12::EmbeddedShaders::k_fullscreen_quad_vs,
-    D3D12::EmbeddedShaders::k_fullscreen_quad_vs_size_bytes,
+    D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs,
+    D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs_size_bytes,
   };
 }
 
@@ -1909,28 +1909,28 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMFillPipeline(uint
     // pgxp = 0
     {
       // wrapped = 0
-      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i0,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i0_size_bytes},
-       {D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i1,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w0i1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w0i0,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w0i0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w0i1,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w0i1_size_bytes}},
       // wrapped = 1
-      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i0,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i0_size_bytes},
-       {D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i1,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p0w1i1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w1i0,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w1i0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w1i1,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p0w1i1_size_bytes}},
     },
     // pgxp = 1
     {
       // wrapped = 0
-      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i0,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i0_size_bytes},
-       {D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i1,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w0i1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w0i0,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w0i0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w0i1,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w0i1_size_bytes}},
       // wrapped = 1
-      {{D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i0,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i0_size_bytes},
-       {D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i1,
-        D3D12::EmbeddedShaders::k_vram_fill_ps_p1w1i1_size_bytes}},
+      {{D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w1i0,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w1i0_size_bytes},
+       {D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w1i1,
+        D3DCommon::EmbeddedShaders::k_vram_fill_ps_p1w1i1_size_bytes}},
     },
   };
   const D3D12_SHADER_BYTECODE fs =
@@ -1995,10 +1995,10 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMCopyPipeline(uint
   // blob per PGXP value serves every resolution scale.
   const D3D12_SHADER_BYTECODE fs =
     m_pgxp_depth_buffer
-      ? D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp1,
-                              D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp1_size_bytes}
-      : D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp0,
-                              D3D12::EmbeddedShaders::k_vram_copy_ps_pgxp0_size_bytes};
+      ? D3D12_SHADER_BYTECODE{D3DCommon::EmbeddedShaders::k_vram_copy_ps_pgxp1,
+                              D3DCommon::EmbeddedShaders::k_vram_copy_ps_pgxp1_size_bytes}
+      : D3D12_SHADER_BYTECODE{D3DCommon::EmbeddedShaders::k_vram_copy_ps_pgxp0,
+                              D3DCommon::EmbeddedShaders::k_vram_copy_ps_pgxp0_size_bytes};
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
@@ -2059,10 +2059,10 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMWritePipeline(uin
   // scale.
   const D3D12_SHADER_BYTECODE fs =
     m_pgxp_depth_buffer
-      ? D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_write_ps_pgxp1,
-                              D3D12::EmbeddedShaders::k_vram_write_ps_pgxp1_size_bytes}
-      : D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_write_ps_pgxp0,
-                              D3D12::EmbeddedShaders::k_vram_write_ps_pgxp0_size_bytes};
+      ? D3D12_SHADER_BYTECODE{D3DCommon::EmbeddedShaders::k_vram_write_ps_pgxp1,
+                              D3DCommon::EmbeddedShaders::k_vram_write_ps_pgxp1_size_bytes}
+      : D3D12_SHADER_BYTECODE{D3DCommon::EmbeddedShaders::k_vram_write_ps_pgxp0,
+                              D3DCommon::EmbeddedShaders::k_vram_write_ps_pgxp0_size_bytes};
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
@@ -2125,10 +2125,10 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMUpdateDepthPipeli
   // unchanged.
   const D3D12_SHADER_BYTECODE fs =
     (m_multisamples > 1)
-      ? D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa1,
-                              D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa1_size_bytes}
-      : D3D12_SHADER_BYTECODE{D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa0,
-                              D3D12::EmbeddedShaders::k_vram_update_depth_ps_msaa0_size_bytes};
+      ? D3D12_SHADER_BYTECODE{D3DCommon::EmbeddedShaders::k_vram_update_depth_ps_msaa1,
+                              D3DCommon::EmbeddedShaders::k_vram_update_depth_ps_msaa1_size_bytes}
+      : D3D12_SHADER_BYTECODE{D3DCommon::EmbeddedShaders::k_vram_update_depth_ps_msaa0,
+                              D3DCommon::EmbeddedShaders::k_vram_update_depth_ps_msaa0_size_bytes};
 
   // VRAM update depth differs from the other VRAM ops in three
   // ways: it uses m_batch_root_signature (the regular ops use the
@@ -2207,28 +2207,28 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline(
   switch (m_multisamples)
   {
     case 1:
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m1,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m1_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m1,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m1_size_bytes};
       break;
     case 2:
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m2,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m2_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m2,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m2_size_bytes};
       break;
     case 4:
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m4,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m4_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m4,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m4_size_bytes};
       break;
     case 8:
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m8,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m8_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m8,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m8_size_bytes};
       break;
     case 16:
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m16,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m16_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m16,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m16_size_bytes};
       break;
     case 32:
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m32,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m32_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m32,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m32_size_bytes};
       break;
     default:
       Log_WarningPrintf(
@@ -2236,8 +2236,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetVRAMReadbackPipeline(
         "{1,2,4,8,16,32}; falling back to m1 blob (VRAM readback may "
         "average samples incorrectly)",
         m_multisamples);
-      fs = {D3D12::EmbeddedShaders::k_vram_read_ps_m1,
-            D3D12::EmbeddedShaders::k_vram_read_ps_m1_size_bytes};
+      fs = {D3DCommon::EmbeddedShaders::k_vram_read_ps_m1,
+            D3DCommon::EmbeddedShaders::k_vram_read_ps_m1_size_bytes};
       break;
   }
 
@@ -2328,48 +2328,48 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8
   static const D3D12_SHADER_BYTECODE k_display_d0[3][6] = {
     // interlace_mode = 0
     {
-      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m01,
-       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m01_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m02,
-       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m02_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m04,
-       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m04_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m08,
-       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m08_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m16,
-       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m16_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i0c0m32,
-       D3D12::EmbeddedShaders::k_display_ps_d0i0c0m32_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m01,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m01_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m02,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m02_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m04,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m04_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m08,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m08_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m16,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m16_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m32,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i0c0m32_size_bytes},
     },
     // interlace_mode = 1
     {
-      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m01,
-       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m01_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m02,
-       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m02_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m04,
-       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m04_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m08,
-       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m08_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m16,
-       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m16_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i1c0m32,
-       D3D12::EmbeddedShaders::k_display_ps_d0i1c0m32_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m01,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m01_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m02,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m02_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m04,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m04_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m08,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m08_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m16,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m16_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m32,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i1c0m32_size_bytes},
     },
     // interlace_mode = 2
     {
-      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m01,
-       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m01_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m02,
-       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m02_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m04,
-       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m04_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m08,
-       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m08_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m16,
-       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m16_size_bytes},
-      {D3D12::EmbeddedShaders::k_display_ps_d0i2c0m32,
-       D3D12::EmbeddedShaders::k_display_ps_d0i2c0m32_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m01,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m01_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m02,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m02_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m04,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m04_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m08,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m08_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m16,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m16_size_bytes},
+      {D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m32,
+       D3DCommon::EmbeddedShaders::k_display_ps_d0i2c0m32_size_bytes},
     },
   };
 
@@ -2378,99 +2378,99 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetDisplayPipeline(uint8
     {
       // smooth_chroma = 0
       {
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m01,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m01_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m02,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m02_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m04,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m04_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m08,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m08_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m16,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m16_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c0m32,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c0m32_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m01,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m01_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m02,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m02_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m04,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m04_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m08,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m08_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m16,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m16_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m32,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c0m32_size_bytes},
       },
       // smooth_chroma = 1
       {
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m01,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m01_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m02,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m02_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m04,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m04_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m08,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m08_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m16,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m16_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i0c1m32,
-         D3D12::EmbeddedShaders::k_display_ps_d1i0c1m32_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m01,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m01_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m02,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m02_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m04,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m04_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m08,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m08_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m16,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m16_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m32,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i0c1m32_size_bytes},
       },
     },
     // interlace_mode = 1
     {
       // smooth_chroma = 0
       {
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m01,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m01_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m02,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m02_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m04,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m04_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m08,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m08_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m16,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m16_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c0m32,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c0m32_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m01,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m01_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m02,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m02_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m04,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m04_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m08,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m08_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m16,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m16_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m32,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c0m32_size_bytes},
       },
       // smooth_chroma = 1
       {
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m01,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m01_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m02,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m02_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m04,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m04_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m08,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m08_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m16,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m16_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i1c1m32,
-         D3D12::EmbeddedShaders::k_display_ps_d1i1c1m32_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m01,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m01_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m02,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m02_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m04,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m04_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m08,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m08_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m16,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m16_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m32,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i1c1m32_size_bytes},
       },
     },
     // interlace_mode = 2
     {
       // smooth_chroma = 0
       {
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m01,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m01_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m02,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m02_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m04,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m04_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m08,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m08_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m16,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m16_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c0m32,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c0m32_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m01,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m01_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m02,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m02_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m04,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m04_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m08,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m08_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m16,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m16_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m32,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c0m32_size_bytes},
       },
       // smooth_chroma = 1
       {
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m01,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m01_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m02,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m02_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m04,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m04_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m08,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m08_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m16,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m16_size_bytes},
-        {D3D12::EmbeddedShaders::k_display_ps_d1i2c1m32,
-         D3D12::EmbeddedShaders::k_display_ps_d1i2c1m32_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m01,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m01_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m02,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m02_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m04,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m04_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m08,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m08_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m16,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m16_size_bytes},
+        {D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m32,
+         D3DCommon::EmbeddedShaders::k_display_ps_d1i2c1m32_size_bytes},
       },
     },
   };
@@ -2532,8 +2532,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
   // no shader_cache lookup, no D3DCompile, no m_shadergen
   // dependency. The PSO compile below is the only remaining work.
   const D3D12_SHADER_BYTECODE fs = {
-    D3D12::EmbeddedShaders::k_copy_ps,
-    D3D12::EmbeddedShaders::k_copy_ps_size_bytes,
+    D3DCommon::EmbeddedShaders::k_copy_ps,
+    D3DCommon::EmbeddedShaders::k_copy_ps_size_bytes,
   };
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
