@@ -171,16 +171,23 @@ protected:
     // ATTR4 when textured; OpenGL already did; Vulkan untouched
     // (its own pre-baked SPIR-V path needs a separate regen).
     uint32_t u_uv_limits;
-    // Reserved cbuffer slot. The batch UBO has been progressively
-    // growing as compile-time #defines move to runtime cbuffer
-    // branches (RESOLUTION_SCALE, TRUE_COLOR, DITHERING_SCALED,
-    // DITHERING, INTERLACING, PGXP_DEPTH for VS, UV_LIMITS).
-    // Pre-allocating the remaining slot in the 4th 16-byte row
-    // matches the layout HLSL would have padded to anyway, and
-    // lets a follow-up commit route one more axis into a named
-    // slot without changing the cbuffer's external size or
-    // alignment.
-    uint32_t u_pad2;
+    // u_render_mode: per-batch BatchRenderMode enum value (0/1/2/3).
+    // 0=TransparencyDisabled, 1=TransparentAndOpaque, 2=OnlyOpaque,
+    // 3=OnlyTransparent. The shader body branches on this scalar
+    // instead of compile-time TRANSPARENCY / TRANSPARENCY_ONLY_OPAQUE
+    // / TRANSPARENCY_ONLY_TRANSPARENT macros - the three booleans
+    // are derived inside the FS body as (u_render_mode != 0),
+    // (u_render_mode == 2), and (u_render_mode == 3) respectively.
+    // The two-pass-rendering case in FlushRender re-uploads the UBO
+    // with a different u_render_mode value between the OnlyOpaque
+    // and OnlyTransparent DrawInstanced calls so each draw sees its
+    // matching enum value. PSO blend state still varies by render
+    // mode at the GraphicsPipelineBuilder level - the [render_mode]
+    // matrix dim in m_batch_pipelines stays. Only the FS bytecode
+    // is invariant across the flip post-routing, which is the win
+    // for the D3D12 pre-bake: 288 -> 72 variants per textured
+    // filter template (4x reduction).
+    uint32_t u_render_mode;
   };
 
   struct VRAMFillUBOData

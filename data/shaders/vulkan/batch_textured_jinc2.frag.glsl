@@ -13,9 +13,6 @@
 
 // ---- Specialisation constants --------------------------------------
 layout(constant_id =   0) const uint RESOLUTION_SCALE              = 1u;
-layout(constant_id = 100) const bool TRANSPARENCY                  = false;
-layout(constant_id = 101) const bool TRANSPARENCY_ONLY_OPAQUE      = false;
-layout(constant_id = 102) const bool TRANSPARENCY_ONLY_TRANSPARENT = false;
 layout(constant_id = 103) const bool DITHERING                     = false;
 layout(constant_id = 104) const bool INTERLACING                   = false;
 layout(constant_id = 105) const bool DITHERING_SCALED              = false;
@@ -47,6 +44,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
   layout(offset = 52) uint u_pgxp_depth;
+  layout(offset = 60) uint u_render_mode;
 };
 
 layout(set = 0, binding = 1) uniform sampler2D samp0;
@@ -327,7 +325,7 @@ void main()
 
   float oalpha = u_set_mask_while_drawing ? 1.0 : (semitransparent ? 1.0 : 0.0);
 
-  float premultiply_alpha = TRANSPARENCY
+  float premultiply_alpha = (u_render_mode != 0u)
                             ? (ialpha * (semitransparent ? u_src_alpha_factor : 1.0))
                             : ialpha;
 
@@ -335,7 +333,7 @@ void main()
                ? ((vec3(icolor) * premultiply_alpha) / vec3(255.0, 255.0, 255.0))
                : (floor(vec3(icolor) * premultiply_alpha) /  vec3(31.0,  31.0,  31.0));
 
-  if (TRANSPARENCY)
+  if ((u_render_mode != 0u))
   {
     if (semitransparent)
     {
@@ -343,7 +341,7 @@ void main()
 #if defined(DUAL_SOURCE)
       o_col1 = vec4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
 #endif
-      if (TRANSPARENCY_ONLY_OPAQUE)
+      if ((u_render_mode == 2u))
         discard;
     }
     else
@@ -352,7 +350,7 @@ void main()
 #if defined(DUAL_SOURCE)
       o_col1 = vec4(0.0, 0.0, 0.0, 1.0 - ialpha);
 #endif
-      if (TRANSPARENCY_ONLY_TRANSPARENT)
+      if ((u_render_mode == 3u))
         discard;
     }
   }

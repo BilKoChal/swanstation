@@ -32,33 +32,32 @@
 // collapse into specialisation constants on every blob:
 //
 //   constant_id =   0  RESOLUTION_SCALE             (uint)
-//   constant_id = 100  TRANSPARENCY                 (bool)
-//   constant_id = 101  TRANSPARENCY_ONLY_OPAQUE     (bool)
-//   constant_id = 102  TRANSPARENCY_ONLY_TRANSPARENT(bool)
 //   constant_id = 103  DITHERING                    (bool)
 //   constant_id = 104  INTERLACING                  (bool)
 //   constant_id = 105  DITHERING_SCALED             (bool)
 //   constant_id = 106  TRUE_COLOR                   (bool)
 //
-// The TRANSPARENCY trio encodes the per-call BatchRenderMode enum
-// (which has four values: TransparencyDisabled, TransparentAndOpaque,
-// OnlyOpaque, OnlyTransparent). Only valid combinations are passed by
-// the C++ caller, see embedded_shaders.cpp / gpu_hw_vulkan.cpp for the
-// mapping.
+// TRANSPARENCY used to live as 3 spec consts at constant_id =
+// 100/101/102 (TRANSPARENCY, TRANSPARENCY_ONLY_OPAQUE,
+// TRANSPARENCY_ONLY_TRANSPARENT) encoding the 4-value
+// BatchRenderMode enum. They have been collapsed to a runtime
+// branch on the u_render_mode cbuffer scalar (offset 60 - the
+// former u_pad2 slot). The C++ side re-uploads the UBO between
+// two-pass DrawIndexed calls so each draw sees its matching
+// u_render_mode value (see gpu_hw.cpp FlushRender). Mirrors the
+// prior cbuffer-routing arc (DITHERING / INTERLACING / UV_LIMITS
+// / PGXP_DEPTH).
 //
 // Bindings: pipeline layout m_batch_pipeline_layout. The dynamic UBO
 // at set=0 binding=0 supplies the BatchUBOData fields read here
 // (u_src_alpha_factor, u_dst_alpha_factor, u_interlaced_displayed_field,
-// u_set_mask_while_drawing). u_texture_window_* are present in the
-// UBO but unused in the untextured path.
+// u_set_mask_while_drawing, u_render_mode). u_texture_window_* are
+// present in the UBO but unused in the untextured path.
 
 #version 450 core
 
 // ---- Specialisation constants --------------------------------------
 layout(constant_id =   0) const uint RESOLUTION_SCALE              = 1u;
-layout(constant_id = 100) const bool TRANSPARENCY                  = false;
-layout(constant_id = 101) const bool TRANSPARENCY_ONLY_OPAQUE      = false;
-layout(constant_id = 102) const bool TRANSPARENCY_ONLY_TRANSPARENT = false;
 layout(constant_id = 103) const bool DITHERING                     = false;
 layout(constant_id = 104) const bool INTERLACING                   = false;
 layout(constant_id = 105) const bool DITHERING_SCALED              = false;
@@ -94,6 +93,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
   layout(offset = 52) uint u_pgxp_depth;
+  layout(offset = 60) uint u_render_mode;
 };
 
 // ---- Inputs from the batch VS --------------------------------------
@@ -167,7 +167,7 @@ void main()
   float oalpha = float(u_set_mask_while_drawing);
 
   // Premultiply alpha so the colour output can carry the mask in alpha.
-  float premultiply_alpha = TRANSPARENCY ? (ialpha * u_src_alpha_factor) : ialpha;
+  float premultiply_alpha = (u_render_mode != 0u) ? (ialpha * u_src_alpha_factor) : ialpha;
 
   vec3 color = TRUE_COLOR
                ? ((vec3(icolor) * premultiply_alpha) / vec3(255.0, 255.0, 255.0))
@@ -179,7 +179,7 @@ void main()
   // GetBatchPipeline on the C++ side.
   o_col0 = vec4(color, oalpha);
 #if defined(DUAL_SOURCE)
-  if (TRANSPARENCY)
+  if ((u_render_mode != 0u))
     o_col1 = vec4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
   else
     o_col1 = vec4(0.0, 0.0, 0.0, 1.0 - ialpha);

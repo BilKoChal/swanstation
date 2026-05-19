@@ -28,9 +28,6 @@
 // Per-call specialisation constants (collapse onto each blob):
 //
 //   id =   0  RESOLUTION_SCALE              (uint, per-session)
-//   id = 100  TRANSPARENCY                  (bool)
-//   id = 101  TRANSPARENCY_ONLY_OPAQUE      (bool)
-//   id = 102  TRANSPARENCY_ONLY_TRANSPARENT (bool)
 //   id = 103  DITHERING                     (bool)
 //   id = 104  INTERLACING                   (bool)
 //   id = 105  DITHERING_SCALED              (bool, per-session)
@@ -57,9 +54,6 @@
 
 // ---- Specialisation constants --------------------------------------
 layout(constant_id =   0) const uint RESOLUTION_SCALE              = 1u;
-layout(constant_id = 100) const bool TRANSPARENCY                  = false;
-layout(constant_id = 101) const bool TRANSPARENCY_ONLY_OPAQUE      = false;
-layout(constant_id = 102) const bool TRANSPARENCY_ONLY_TRANSPARENT = false;
 layout(constant_id = 103) const bool DITHERING                     = false;
 layout(constant_id = 104) const bool INTERLACING                   = false;
 layout(constant_id = 105) const bool DITHERING_SCALED              = false;
@@ -103,6 +97,7 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   bool  u_set_mask_while_drawing;
   layout(offset = 52) uint u_pgxp_depth;
   layout(offset = 56) uint u_uv_limits;
+  layout(offset = 60) uint u_render_mode;
 };
 
 // ---- VRAM atlas sampler --------------------------------------------
@@ -313,7 +308,7 @@ void main()
   float oalpha = u_set_mask_while_drawing ? 1.0 : (semitransparent ? 1.0 : 0.0);
 
   // Premultiplied colour.
-  float premultiply_alpha = TRANSPARENCY
+  float premultiply_alpha = (u_render_mode != 0u)
                             ? (ialpha * (semitransparent ? u_src_alpha_factor : 1.0))
                             : ialpha;
 
@@ -322,10 +317,10 @@ void main()
                : (floor(vec3(icolor) * premultiply_alpha) /  vec3(31.0,  31.0,  31.0));
 
   // Output. Textured path differs from untextured in that the
-  // TRANSPARENCY branch is the "TEXTURED && TRANSPARENCY" branch in
+  // (u_render_mode != 0u) branch is the "TEXTURED && (u_render_mode != 0u)" branch in
   // the shadergen, which also drives the per-texel discard logic for
-  // TRANSPARENCY_ONLY_OPAQUE / TRANSPARENCY_ONLY_TRANSPARENT.
-  if (TRANSPARENCY)
+  // (u_render_mode == 2u) / (u_render_mode == 3u).
+  if ((u_render_mode != 0u))
   {
     if (semitransparent)
     {
@@ -333,7 +328,7 @@ void main()
 #if defined(DUAL_SOURCE)
       o_col1 = vec4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
 #endif
-      if (TRANSPARENCY_ONLY_OPAQUE)
+      if ((u_render_mode == 2u))
         discard;
     }
     else
@@ -342,7 +337,7 @@ void main()
 #if defined(DUAL_SOURCE)
       o_col1 = vec4(0.0, 0.0, 0.0, 1.0 - ialpha);
 #endif
-      if (TRANSPARENCY_ONLY_TRANSPARENT)
+      if ((u_render_mode == 3u))
         discard;
     }
   }

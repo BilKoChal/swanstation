@@ -85,7 +85,7 @@ void GPU_HW_ShaderGen::WriteBatchUniformBuffer(std::stringstream& ss)
                         "float u_dst_alpha_factor", "uint u_interlaced_displayed_field",
                         "bool u_set_mask_while_drawing", "uint u_resolution_scale", "uint u_true_color",
                         "uint u_scaled_dithering", "uint u_dithering",
-                        "uint u_interlacing", "uint u_pgxp_depth", "uint u_uv_limits", "uint u_pad2"},
+                        "uint u_interlacing", "uint u_pgxp_depth", "uint u_uv_limits", "uint u_render_mode"},
                        false);
 
   // Alias the historical compile-time constants to their cbuffer-
@@ -755,9 +755,23 @@ std::string GPU_HW_ShaderGen::GenerateBatchFragmentShader(GPU_HW::BatchRenderMod
 
   std::stringstream ss;
   WriteHeader(ss);
-  DefineMacro(ss, "TRANSPARENCY", transparency != GPU_HW::BatchRenderMode::TransparencyDisabled);
-  DefineMacro(ss, "TRANSPARENCY_ONLY_OPAQUE", transparency == GPU_HW::BatchRenderMode::OnlyOpaque);
-  DefineMacro(ss, "TRANSPARENCY_ONLY_TRANSPARENT", transparency == GPU_HW::BatchRenderMode::OnlyTransparent);
+  // TRANSPARENCY used to live as 3 compile-time DefineMacro calls
+  // here (TRANSPARENCY / TRANSPARENCY_ONLY_OPAQUE /
+  // TRANSPARENCY_ONLY_TRANSPARENT) encoding the 4-state
+  // BatchRenderMode enum across 3 booleans. They are now routed
+  // through the batch UBO (u_render_mode at offset 60 - the former
+  // u_pad2 slot) and the four former #if/elif sites below are
+  // uniform-control-flow runtime branches on the cbuffer scalar.
+  // Toggling render_mode mid-FlushRender (e.g. the two-pass
+  // OnlyOpaque -> OnlyTransparent case in NeedsTwoPassRendering)
+  // is a single 4-byte cbuffer write between the two DrawInstanced
+  // calls; the FS bytecode is invariant across the flip. Same
+  // shape as the prior cbuffer-routing arc (DITHERING / INTERLACING
+  // / UV_LIMITS / PGXP_DEPTH). The PSO render_mode dim
+  // (m_batch_pipelines's [render_mode] axis) stays because PSO
+  // blend state still varies per BatchRenderMode value at the
+  // GraphicsPipelineBuilder level - what changes is just the FS
+  // bytecode variant count.
   DefineMacro(ss, "TEXTURED", textured);
   DefineMacro(ss, "PALETTE",
               actual_texture_mode == GPUTextureMode::Palette4Bit || actual_texture_mode == GPUTextureMode::Palette8Bit);
@@ -1098,10 +1112,12 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
   #endif
 
   // Premultiply alpha so we don't need to use a colour output for it.
+  // Was a compile-time #if TRANSPARENCY guard pre-routing. The
+  // (u_render_mode != 0u) runtime check picks the same value as
+  // the macro did at compile time.
   float premultiply_alpha = ialpha;
-  #if TRANSPARENCY
+  if (u_render_mode != 0u)
     premultiply_alpha = ialpha * (semitransparent ? u_src_alpha_factor : 1.0);
-  #endif
 
   float3 color;
   if (u_true_color != 0u)
@@ -1116,8 +1132,22 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
     color = floor(float3(icolor) * premultiply_alpha) / float3(31.0, 31.0, 31.0);
   }
 
-  #if TRANSPARENCY && TEXTURED
-    // Apply semitransparency. If not a semitransparent texel, destination alpha is ignored.
+  // Output. Pre-routing this was a compile-time
+  // `#if TRANSPARENCY && TEXTURED / #elif TRANSPARENCY / #else`
+  // tri-state on the 3-boolean TRANSPARENCY macros. Post-routing
+  // it is a single runtime branch on u_render_mode, with the
+  // TEXTURED gate kept compile-time because that affects whether
+  // the inner discard arms even reach the build (texture_mode-
+  // dependent shadergen branch). The PSX behavioural shape is
+  // unchanged: TransparencyDisabled (u_render_mode=0) writes
+  // o_col0 once and skips the semitransparent / opaque-only
+  // discards; the three transparency modes each take their
+  // matching arm.
+#if TEXTURED
+  if (u_render_mode != 0u)
+  {
+    // Textured + transparency. Apply semitransparency. If not a
+    // semitransparent texel, destination alpha is ignored.
     if (semitransparent)
     {
       #if USE_DUAL_SOURCE
@@ -1127,9 +1157,12 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
         o_col0 = float4(color, oalpha);
       #endif
 
-      #if TRANSPARENCY_ONLY_OPAQUE
+      // u_render_mode == 2 is BatchRenderMode::OnlyOpaque - the
+      // two-pass first pass that keeps only the opaque pixels and
+      // discards the semitransparent ones. Was
+      // `#if TRANSPARENCY_ONLY_OPAQUE` pre-routing.
+      if (u_render_mode == 2u)
         discard;
-      #endif
     }
     else
     {
@@ -1140,26 +1173,46 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
         o_col0 = float4(color, oalpha);
       #endif
 
-      #if TRANSPARENCY_ONLY_TRANSPARENT
+      // u_render_mode == 3 is BatchRenderMode::OnlyTransparent -
+      // the two-pass second pass that keeps only the
+      // semitransparent pixels and discards the opaque ones. Was
+      // `#if TRANSPARENCY_ONLY_TRANSPARENT` pre-routing.
+      if (u_render_mode == 3u)
         discard;
-      #endif
     }
-  #elif TRANSPARENCY
-    // We shouldn't be rendering opaque geometry only when untextured, so no need to test/discard here.
+  }
+  else
+  {
+    // Textured non-transparency. Blending is disabled at the PSO
+    // level so the mask alpha sits directly in the colour write.
+    o_col0 = float4(color, oalpha);
+    #if USE_DUAL_SOURCE
+      o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
+    #endif
+  }
+#else
+  if (u_render_mode != 0u)
+  {
+    // Untextured + transparency. Single colour arm - the
+    // OnlyOpaque / OnlyTransparent inner discards are unreachable
+    // here per the shadergen long-standing rule "We shouldn't be
+    // rendering opaque geometry only when untextured."
     #if USE_DUAL_SOURCE
       o_col0 = float4(color, oalpha);
       o_col1 = float4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
     #else
       o_col0 = float4(color, oalpha);
     #endif
-  #else
-    // Non-transparency won't enable blending so we can write the mask here regardless.
+  }
+  else
+  {
+    // Untextured non-transparency.
     o_col0 = float4(color, oalpha);
-
     #if USE_DUAL_SOURCE
       o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
     #endif
-  #endif
+  }
+#endif
 
   // SV_Depth output (always declared now - was conditional on !PGXP_DEPTH
   // pre-routing). The four per-branch `#if !PGXP_DEPTH / o_depth = oalpha *

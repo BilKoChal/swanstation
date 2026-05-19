@@ -2280,9 +2280,6 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, bool true_co
   // through shadergen and ignore these entries per Vulkan spec).
   //
   //   id =   0  RESOLUTION_SCALE              (uint, per-session)
-  //   id = 100  TRANSPARENCY                  (bool, per-call)
-  //   id = 101  TRANSPARENCY_ONLY_OPAQUE      (bool, per-call)
-  //   id = 102  TRANSPARENCY_ONLY_TRANSPARENT (bool, per-call)
   //   id = 103  DITHERING                     (bool, per-call)
   //   id = 104  INTERLACING                   (bool, per-call)
   //   id = 105  DITHERING_SCALED              (bool, cache-dim - the
@@ -2308,7 +2305,20 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, bool true_co
   // 107-110 are meaningful only on the textured blobs; the untextured
   // blobs do not declare them. Passing them is harmless - unrecognised
   // spec const IDs are silently dropped.
-  const BatchRenderMode brm = static_cast<BatchRenderMode>(render_mode);
+  //
+  // TRANSPARENCY (former id=100) / TRANSPARENCY_ONLY_OPAQUE (101) /
+  // TRANSPARENCY_ONLY_TRANSPARENT (102) used to live as 3 spec
+  // consts here encoding the 4-state BatchRenderMode enum across 3
+  // booleans. They are now routed through the batch UBO
+  // (u_render_mode at offset 60) - the C++ side re-uploads the UBO
+  // between two-pass DrawIndexed calls so each draw sees its
+  // matching enum value. The FS bytecode is invariant across the
+  // flip, collapsing 4x of pipeline cache entries on Vulkan and 4x
+  // of DXBC variants on the D3D12 pre-bake side. PSO blend state
+  // still varies by BatchRenderMode at the GraphicsPipelineBuilder
+  // level (per-render_mode matrix dim stays). Mirrors the prior
+  // cbuffer-routing arc (DITHERING / INTERLACING / UV_LIMITS /
+  // PGXP_DEPTH).
   const uint8_t actual_tex_mode =
     static_cast<uint8_t>(lookup_mode) &
     ~static_cast<uint8_t>(GPUTextureMode::RawTextureBit);
@@ -2321,9 +2331,6 @@ VkPipeline GPU_HW_Vulkan::GetBatchPipeline(GPUTextureFilter filter, bool true_co
                          filter == GPUTextureFilter::xBRBinAlpha);
   Vulkan::SpecConstants fs_spec;
   fs_spec.AddUInt(  0, static_cast<uint32_t>(m_resolution_scale));
-  fs_spec.AddBool(100, brm != BatchRenderMode::TransparencyDisabled);
-  fs_spec.AddBool(101, brm == BatchRenderMode::OnlyOpaque);
-  fs_spec.AddBool(102, brm == BatchRenderMode::OnlyTransparent);
   fs_spec.AddBool(103, dithering);
   fs_spec.AddBool(104, interlacing);
   fs_spec.AddBool(105, scaled_dithering);
