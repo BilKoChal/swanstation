@@ -230,6 +230,119 @@ TEMPLATE_VARIANTS = {
         ("d1_sample_p0",   ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
         ("d1_sample_p1",   ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
     ],
+
+    # batch_textured_nearest_ps: second batch FS pre-bake template.
+    # Mirror of the C++ shadergen GenerateBatchFragmentShader output
+    # for the (texture_mode != Disabled, m_texture_filter == Nearest)
+    # slice. 4 structural axes (post-c532a34 TRANSPARENCY routing):
+    #
+    #   * Texture mode (6 combos, 3 -D macros):
+    #     (PALETTE_4_BIT, PALETTE_8_BIT, RAW_TEXTURE) tuple. Valid:
+    #       (0, 0, 0): Direct16Bit
+    #       (0, 0, 1): RawDirect16Bit
+    #       (1, 0, 0): Palette4Bit
+    #       (1, 0, 1): RawPalette4Bit
+    #       (0, 1, 0): Palette8Bit
+    #       (0, 1, 1): RawPalette8Bit
+    #     PALETTE_4_BIT and PALETTE_8_BIT are mutually exclusive; no
+    #     variant has both set. The Reserved_Direct16Bit /
+    #     Reserved_RawDirect16Bit enum values fold to their non-
+    #     Reserved counterparts at the C++ picker level.
+    #   * USE_DUAL_SOURCE (0/1): drives o_col1 declaration + write.
+    #   * INTERP_CENTROID / INTERP_SAMPLE: mutually exclusive
+    #     booleans encoding the (none / centroid / sample) tri-state.
+    #     Sample wins over centroid when both flags happen to be set.
+    #   * NOPERSP (0/1): `noperspective` qualifier on v_col0.
+    #
+    # 6 (tex_mode) x 2 (dual) x 3 (interp) x 2 (persp) = 72 blobs.
+    # The MSAA axis does NOT multiply this template - the batch FS
+    # samples from the single-sample shadow VRAM regardless of
+    # m_multisamples; MSAA only affects the interp qualifier which
+    # the INTERP_* axes already cover.
+    #
+    # Variant suffix: pXrY_d{0,1}_{none,centroid,sample}_n{0,1}
+    # where:
+    #   pX: palette mode (X = 4 for Palette4Bit, 8 for Palette8Bit,
+    #                     0 for non-palette / Direct16Bit)
+    #   rY: RawTextureBit (Y = 0 or 1)
+    #   dZ: USE_DUAL_SOURCE bit (Z = 0 or 1)
+    #   nW: NOPERSP bit (W = 0 or 1)
+    # Alphabetical sort matches the natural nested-loop iteration
+    # order in the matching helper at gpu_hw_d3d12.cpp.
+    "batch_textured_nearest.ps.hlsl": [
+        ("p0r0_d0_none_n0", []),
+        ("p0r0_d0_none_n1", ["NOPERSP=1"]),
+        ("p0r0_d0_centroid_n0", ["INTERP_CENTROID=1"]),
+        ("p0r0_d0_centroid_n1", ["INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r0_d0_sample_n0", ["INTERP_SAMPLE=1"]),
+        ("p0r0_d0_sample_n1", ["INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r0_d1_none_n0", ["USE_DUAL_SOURCE=1"]),
+        ("p0r0_d1_none_n1", ["USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p0r0_d1_centroid_n0", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p0r0_d1_centroid_n1", ["USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r0_d1_sample_n0", ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p0r0_d1_sample_n1", ["USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r1_d0_none_n0", ["RAW_TEXTURE=1"]),
+        ("p0r1_d0_none_n1", ["RAW_TEXTURE=1", "NOPERSP=1"]),
+        ("p0r1_d0_centroid_n0", ["RAW_TEXTURE=1", "INTERP_CENTROID=1"]),
+        ("p0r1_d0_centroid_n1", ["RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r1_d0_sample_n0", ["RAW_TEXTURE=1", "INTERP_SAMPLE=1"]),
+        ("p0r1_d0_sample_n1", ["RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p0r1_d1_none_n0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1"]),
+        ("p0r1_d1_none_n1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p0r1_d1_centroid_n0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p0r1_d1_centroid_n1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p0r1_d1_sample_n0", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p0r1_d1_sample_n1", ["RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r0_d0_none_n0", ["PALETTE_4_BIT=1"]),
+        ("p4r0_d0_none_n1", ["PALETTE_4_BIT=1", "NOPERSP=1"]),
+        ("p4r0_d0_centroid_n0", ["PALETTE_4_BIT=1", "INTERP_CENTROID=1"]),
+        ("p4r0_d0_centroid_n1", ["PALETTE_4_BIT=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r0_d0_sample_n0", ["PALETTE_4_BIT=1", "INTERP_SAMPLE=1"]),
+        ("p4r0_d0_sample_n1", ["PALETTE_4_BIT=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r0_d1_none_n0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1"]),
+        ("p4r0_d1_none_n1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p4r0_d1_centroid_n0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p4r0_d1_centroid_n1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r0_d1_sample_n0", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p4r0_d1_sample_n1", ["PALETTE_4_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r1_d0_none_n0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1"]),
+        ("p4r1_d0_none_n1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "NOPERSP=1"]),
+        ("p4r1_d0_centroid_n0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1"]),
+        ("p4r1_d0_centroid_n1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r1_d0_sample_n0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1"]),
+        ("p4r1_d0_sample_n1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p4r1_d1_none_n0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1"]),
+        ("p4r1_d1_none_n1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p4r1_d1_centroid_n0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p4r1_d1_centroid_n1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p4r1_d1_sample_n0", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p4r1_d1_sample_n1", ["PALETTE_4_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r0_d0_none_n0", ["PALETTE_8_BIT=1"]),
+        ("p8r0_d0_none_n1", ["PALETTE_8_BIT=1", "NOPERSP=1"]),
+        ("p8r0_d0_centroid_n0", ["PALETTE_8_BIT=1", "INTERP_CENTROID=1"]),
+        ("p8r0_d0_centroid_n1", ["PALETTE_8_BIT=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r0_d0_sample_n0", ["PALETTE_8_BIT=1", "INTERP_SAMPLE=1"]),
+        ("p8r0_d0_sample_n1", ["PALETTE_8_BIT=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r0_d1_none_n0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1"]),
+        ("p8r0_d1_none_n1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p8r0_d1_centroid_n0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p8r0_d1_centroid_n1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r0_d1_sample_n0", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p8r0_d1_sample_n1", ["PALETTE_8_BIT=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r1_d0_none_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1"]),
+        ("p8r1_d0_none_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "NOPERSP=1"]),
+        ("p8r1_d0_centroid_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1"]),
+        ("p8r1_d0_centroid_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r1_d0_sample_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1"]),
+        ("p8r1_d0_sample_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+        ("p8r1_d1_none_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1"]),
+        ("p8r1_d1_none_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "NOPERSP=1"]),
+        ("p8r1_d1_centroid_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1"]),
+        ("p8r1_d1_centroid_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_CENTROID=1", "NOPERSP=1"]),
+        ("p8r1_d1_sample_n0", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1"]),
+        ("p8r1_d1_sample_n1", ["PALETTE_8_BIT=1", "RAW_TEXTURE=1", "USE_DUAL_SOURCE=1", "INTERP_SAMPLE=1", "NOPERSP=1"]),
+    ],
 }
 
 
