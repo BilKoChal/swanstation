@@ -892,9 +892,20 @@ bool GPU_HW_D3D12::CompilePipelines()
         if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
           continue;
 
-        ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode);
-        if (!blob)
-          return false;
+        // Pre-baked variants skip the GetBatchFragmentShader cache-
+        // warm step - the bytecode is statically linked, no
+        // D3DCompile to run. Currently the untextured slice is the
+        // only pre-baked template (commits 9e6f933 + this one); the
+        // four textured filter templates are still runtime-compiled
+        // and land in subsequent commits. The progress.Increment
+        // below still ticks for visual continuity so the
+        // user-facing progress bar reads the same as pre-pre-bake.
+        if (static_cast<GPUTextureMode>(texture_mode) != GPUTextureMode::Disabled)
+        {
+          ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode);
+          if (!blob)
+            return false;
+        }
         progress.Increment();
       }
     }
@@ -1133,6 +1144,139 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   }
 }
 
+namespace {
+
+// Untextured batch FS pre-baked variant picker. Returns the matching
+// DXBC blob from the 24-entry table at
+// src/common/d3d12/embedded_dxbc/batch_untextured_ps_*.inc, indexed
+// by the 5 axes the shadergen used to bake at compile time:
+//
+//   transparency      (BatchRenderMode != TransparencyDisabled)
+//   use_dual_source   (BatchRenderMode != Disabled/OnlyOpaque OR
+//                      filter != Nearest, capability-gated by
+//                      m_supports_dual_source_blend)
+//   interp            (per_sample_shading > MSAA > none; mirror of
+//                      ShaderGen::GetInterpolationQualifier)
+//   noperspective     (m_disable_color_perspective)
+//
+// The session-level inputs (filter, supports_dual_source_blend,
+// multisamples, per_sample_shading, disable_color_perspective) are
+// fixed for the lifetime of the GetBatchPipeline call - they only
+// change via UpdateHWSettings which triggers full PSO rebuild. The
+// per-call input (render_mode) is the BatchRenderMode enum value
+// the draw is rendering with.
+static D3D12_SHADER_BYTECODE PickBatchUntexturedFSBytecode(
+    uint8_t render_mode, GPUTextureFilter filter, bool supports_dual_source_blend,
+    uint32_t multisamples, bool per_sample_shading, bool disable_color_perspective)
+{
+  const bool transparency =
+    (render_mode != static_cast<uint8_t>(BatchRenderMode::TransparencyDisabled));
+  const bool use_dual_source =
+    supports_dual_source_blend &&
+    ((render_mode != static_cast<uint8_t>(BatchRenderMode::TransparencyDisabled) &&
+      render_mode != static_cast<uint8_t>(BatchRenderMode::OnlyOpaque)) ||
+     filter != GPUTextureFilter::Nearest);
+  // 0 = none, 1 = centroid, 2 = sample. Mirror of
+  // ShaderGen::GetInterpolationQualifier: sample wins over centroid
+  // when per-sample-shading is enabled.
+  const unsigned interp_idx =
+    per_sample_shading ? 2u : ((multisamples > 1u) ? 1u : 0u);
+  const unsigned persp_idx = disable_color_perspective ? 1u : 0u;
+
+  // 4-D table: [transparency][dual_source][interp][persp]. Nested
+  // brace-init keeps the structural correspondence with the regen
+  // tool's TEMPLATE_VARIANTS table visible to readers - the
+  // outermost-to-innermost iteration order matches the
+  // alphabetical .inc filenames. Each entry is a
+  // D3D12_SHADER_BYTECODE { pShaderBytecode, BytecodeLength }
+  // aggregate; the extern declarations in
+  // src/common/d3d12/embedded_shaders.h supply both halves.
+  static const D3D12_SHADER_BYTECODE k_blobs[2][2][3][2] = {
+    // transparency = 0
+    {
+      // dual = 0
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_none_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_none_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_none_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_none_p1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_centroid_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_centroid_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_centroid_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_centroid_p1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_sample_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_sample_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_sample_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d0_sample_p1_size_bytes}},
+      },
+      // dual = 1
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_none_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_none_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_none_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_none_p1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_centroid_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_centroid_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_centroid_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_centroid_p1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_sample_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_sample_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_sample_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t0d1_sample_p1_size_bytes}},
+      },
+    },
+    // transparency = 1
+    {
+      // dual = 0
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_none_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_none_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_none_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_none_p1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_centroid_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_centroid_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_centroid_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_centroid_p1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_sample_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_sample_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_sample_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d0_sample_p1_size_bytes}},
+      },
+      // dual = 1
+      {
+        // interp = none
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_none_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_none_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_none_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_none_p1_size_bytes}},
+        // interp = centroid
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_centroid_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_centroid_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_centroid_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_centroid_p1_size_bytes}},
+        // interp = sample
+        {{D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_sample_p0,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_sample_p0_size_bytes},
+         {D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_sample_p1,
+          D3D12::EmbeddedShaders::k_batch_untextured_ps_t1d1_sample_p1_size_bytes}},
+      },
+    },
+  };
+
+  return k_blobs[transparency ? 1 : 0][use_dual_source ? 1 : 0][interp_idx][persp_idx];
+}
+
+} // anonymous namespace
+
 GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode)
 {
   // Reserved_*Direct16Bit shader-source dedup is applied at the
@@ -1269,20 +1413,41 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
     return ret;
   }
 
-  // Slow path. Compile the PSO WITHOUT m_batch_shader_mutex held.
-  // GetBatchFragmentShader is internally thread-safe and so is
-  // m_shader_cache.GetPipelineState (via the per-instance mutexes
-  // added inside D3D12::ShaderCache). The actual D3DCompile and
-  // CreateGraphicsPipelineState calls run lock-free, so the worker
-  // compiling slot A doesn't block the main thread compiling
-  // slot B. Two threads racing to compile the SAME slot is
-  // wasteful but harmless - both produce equivalent PSOs and the
-  // double-check below picks the winner.
-  ComPtr<ID3DBlob> fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
-  if (!fs_blob)
-    return {};
-
+  // Compile WITHOUT m_batch_shader_mutex held. The shader cache
+  // itself is thread-safe (it has its own internal locking
+  // that does NOT span D3DCompile), so multiple threads can compile
+  // different shaders here in parallel. Two threads compiling the
+  // SAME shader is harmless - both produce identical DXBC and the
+  // cache dedups internally via its own double-check.
+  //
+  // Untextured slice (lookup_mode == GPUTextureMode::Disabled) takes
+  // the pre-baked fast path - PickBatchUntexturedFSBytecode picks
+  // the right .inc-supplied DXBC blob from the 24-variant table.
+  // Textured slices fall through to GetBatchFragmentShader which
+  // does the shadergen + D3DCompile dance and caches via
+  // m_batch_fragment_shader_blobs. The matrix slot for untextured
+  // stays empty across all sessions; nothing reads from it on this
+  // path. As subsequent commits land the 4 textured filter
+  // templates (Nearest / Bilinear / JINC2 / xBR), the textured
+  // branch shrinks until every batch FS variant is pre-baked.
   const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
+
+  D3D12_SHADER_BYTECODE fs_bc;
+  ComPtr<ID3DBlob> fs_blob;  // null on the pre-baked path; held for ref-life otherwise
+  if (textured)
+  {
+    fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
+    if (!fs_blob)
+      return {};
+    fs_bc.pShaderBytecode = fs_blob->GetBufferPointer();
+    fs_bc.BytecodeLength = fs_blob->GetBufferSize();
+  }
+  else
+  {
+    fs_bc = PickBatchUntexturedFSBytecode(render_mode, filter, m_supports_dual_source_blend,
+                                          m_multisamples, m_per_sample_shading,
+                                          m_disable_color_perspective);
+  }
 
   D3D12::GraphicsPipelineBuilder gpbuilder;
   gpbuilder.SetRootSignature(m_batch_root_signature.Get());
@@ -1310,7 +1475,7 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
 
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
   gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<uint8_t>(textured)].Get());
-  gpbuilder.SetPixelShader(fs_blob.Get());
+  gpbuilder.SetPixelShader(fs_bc);
 
   gpbuilder.SetRasterizationState(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, false);
   gpbuilder.SetDepthState(true, true,
