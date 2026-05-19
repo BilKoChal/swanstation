@@ -7,15 +7,20 @@
 // gate in GetBatchFragmentShader on the C++ side picks this template
 // for nearest-only sessions.
 //
-// Five SPIR-V-structural axes for this template:
+// Four SPIR-V-structural axes for this template:
 //
 //   - Input interpolation qualifier (none / centroid / sample). 3.
 //   - Color input perspective (standard / noperspective). 2.
 //   - Dual-source output (1 vs 2 outputs). 2.
 //   - PGXP depth output (writes gl_FragDepth or omits it). 2.
-//   - UV limits (without / with v_uv_limits flat input). 2.
 //
-// 3 x 2 x 2 x 2 x 2 = 48 blobs.
+// 3 x 2 x 2 x 2 = 24 blobs.
+//
+// UV_LIMITS used to be a fifth axis (without / with v_uv_limits flat
+// input) but has been collapsed to a runtime branch on the
+// u_uv_limits cbuffer scalar - v_uv_limits is now always declared
+// (the batch VS always emits it when textured, see the matching VS
+// collapse) and consumed iff u_uv_limits != 0 at runtime.
 //
 // Per-call specialisation constants (collapse onto each blob):
 //
@@ -76,6 +81,16 @@ layout(constant_id = 109) const bool RAW_TEXTURE                   = false;
 #endif
 
 // ---- Batch UBO -----------------------------------------------------
+// First six fields mirror the C++ BatchUBOData declaration head
+// (gpu_hw.h:111) verbatim. The std140 offsets are 0..31. The trailing
+// C++ struct fields between offset 32 and 55 (u_resolution_scale,
+// u_true_color, u_scaled_dithering, u_dithering, u_interlacing,
+// u_pgxp_depth) are handled on the Vulkan path via specialisation
+// constants on every pipeline blob and so are not redeclared here.
+// u_uv_limits at offset 56 is read at runtime; the explicit
+// layout(offset=56) is the GL_ARB_enhanced_layouts core-since-4.40
+// way to skip past the spec-const-handled fields without redeclaring
+// them.
 layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   uvec2 u_texture_window_and;
   uvec2 u_texture_window_or;
@@ -83,19 +98,21 @@ layout(std140, set = 0, binding = 0) uniform BatchUBOData {
   float u_dst_alpha_factor;
   uint  u_interlaced_displayed_field;
   bool  u_set_mask_while_drawing;
+  layout(offset = 56) uint u_uv_limits;
 };
 
 // ---- VRAM atlas sampler --------------------------------------------
 layout(set = 0, binding = 1) uniform sampler2D samp0;
 
 // ---- Inputs from the batch VS --------------------------------------
+// v_uv_limits is always declared - the batch VS always emits it when
+// textured (post-UV_LIMITS-collapse, see batch.vert.glsl). Whether to
+// consume it for clamping is a runtime branch on u_uv_limits below.
 layout(location = 0) in VertexData {
   COLOR_INTERP vec4 v_col0;
   INTERP       vec2 v_tex0;
   flat         uvec4 v_texpage;
-#if defined(UV_LIMITS)
   flat         vec4 v_uv_limits;
-#endif
 };
 
 // ---- Outputs -------------------------------------------------------
@@ -227,20 +244,32 @@ void main()
   if (palette)
     coords /= float(RESOLUTION_SCALE);
 
-#if defined(UV_LIMITS)
-  vec4 uv_limits = v_uv_limits;
-  if (!palette)
+  // UV-clamping path. Pre-UV_LIMITS-routing this was gated by the
+  // compile-time UV_LIMITS macro. Now u_uv_limits is a runtime
+  // cbuffer scalar - 1 when PGXP is on (under any filter) OR the
+  // texture filter is non-Nearest (which can't happen in this
+  // Nearest template, so for this FS u_uv_limits is effectively
+  // "is PGXP on"). When u_uv_limits is 0, the clamping path is
+  // skipped and v_uv_limits contents (potentially zero, since
+  // ComputePolygonUVLimits didn't run on the vertex) are not read.
+  vec4 texcol;
+  if (u_uv_limits != 0u)
   {
-    // Direct-16bpp: extend the UV range to all upscaled pixels so 1-
-    // pixel-high polygon-based framebuffer effects (e.g. MegaMan Legends
-    // 2 haze) are not downsampled.
-    uv_limits = uv_limits * float(RESOLUTION_SCALE);
-    uv_limits.zw += float(RESOLUTION_SCALE - 1u);
+    vec4 uv_limits = v_uv_limits;
+    if (!palette)
+    {
+      // Direct-16bpp: extend the UV range to all upscaled pixels so 1-
+      // pixel-high polygon-based framebuffer effects (e.g. MegaMan Legends
+      // 2 haze) are not downsampled.
+      uv_limits = uv_limits * float(RESOLUTION_SCALE);
+      uv_limits.zw += float(RESOLUTION_SCALE - 1u);
+    }
+    texcol = SampleFromVRAM(v_texpage, clamp(coords, uv_limits.xy, uv_limits.zw));
   }
-  vec4 texcol = SampleFromVRAM(v_texpage, clamp(coords, uv_limits.xy, uv_limits.zw));
-#else
-  vec4 texcol = SampleFromVRAM(v_texpage, coords);
-#endif
+  else
+  {
+    texcol = SampleFromVRAM(v_texpage, coords);
+  }
 
   // Transparent-texel discard: VRAM rgba 0000h is the "no draw" sentinel.
   if (all(equal(texcol, vec4(0.0, 0.0, 0.0, 0.0))))

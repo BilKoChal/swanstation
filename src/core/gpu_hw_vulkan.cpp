@@ -2136,7 +2136,7 @@ VkShaderModule GPU_HW_Vulkan::GetBatchFragmentShader(GPUTextureFilter filter, ui
       case GPUTextureFilter::Nearest:
         blob_ptr = &Vulkan::EmbeddedShaders::GetBatchTexturedNearestFragmentShaderBlob(
           m_multisamples > 1, m_per_sample_shading, m_disable_color_perspective,
-          dual_source, m_pgxp_depth_buffer, m_using_uv_limits);
+          dual_source, m_pgxp_depth_buffer);
         break;
       case GPUTextureFilter::Bilinear:
       case GPUTextureFilter::BilinearBinAlpha:
