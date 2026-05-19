@@ -1,5 +1,6 @@
 #include "gpu_hw_d3d11.h"
 #include "common/d3d11/shader_compiler.h"
+#include "common/d3d_common/embedded_shaders.h"
 #include "common/display.hlsl.h"
 #include "common/log.h"
 #include "common/state_wrapper.h"
@@ -1337,22 +1338,74 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
   // the loser's ComPtr is released when it falls out of scope
   // below.
   //
-  // Construct a per-call shadergen bound to the requested filter
-  // rather than reusing m_shadergen (which is pinned to the
-  // runtime-current m_texture_filtering for the non-batch helpers).
-  // Filter is the only setting that differs between this shadergen
-  // and m_shadergen - all other inputs come from member state that
-  // is single-valued per session. Construction is a handful of POD
-  // copies; the expensive work is GenerateBatchFragmentShader +
-  // D3DCompile + CreatePixelShader that follow, all unchanged from
-  // the pre-dim-cache path.
-  GPU_HW_ShaderGen tmp_shadergen(
-    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-    m_scaled_dithering, filter, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-    m_supports_dual_source_blend);
-  const std::string ps = tmp_shadergen.GenerateBatchFragmentShader(
-    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-  ComPtr<ID3D11PixelShader> fresh = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+  // Two paths converge on the same `fresh` ComPtr:
+  //   1. Pre-baked (texture_mode == Disabled OR
+  //      filter == Nearest with a non-Disabled texture_mode): no
+  //      shadergen, no D3DCompile, no m_shader_cache lookup. The
+  //      shared picker in D3DCommon::EmbeddedShaders returns the
+  //      matching .inc-supplied DXBC blob and we hand it straight
+  //      to D3D11::ShaderCompiler::CreatePixelShader (which wraps
+  //      ID3D11Device::CreatePixelShader with the byte / size pair).
+  //      Same blobs the D3D12 backend consumes; fxc emits ps_5_0
+  //      that both APIs honour identically. No shader-cache
+  //      entries are produced for these cells.
+  //   2. Runtime (every other filter): the existing shadergen +
+  //      D3DCompile + m_shader_cache path, unchanged. Bilinear /
+  //      JINC2 / xBR (and their *BinAlpha variants) still take
+  //      this path. As subsequent pre-bake commits land their
+  //      filter slices for the D3D12 backend, the same pre-baked
+  //      blobs become reusable here.
+  //
+  // The use_dual_source bit is the same shadergen formula the
+  // pickers consume on D3D12 (m_supports_dual_source_blend AND
+  // (transparent render_mode OR non-Nearest filter)). Computed
+  // once at the call site so the pre-baked picker and any future
+  // PSO blend-state branching see the same value.
+  const bool use_dual_source =
+    m_supports_dual_source_blend &&
+    ((render_mode != static_cast<uint8_t>(BatchRenderMode::TransparencyDisabled) &&
+      render_mode != static_cast<uint8_t>(BatchRenderMode::OnlyOpaque)) ||
+     filter != GPUTextureFilter::Nearest);
+  const bool untextured =
+    (static_cast<GPUTextureMode>(lookup_mode) == GPUTextureMode::Disabled);
+  const bool textured_nearest =
+    !untextured && (filter == GPUTextureFilter::Nearest);
+
+  ComPtr<ID3D11PixelShader> fresh;
+  if (untextured)
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchUntexturedFS(
+      use_dual_source, m_multisamples, m_per_sample_shading,
+      m_disable_color_perspective);
+    fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
+  else if (textured_nearest)
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedNearestFS(
+      lookup_mode, use_dual_source, m_multisamples, m_per_sample_shading,
+      m_disable_color_perspective);
+    fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
+  else
+  {
+    // Construct a per-call shadergen bound to the requested filter
+    // rather than reusing m_shadergen (which is pinned to the
+    // runtime-current m_texture_filtering for the non-batch helpers).
+    // Filter is the only setting that differs between this shadergen
+    // and m_shadergen - all other inputs come from member state that
+    // is single-valued per session. Construction is a handful of POD
+    // copies; the expensive work is GenerateBatchFragmentShader +
+    // D3DCompile + CreatePixelShader that follow, all unchanged from
+    // the pre-dim-cache path.
+    GPU_HW_ShaderGen tmp_shadergen(
+      m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
+      m_scaled_dithering, filter, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
+      m_supports_dual_source_blend);
+    const std::string ps = tmp_shadergen.GenerateBatchFragmentShader(
+      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
+    fresh = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+  }
+
   if (!fresh)
   {
     Log_ErrorPrintf("Lazy batch pixel shader compile failed for (f=%u, rm=%u, tm=%u, d=%u, i=%u)",
