@@ -119,6 +119,7 @@ private:
   bool CreateTextureBuffer();
 
   bool CompilePipelines();
+  bool CompileDownsamplePipeline();
   void DestroyPipelines();
   void ClearDisplayPipelines();
 
@@ -306,6 +307,7 @@ private:
   ComPtr<ID3D12PipelineState> m_copy_pipeline;
   std::atomic<ID3D12PipelineState*> m_copy_pipeline_fastpath{nullptr};
 
+  ComPtr<ID3D12PipelineState> m_downsample_pipeline;
   D3D12::Texture m_vram_write_replacement_texture;
   D3D12::StreamBuffer m_texture_replacment_stream_buffer;
 };

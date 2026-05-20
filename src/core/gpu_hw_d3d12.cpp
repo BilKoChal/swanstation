@@ -1076,6 +1076,47 @@ bool GPU_HW_D3D12::CompilePipelines()
     m_shader_compile_thread = std::thread(&GPU_HW_D3D12::ShaderCompileThreadEntryPoint, this);
   }
 
+  if (!CompileDownsamplePipeline())
+    return false;
+
+  return true;
+}
+
+bool GPU_HW_D3D12::CompileDownsamplePipeline()
+{
+  // Box-filter downsample PSO: averages the upscaled VRAM/display texture
+  // down to native PSX resolution in a single fullscreen pass. The
+  // resolution scale is baked into the pre-baked FS variant
+  // (PickBoxSampleDownsampleFS), so no cbuffer is needed - the
+  // fullscreen-quad VS plus one source SRV and the point sampler under
+  // m_single_sampler_root_signature is the entire binding set, identical
+  // in shape to the display PSO. Built once per session (and rebuilt by
+  // UpdateSettings on a downsample-mode / resolution-scale change). D3D12
+  // only supports Box (GetDownsampleMode falls Adaptive back to Box while
+  // m_supports_adaptive_downsampling is false), so Disabled/Adaptive are
+  // a no-op and leave m_downsample_pipeline null.
+  if (m_downsample_mode != GPUDownsampleMode::Box)
+    return true;
+
+  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
+  const auto fs_bc = D3DCommon::EmbeddedShaders::PickBoxSampleDownsampleFS(m_resolution_scale);
+  const D3D12_SHADER_BYTECODE fs{fs_bc.data, fs_bc.size};
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetVertexShader(vs);
+  gpbuilder.SetPixelShader(fs);
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoDepthTestState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetRenderTarget(0, m_downsample_texture.GetFormat());
+
+  m_downsample_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+  if (!m_downsample_pipeline)
+    return false;
+
+  D3D12::SetObjectName(m_downsample_pipeline.Get(), "Downsample Pipeline");
   return true;
 }
 
@@ -2001,6 +2042,8 @@ void GPU_HW_D3D12::DestroyPipelines()
   // across UpdateSettings -> DestroyPipelines -> CompilePipelines
   // cycles.
   m_copy_pipeline.Reset();
+
+  m_downsample_pipeline.Reset();
 }
 
 void GPU_HW_D3D12::ClearDisplayPipelines()
