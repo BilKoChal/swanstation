@@ -98,8 +98,6 @@ target_compile_definitions(common PRIVATE -D__LIBRETRO__)
 
 if(WIN32)
   target_sources(common PRIVATE
-    d3d11/shader_cache.cpp
-    d3d11/shader_cache.h
     d3d11/shader_compiler.cpp
     d3d11/shader_compiler.h
     d3d11/staging_texture.cpp

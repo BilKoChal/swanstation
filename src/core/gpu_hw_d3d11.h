@@ -1,10 +1,8 @@
 #pragma once
-#include "common/d3d11/shader_cache.h"
 #include "common/d3d11/staging_texture.h"
 #include "common/d3d11/stream_buffer.h"
 #include "common/d3d11/texture.h"
 #include "gpu_hw.h"
-#include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "texture_replacements.h"
 #include <array>
@@ -297,24 +295,19 @@ private:
   std::array<std::array<std::array<std::array<std::array<std::atomic<ID3D11PixelShader*>, 2>, 2>, 9>, 4>, 7>
     m_batch_pixel_shader_fastpath{}; // [filter][render_mode][texture_mode][dithering][interlacing]
 
-  // Persistent shader cache and shadergen instances for the lazy
-  // / background-thread compile path. Both used to be locals in
-  // CompileShaders(); now they live for the lifetime of this GPU
-  // backend so GetBatchPixelShader can call into them at draw time.
   // m_batch_shader_mutex serialises the SLOW path of
-  // GetBatchPixelShader (cache mutation, ComPtr-array write, and
-  // the atomic-raw-pointer publish). The FAST path -
-  // DrawBatchVertices looking up an already-filled slot - reads
+  // GetBatchPixelShader (the ComPtr-array write and the
+  // atomic-raw-pointer publish). The FAST path - DrawBatchVertices
+  // looking up an already-filled slot - reads
   // m_batch_pixel_shader_fastpath with an atomic acquire-load and
-  // does not take this mutex; that's what keeps the runloop
-  // running while the background precompile worker is compiling
-  // other cells. The shadergen is stateless once constructed - all
-  // its parameters are baked in at construction - so reads under
-  // the mutex are safe; we re-construct it in CompileShaders
-  // whenever settings change and the matrix needs re-filling.
+  // does not take this mutex; that's what keeps the runloop running
+  // while the background precompile worker is wrapping other cells'
+  // pre-baked DXBC. There is no shader cache or shadergen instance any
+  // more: every shader is pre-baked, so GetBatchPixelShader (and the
+  // worker) wrap DXBC from the D3DCommon::EmbeddedShaders pickers
+  // directly into ID3D11 shader objects - no runtime HLSL compile, no
+  // on-disk bytecode cache.
   std::mutex m_batch_shader_mutex;
-  D3D11::ShaderCache m_shader_cache;
-  std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
   std::thread m_shader_compile_thread;
   std::atomic<bool> m_shader_compile_thread_quit{false};
 

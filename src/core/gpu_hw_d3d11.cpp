@@ -6,12 +6,10 @@
 #include "common/state_wrapper.h"
 #include "common/thread_priority.h"
 #include "common/timer.h"
-#include "gpu_hw_shadergen.h"
 #include "gpu_sw_backend.h"
 #include "host_display.h"
 #include "host_interface.h"
 #include "core/host_interface.h"
-#include "shader_cache_version.h"
 #include "system.h"
 Log_SetChannel(GPU_HW_D3D11);
 
@@ -670,29 +668,18 @@ void GPU_HW_D3D11::UpdateSettings()
       //
       // The non-batch pixel shaders (copy / VRAM ops / display /
       // downsample), the vertex shaders, and the input layout are
-      // also all filter-independent - none of them read
-      // m_texture_filter inside shadergen (see
-      // gpu_hw_shadergen.cpp where m_texture_filter is only ever
-      // referenced from GenerateBatchFragmentShader and the
-      // WriteBatchTextureFilter helper it calls). They keep working
-      // with the handles they already have, so calling
-      // CompileShaders here just to rebuild them via the disk-
-      // backed DXBC shader cache (which hits as cache lookups on
-      // the same HLSL hashes) would be ~10-50ms of pure ComPtr
-      // churn per filter toggle for no functional benefit.
-      // Instead, reconstruct m_shadergen so future calls into it
-      // see current settings, build a progress tracker sized for
-      // the batch matrix only, and call PrecompileBatchShaders
+      // all filter-independent - the texture filter is an axis of the
+      // batch FS only. They keep working with the handles they
+      // already have, so a full CompileShaders pass here would just
+      // re-wrap the same pre-baked DXBC blobs into identical ComPtrs
+      // for no functional benefit. Instead, build a progress tracker
+      // sized for the batch matrix only and call PrecompileBatchShaders
       // directly. PrecompileBatchShaders walks the new filter sub-
       // cube via GetBatchPixelShader (which is dim-cache aware -
-      // already-populated cells from a previous visit short-circuit
-      // on the lock-free atomic load) and relaunches the Lazy
-      // worker for the new filter.
-      m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
-        m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-        m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-        m_supports_dual_source_blend);
-
+      // already-populated cells from a previous visit short-circuit on
+      // the lock-free atomic load, and unvisited cells wrap their
+      // pre-baked DXBC via the EmbeddedShaders pickers) and relaunches
+      // the Lazy worker for the new filter.
       const uint32_t batch_progress_units =
         (g_settings.gpu_shader_precompile_mode == GPUShaderPrecompileMode::Enabled)
           ? CountReachableBatchShaders(m_supports_dual_source_blend)
@@ -1039,33 +1026,6 @@ bool GPU_HW_D3D11::CompileShaders()
   // so it doesn't keep writing into the matrix the new run is about
   // to fill in).
   StopShaderCompileThread();
-
-  // Open the disk-backed shader cache the first time we get here; on
-  // subsequent calls (UpdateSettings -> DestroyShaders ->
-  // CompileShaders) the cache instance still holds the index from
-  // last time and the underlying disk file hasn't moved, so we don't
-  // want to re-read it. Re-opening would double-count every entry in
-  // m_index and leak the previous RFILE* handles, since
-  // ShaderCache::Open has no guard of its own.
-  if (!m_shader_cache.IsOpen())
-  {
-    m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), m_device->GetFeatureLevel(), SHADER_CACHE_VERSION,
-                        false);
-  }
-
-  // NOTE: m_shadergen / m_shader_cache are now vestigial on D3D11 -
-  // every shader is pre-baked and consumed via the
-  // D3DCommon::EmbeddedShaders pickers / blobs below, so nothing in
-  // CompileShaders calls shadergen.Generate* or shader_cache.Get*
-  // anymore. The member + its setup are left in place here only so
-  // this commit stays scoped to the quad-VS pre-bake; the next commit
-  // removes m_shadergen, m_shader_cache, ShaderCompiler::CompileShader
-  // and the D3DCompile linkage together and deletes the now-empty
-  // d3d_shaders_* bytecode cache.
-  m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
-    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-    m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-    m_supports_dual_source_blend);
 
   // Whether to walk the full batch-fragment-shader matrix
   // synchronously from this thread, hand it to a background thread,
@@ -1414,9 +1374,10 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
   //   - Textured + xBR:       PickBatchTexturedXBRFS
   // These are the same blobs the D3D12 backend consumes; fxc emits
   // ps_5_0 that both APIs honour identically. No shadergen, no
-  // D3DCompile, no m_shader_cache lookup or entry for any batch FS
-  // cell - m_shader_cache now serves only the non-batch shaders
-  // (batch VS, screen / UV quad VS, copy / vram / display PS).
+  // D3DCompile, no shader cache - every D3D11 shader (batch FS / VS,
+  // screen / UV quad VS, copy / vram / display PS) is pre-baked and
+  // wrapped straight into a shader object, so the runtime HLSL
+  // compiler and the disk bytecode cache have both been removed.
   //
   // The use_dual_source bit is the same shadergen formula the
   // pickers consume on D3D12 (m_supports_dual_source_blend AND
@@ -1561,7 +1522,6 @@ void GPU_HW_D3D11::DestroyShaders()
   // matrix - otherwise the worker would be writing into ComPtrs we're
   // about to default-construct.
   StopShaderCompileThread();
-  m_shadergen.reset();
 
   m_downsample_composite_pixel_shader.Reset();
   m_downsample_blur_pass_pixel_shader.Reset();
@@ -1641,8 +1601,9 @@ bool GPU_HW_D3D11::PrecompileBatchShaders(ShaderCompileProgressTracker& progress
   // m_batch_pixel_shaders synchronously in Enabled mode; launch the
   // background-thread batch-fragment-shader fill in Lazy mode; do
   // nothing in Disabled. Caller is responsible for joining any
-  // previous worker (StopShaderCompileThread), opening
-  // m_shader_cache, and constructing m_shadergen.
+  // previous worker (StopShaderCompileThread). There is no shader
+  // cache to open or shadergen to construct any more - every batch FS
+  // cell is wrapped from pre-baked DXBC.
   //
   // Extracted from CompileShaders so the only_dim_changed fast path
   // in UpdateSettings can call just this helper without paying the

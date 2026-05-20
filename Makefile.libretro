@@ -315,7 +315,6 @@ SOURCES_CXX += \
 # Direct3D 11 backend - Windows only.
 ifeq ($(IS_WINDOWS),1)
 SOURCES_CXX += \
-   $(COMMON_DIR)/d3d11/shader_cache.cpp \
    $(COMMON_DIR)/d3d11/shader_compiler.cpp \
    $(COMMON_DIR)/d3d11/staging_texture.cpp \
    $(COMMON_DIR)/d3d11/stream_buffer.cpp \
