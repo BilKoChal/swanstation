@@ -284,6 +284,23 @@ Bytecode PickDisplayFS(bool depth_24, uint32_t interlace_mode, bool smooth_chrom
 extern const uint8_t k_fullscreen_quad_vs[];
 extern const size_t k_fullscreen_quad_vs_size_bytes;
 
+// UV-quad vertex shader. Equivalent to
+// ShaderGen::GenerateUVQuadVertexShader(). Same fullscreen-triangle
+// base as the screen / fullscreen quad VS, but remaps the output
+// texcoord into the [u_uv_min, u_uv_max] sub-rect from a 16-byte VS
+// cbuffer at b0. Single variant. Consumed by the D3D11 adaptive-
+// downsample mip-chain pass.
+//
+// Note: the SCREEN-quad VS (ShaderGen::GenerateScreenQuadVertexShader)
+// has no dedicated blob - on D3D it is byte-equivalent to
+// k_fullscreen_quad_vs above (identical SV_VertexID bit-shift triangle;
+// the shadergen's only extra is a GL-only v_pos.y flip that is dead on
+// D3D), so consumers reuse k_fullscreen_quad_vs for it.
+//
+// Source: data/shaders/d3d_common/uv_quad.vs.hlsl
+extern const uint8_t k_uv_quad_vs[];
+extern const size_t k_uv_quad_vs_size_bytes;
+
 // Batch vertex shader. Equivalent to
 // GPU_HW_ShaderGen::GenerateBatchVertexShader(textured). Two variants
 // on the TEXTURED axis only - the textured form adds the

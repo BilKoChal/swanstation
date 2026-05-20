@@ -1052,16 +1052,20 @@ bool GPU_HW_D3D11::CompileShaders()
     m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), m_device->GetFeatureLevel(), SHADER_CACHE_VERSION,
                         false);
   }
-  // Convenience local reference so the rest of this function reads
-  // the same way it always has. The lazy-compile helpers below also
-  // touch m_shader_cache via the member.
-  D3D11::ShaderCache& shader_cache = m_shader_cache;
 
+  // NOTE: m_shadergen / m_shader_cache are now vestigial on D3D11 -
+  // every shader is pre-baked and consumed via the
+  // D3DCommon::EmbeddedShaders pickers / blobs below, so nothing in
+  // CompileShaders calls shadergen.Generate* or shader_cache.Get*
+  // anymore. The member + its setup are left in place here only so
+  // this commit stays scoped to the quad-VS pre-bake; the next commit
+  // removes m_shadergen, m_shader_cache, ShaderCompiler::CompileShader
+  // and the D3DCompile linkage together and deletes the now-empty
+  // d3d_shaders_* bytecode cache.
   m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
     m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
     m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
     m_supports_dual_source_blend);
-  GPU_HW_ShaderGen& shadergen = *m_shadergen;
 
   // Whether to walk the full batch-fragment-shader matrix
   // synchronously from this thread, hand it to a background thread,
@@ -1116,9 +1120,18 @@ bool GPU_HW_D3D11::CompileShaders()
 
   progress.Increment();
 
-  m_screen_quad_vertex_shader =
-    shader_cache.GetVertexShader(m_device.Get(), shadergen.GenerateScreenQuadVertexShader());
-  m_uv_quad_vertex_shader = shader_cache.GetVertexShader(m_device.Get(), shadergen.GenerateUVQuadVertexShader());
+  {
+    // screen-quad VS: byte-equivalent to the fullscreen-quad VS on D3D
+    // (identical SV_VertexID triangle; the shadergen's GL-only y-flip
+    // is dead here), so reuse the pre-baked k_fullscreen_quad_vs blob.
+    m_screen_quad_vertex_shader = D3D11::ShaderCompiler::CreateVertexShader(
+      m_device.Get(), D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs,
+      D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs_size_bytes);
+    // uv-quad VS: dedicated pre-baked blob (cbuffer-driven UV sub-rect).
+    m_uv_quad_vertex_shader = D3D11::ShaderCompiler::CreateVertexShader(
+      m_device.Get(), D3DCommon::EmbeddedShaders::k_uv_quad_vs,
+      D3DCommon::EmbeddedShaders::k_uv_quad_vs_size_bytes);
+  }
   if (!m_screen_quad_vertex_shader || !m_uv_quad_vertex_shader)
     return false;
 

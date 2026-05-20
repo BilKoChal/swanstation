@@ -19,6 +19,7 @@
 namespace D3DCommon::EmbeddedShaders {
 
 #include "embedded_dxbc/fullscreen_quad_vs.inc"
+#include "embedded_dxbc/uv_quad_vs.inc"
 #include "embedded_dxbc/batch_vertex_vs_untextured.inc"
 #include "embedded_dxbc/batch_vertex_vs_textured.inc"
 #include "embedded_dxbc/copy_ps.inc"
