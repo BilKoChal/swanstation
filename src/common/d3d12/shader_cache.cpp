@@ -10,59 +10,18 @@ Log_SetChannel(D3D12::ShaderCache);
 
 namespace D3D12 {
 
-#pragma pack(push, 1)
-struct CacheIndexEntry
-{
-  uint64_t source_hash_low;
-  uint64_t source_hash_high;
-  uint32_t source_length;
-  uint32_t shader_type;
-  uint32_t file_offset;
-  uint32_t blob_size;
-};
-#pragma pack(pop)
+// Pipeline-state-object caching on D3D12 is provided solely by the
+// ID3D12PipelineLibrary (a single compact driver-managed file that
+// dedups PSO state internally; opened in Open() further down). The
+// older per-PSO blob cache - which persisted each PSO's GetCachedBlob
+// output to d3d12_pipelines_<sm>.bin and grew to ~75 MB for coverage
+// that PCSX2-style caches reach at ~1.5 MB - has been removed entirely.
+// It was permanently disabled, and the bytecode it would have saved is
+// now pre-baked (D3DCommon::EmbeddedShaders), so driver-side PSO
+// assembly from the DXBC is cheap enough to redo each cold start.
+// Open() scrubs any d3d12_pipelines_<sm> file left by an older build.
 
-// On-disk index record for the (disabled) D3D12 per-PSO pipeline blob
-// cache. This used to be byte-for-byte shared with the D3D11 backend's
-// bytecode cache, but that cache - and the whole D3D11::ShaderCache
-// class - has been removed (every shader is pre-baked now), so there
-// is no longer a cross-backend file to stay in sync with. The struct
-// is kept only for the per-PSO pipelines cache's on-disk format; the
-// 32-byte size assert guards that format's stability across builds.
-// shader_type stores EntryType cast to uint32_t.
-static_assert(sizeof(CacheIndexEntry) == 32, "CacheIndexEntry must stay 32 bytes for on-disk pipeline-cache format stability");
-
-// Pipeline-state-object disk caching has been disabled.
-//
-// The previous implementation persisted each PSO's full
-// ID3D12PipelineState::GetCachedBlob output as an independent
-// entry keyed by the merged graphics-pipeline-state descriptor hash.
-// On a stock SwanStation matrix that meant ~1440 batch PSOs plus
-// the non-batch pipelines, each blob carrying a fully-validated
-// state object with VS and PS bytecode embedded - ~16 KB per PSO on
-// average. The on-disk d3d12_pipelines_sm50.bin grew to ~75 MB for
-// roughly the same coverage that PCSX2's Vulkan/D3D12 caches reach
-// at ~1.5 MB, because PCSX2 caches at the shader-bytecode level only
-// and lets the runtime build PSOs from cached bytecode on demand.
-//
-// The shader bytecode cache that this rationale used to point to as
-// "the expensive recompile to save" is itself gone now: every D3D12
-// shader is pre-baked DXBC (D3DCommon::EmbeddedShaders), so there is no
-// runtime HLSL compile to cache and Open() scrubs the orphaned
-// d3d_shaders_<sm> files rather than creating them. Driver-side PSO
-// assembly from already-compiled DXBC is fast - sub-millisecond on
-// modern desktop GPUs - so re-doing it each cold start is not a real
-// cost, and the per-PSO blob cache stays disabled. The one cache that
-// remains worthwhile is the ID3D12PipelineLibrary (opened separately
-// below): a single compact driver-managed file that dedups PSO state
-// internally, which is why CanUsePipelineCache (the per-PSO blob path)
-// returns false while the pipeline library path is still used.
-static bool CanUsePipelineCache()
-{
-  return false;
-}
-
-ShaderCache::ShaderCache() : m_use_pipeline_cache(CanUsePipelineCache()) {}
+ShaderCache::ShaderCache() = default;
 
 ShaderCache::~ShaderCache()
 {
@@ -72,17 +31,6 @@ ShaderCache::~ShaderCache()
   // the rest of the teardown.
   if (m_use_pipeline_library && m_pipeline_library && !m_base_path.empty())
     SerializePipelineLibrary();
-
-  if (m_pipeline_index_file)
-    rfclose(m_pipeline_index_file);
-  if (m_pipeline_blob_file)
-    rfclose(m_pipeline_blob_file);
-}
-
-bool ShaderCache::CacheIndexKey::operator==(const CacheIndexKey& key) const
-{
-  return (source_hash_low == key.source_hash_low && source_hash_high == key.source_hash_high &&
-          source_length == key.source_length && type == key.type);
 }
 
 void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEATURE_LEVEL feature_level,
@@ -90,8 +38,8 @@ void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEA
 {
   m_base_path = base_path;
   m_feature_level = feature_level;
-  m_version = version;
   m_debug = debug;
+  (void)version; // no on-disk cache to version any more (pre-baked shaders + pipeline library)
 
   if (!base_path.empty())
   {
@@ -115,26 +63,13 @@ void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEA
         filestream_delete(shader_blob_filename.c_str());
     }
 
-    if (m_use_pipeline_cache)
+    // Scrub any leftover per-PSO pipeline blob cache from an older
+    // build (d3d12_pipelines_<sm>.{idx,bin}). That cache has been
+    // removed; the file is never written now, so unlink it rather than
+    // leave it sitting in the user's system directory (it reached
+    // ~75 MB). Cheap path_is_valid+unlink, self-healing across
+    // upgrades / downgrades.
     {
-      const std::string base_pipelines_filename = GetCacheBaseFileName(base_path, "pipelines", feature_level, debug);
-      const std::string pipelines_index_filename = base_pipelines_filename + ".idx";
-      const std::string pipelines_blob_filename = base_pipelines_filename + ".bin";
-
-      if (!ReadExisting(pipelines_index_filename, pipelines_blob_filename, m_pipeline_index_file, m_pipeline_blob_file,
-                        m_pipeline_index))
-      {
-        CreateNew(pipelines_index_filename, pipelines_blob_filename, m_pipeline_index_file, m_pipeline_blob_file);
-      }
-    }
-    else
-    {
-      // Scrub any leftover pipeline cache from a previous build that
-      // had the per-PSO blob cache enabled. The file is no longer
-      // touched at runtime, so without this it would just sit in the
-      // user's system directory forever consuming ~75 MB. Doing this
-      // on every Open is cheap (two path_is_valid+unlink hits) and
-      // self-healing across upgrades and downgrades.
       const std::string base_pipelines_filename = GetCacheBaseFileName(base_path, "pipelines", feature_level, debug);
       const std::string pipelines_index_filename = base_pipelines_filename + ".idx";
       const std::string pipelines_blob_filename = base_pipelines_filename + ".bin";
@@ -195,137 +130,6 @@ void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEA
   m_open = true;
 }
 
-void ShaderCache::InvalidatePipelineCache()
-{
-  m_pipeline_index.clear();
-  if (m_pipeline_blob_file)
-  {
-    rfclose(m_pipeline_blob_file);
-    m_pipeline_blob_file = nullptr;
-  }
-
-  if (m_pipeline_index_file)
-  {
-    rfclose(m_pipeline_index_file);
-    m_pipeline_index_file = nullptr;
-  }
-
-  if (m_use_pipeline_cache)
-  {
-    const std::string base_pipelines_filename =
-      GetCacheBaseFileName(m_base_path, "pipelines", m_feature_level, m_debug);
-    const std::string pipelines_index_filename = base_pipelines_filename + ".idx";
-    const std::string pipelines_blob_filename = base_pipelines_filename + ".bin";
-    CreateNew(pipelines_index_filename, pipelines_blob_filename, m_pipeline_index_file, m_pipeline_blob_file);
-  }
-}
-
-bool ShaderCache::CreateNew(const std::string& index_filename, const std::string& blob_filename, RFILE*& index_file,
-                            RFILE*& blob_file)
-{
-  if (path_is_valid(index_filename.c_str()))
-  {
-    Log_WarningPrintf("Removing existing index file '%s'", index_filename.c_str());
-    filestream_delete(index_filename.c_str());
-  }
-  if (path_is_valid(blob_filename.c_str()))
-  {
-    Log_WarningPrintf("Removing existing blob file '%s'", blob_filename.c_str());
-    filestream_delete(blob_filename.c_str());
-  }
-
-  index_file = FileSystem::OpenRFile(index_filename.c_str(), "wb");
-  if (!index_file)
-  {
-    Log_ErrorPrintf("Failed to open index file '%s' for writing", index_filename.c_str());
-    return false;
-  }
-
-  const uint32_t index_version = FILE_VERSION;
-  const uint32_t data_version = m_version;
-  if (rfwrite(&index_version, sizeof(index_version), 1, index_file) != 1 ||
-      rfwrite(&data_version, sizeof(data_version), 1, index_file) != 1)
-  {
-    Log_ErrorPrintf("Failed to write version to index file '%s'", index_filename.c_str());
-    rfclose(index_file);
-    index_file = nullptr;
-    filestream_delete(index_filename.c_str());
-    return false;
-  }
-
-  blob_file = FileSystem::OpenRFile(blob_filename.c_str(), "w+b");
-  if (!blob_file)
-  {
-    Log_ErrorPrintf("Failed to open blob file '%s' for writing", blob_filename.c_str());
-    rfclose(blob_file);
-    blob_file = nullptr;
-    filestream_delete(index_filename.c_str());
-    return false;
-  }
-
-  return true;
-}
-
-bool ShaderCache::ReadExisting(const std::string& index_filename, const std::string& blob_filename,
-                               RFILE*& index_file, RFILE*& blob_file, CacheIndex& index)
-{
-  index_file = FileSystem::OpenRFile(index_filename.c_str(), "r+b");
-  if (!index_file)
-    return false;
-
-  uint32_t file_version = 0;
-  uint32_t data_version = 0;
-  if (rfread(&file_version, sizeof(file_version), 1, index_file) != 1 || file_version != FILE_VERSION ||
-      rfread(&data_version, sizeof(data_version), 1, index_file) != 1 || data_version != m_version)
-  {
-    Log_ErrorPrintf("Bad file/data version in '%s'", index_filename.c_str());
-    rfclose(index_file);
-    index_file = nullptr;
-    return false;
-  }
-
-  blob_file = FileSystem::OpenRFile(blob_filename.c_str(), "a+b");
-  if (!blob_file)
-  {
-    Log_ErrorPrintf("Blob file '%s' is missing", blob_filename.c_str());
-    rfclose(index_file);
-    index_file = nullptr;
-    return false;
-  }
-
-  rfseek(blob_file, 0, SEEK_END);
-  const uint32_t blob_file_size = static_cast<uint32_t>(rftell(blob_file));
-
-  for (;;)
-  {
-    CacheIndexEntry entry;
-    if (rfread(&entry, sizeof(entry), 1, index_file) != 1 || (entry.file_offset + entry.blob_size) > blob_file_size)
-    {
-      if (rfeof(index_file))
-        break;
-
-      Log_ErrorPrintf("Failed to read entry from '%s', corrupt file?", index_filename.c_str());
-      index.clear();
-      rfclose(blob_file);
-      blob_file = nullptr;
-      rfclose(index_file);
-      index_file = nullptr;
-      return false;
-    }
-
-    const CacheIndexKey key{entry.source_hash_low, entry.source_hash_high, entry.source_length,
-                            static_cast<EntryType>(entry.shader_type)};
-    const CacheIndexData data{entry.file_offset, entry.blob_size};
-    index.emplace(key, data);
-  }
-
-  // ensure we don't write before seeking
-  rfseek(index_file, 0, SEEK_END);
-
-  Log_InfoPrintf("Read %zu entries from '%s'", index.size(), index_filename.c_str());
-  return true;
-}
-
 std::string ShaderCache::GetCacheBaseFileName(const std::string_view& base_path, const std::string_view& type,
                                               D3D_FEATURE_LEVEL feature_level, bool debug)
 {
@@ -378,80 +182,6 @@ union MD5Hash
   };
   uint8_t hash[16];
 };
-
-ShaderCache::ComPtr<ID3D12PipelineState>
-ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& key,
-                                   const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc)
-{
-  // SLOW: CreateGraphicsPipelineState runs WITHOUT the cache mutex
-  // held - it's the equivalent of D3DCompile on the PSO side. Two
-  // threads racing to compile the same PSO key both end up here;
-  // both produce equivalent ID3D12PipelineState objects (PSOs are
-  // deterministic on identical descriptors). The double-check
-  // below picks whichever completed first.
-  ComPtr<ID3D12PipelineState> pso;
-  HRESULT hr = device->CreateGraphicsPipelineState(&gpdesc, IID_PPV_ARGS(pso.GetAddressOf()));
-  if (FAILED(hr))
-  {
-    Log_ErrorPrintf("Creating cached PSO failed: %08X", hr);
-    return {};
-  }
-
-  // After the disk PSO cache drop (commit 81e3a2b8) the
-  // m_pipeline_blob_file is always null when the cache is open, so
-  // the whole index-update block below is dead in practice. Code
-  // kept correct in case the per-PSO blob cache is ever revived.
-  if (!m_pipeline_blob_file)
-    return pso;
-
-  ComPtr<ID3DBlob> blob;
-  hr = pso->GetCachedBlob(blob.GetAddressOf());
-  if (FAILED(hr))
-  {
-    Log_WarningPrintf("Failed to get cached PSO data: %08X", hr);
-    return pso;
-  }
-
-  // FAST: take the lock to write the index/blob file. Double-check
-  // under the lock - if another thread won the race, return their
-  // PSO instead of writing ours.
-  std::lock_guard<std::mutex> lock(m_pipeline_cache_mutex);
-
-  auto iter = m_pipeline_index.find(key);
-  if (iter != m_pipeline_index.end())
-  {
-    // Someone else already wrote this key. Our PSO is equivalent
-    // by construction; just return it (no point reading theirs
-    // from disk - the in-memory PSO works the same).
-    return pso;
-  }
-
-  if (rfseek(m_pipeline_blob_file, 0, SEEK_END) != 0)
-    return pso;
-
-  CacheIndexData data;
-  data.file_offset = static_cast<uint32_t>(rftell(m_pipeline_blob_file));
-  data.blob_size = static_cast<uint32_t>(blob->GetBufferSize());
-
-  CacheIndexEntry entry = {};
-  entry.source_hash_low = key.source_hash_low;
-  entry.source_hash_high = key.source_hash_high;
-  entry.source_length = key.source_length;
-  entry.shader_type = static_cast<uint32_t>(key.type);
-  entry.blob_size = data.blob_size;
-  entry.file_offset = data.file_offset;
-
-  if (rfwrite(blob->GetBufferPointer(), 1, entry.blob_size, m_pipeline_blob_file) != entry.blob_size ||
-      filestream_flush(m_pipeline_blob_file) != 0 || rfwrite(&entry, sizeof(entry), 1, m_pipeline_index_file) != 1 ||
-      filestream_flush(m_pipeline_index_file) != 0)
-  {
-    Log_ErrorPrintf("Failed to write pipeline blob to file");
-    return pso;
-  }
-
-  m_pipeline_index.emplace(key, data);
-  return pso;
-}
 
 ShaderCache::CacheIndexKey ShaderCache::GetPipelineCacheKey(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc)
 {
@@ -548,15 +278,18 @@ ShaderCache::ComPtr<ID3D12PipelineState> ShaderCache::GetPipelineState(ID3D12Dev
   }
 
   // No pipeline library available (pre-D3D12.1 / older Windows):
-  // compile the PSO directly. The per-PSO on-disk blob cache that used
-  // to provide a read fallback here is disabled
-  // (CanUsePipelineCache() == false), and reading a cached blob back
-  // required D3DCreateBlob from d3dcompiler - now that the d3dcompiler
-  // dependency is gone, just build the PSO from the pre-baked DXBC each
-  // time (cheap driver-side assembly). CompileAndAddPipeline does the
-  // CreateGraphicsPipelineState and, with m_pipeline_blob_file null,
-  // skips the (dead) disk-cache write.
-  return CompileAndAddPipeline(device, key, desc);
+  // create the PSO uncached from the pre-baked DXBC. Driver-side PSO
+  // assembly is cheap, and the per-PSO on-disk blob cache that used to
+  // back this path was permanently disabled, so it has been removed
+  // entirely - the ID3D12PipelineLibrary above is the only PSO cache.
+  ComPtr<ID3D12PipelineState> pso;
+  const HRESULT hr = device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(pso.GetAddressOf()));
+  if (FAILED(hr))
+  {
+    Log_ErrorPrintf("CreateGraphicsPipelineState failed: %08X", hr);
+    return {};
+  }
+  return pso;
 }
 
 std::string ShaderCache::GetPipelineLibraryFilename(const std::string_view& base_path, D3D_FEATURE_LEVEL feature_level,
