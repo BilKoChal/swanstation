@@ -46,29 +46,15 @@ public:
   void Open(std::string_view base_path, ID3D12Device* device, D3D_FEATURE_LEVEL feature_level, uint32_t version,
             bool debug);
 
-  // Returns whether Open() has already been called successfully on
-  // this instance. Used by the persistent (lazy-compile) GPU backend
-  // to avoid re-reading the same on-disk index on UpdateSettings
-  // round-trips through DestroyPipelines/CompilePipelines, which
-  // would both leak file handles and double-count m_shader_index /
-  // m_pipeline_index entries. Mirrors the equivalent accessor on
-  // D3D11::ShaderCache.
-  // True once Open() has run. Previously keyed off m_shader_index_file,
-  // but the shader bytecode cache is no longer opened (it's scrubbed
-  // instead - every shader is pre-baked), so track open state
-  // explicitly. Used by the caller's "open once" guard.
+  // Returns whether Open() has already been called on this instance.
+  // Used by the persistent (lazy-compile) GPU backend to avoid
+  // re-running Open on UpdateSettings round-trips through
+  // DestroyPipelines/CompilePipelines, which would re-read the
+  // pipeline-library blob and leak its file handles. Previously keyed
+  // off m_shader_index_file, but the shader bytecode cache is no longer
+  // opened (it's scrubbed instead - every shader is pre-baked), so
+  // track open state explicitly.
   bool IsOpen() const { return m_open; }
-
-  ALWAYS_INLINE ComPtr<ID3DBlob> GetVertexShader(std::string_view shader_code)
-  {
-    return GetShaderBlob(EntryType::VertexShader, shader_code);
-  }
-  ALWAYS_INLINE ComPtr<ID3DBlob> GetPixelShader(std::string_view shader_code)
-  {
-    return GetShaderBlob(EntryType::PixelShader, shader_code);
-  }
-
-  ComPtr<ID3DBlob> GetShaderBlob(EntryType type, std::string_view shader_code);
 
   ComPtr<ID3D12PipelineState> GetPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
 
@@ -114,7 +100,6 @@ private:
 
   static std::string GetCacheBaseFileName(const std::string_view& base_path, const std::string_view& type,
                                           D3D_FEATURE_LEVEL feature_level, bool debug);
-  static CacheIndexKey GetShaderCacheKey(EntryType type, const std::string_view& shader_code);
   static CacheIndexKey GetPipelineCacheKey(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc);
 
   bool CreateNew(const std::string& index_filename, const std::string& blob_filename, RFILE*& index_file,
@@ -144,31 +129,26 @@ private:
   // Writes 33 wchar_t (32 hex digits + L'\0') into 'out'.
   static void FormatPipelineLibraryName(const CacheIndexKey& key, WCHAR out[33]);
 
-  ComPtr<ID3DBlob> CompileAndAddShaderBlob(const CacheIndexKey& key, std::string_view shader_code);
   ComPtr<ID3D12PipelineState> CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& key,
                                                     const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc);
 
   std::string m_base_path;
 
-  // Two mutexes covering the two cache sides (HLSL shader blobs vs
-  // D3D12 pipeline blobs). The mutexes are deliberately NOT held
-  // across the slow operations - D3DCompile in
-  // CompileAndAddShaderBlob and CreateGraphicsPipelineState in
-  // CompileAndAddPipeline - so two threads compiling different
-  // shaders / pipelines run truly in parallel.
+  // Guards the per-PSO pipeline blob cache's index/file state. It is
+  // deliberately NOT held across the slow operation -
+  // CreateGraphicsPipelineState in CompileAndAddPipeline - so two
+  // threads compiling different pipelines run truly in parallel. Two
+  // threads racing to compile the SAME pipeline is harmless: each
+  // creates its own PSO, then takes the mutex to publish; the second
+  // observes the slot already filled (via the double-check inside
+  // CompileAndAddPipeline) and discards its copy.
   //
-  // Two threads racing to compile the SAME shader is harmless: each
-  // does its own D3DCompile, then takes the mutex to publish the
-  // result. The second one observes the slot already filled (via the
-  // double-check inside CompileAndAddXxx) and discards its copy. The
-  // wasted compile is the cost of avoiding the deadlock the previous
-  // single-mutex-around-everything design would have caused.
-  std::mutex m_shader_cache_mutex;
+  // (The companion shader-blob mutex is gone: the shader bytecode cache
+  // was removed - every shader is pre-baked - so there is no
+  // CompileAndAddShaderBlob to serialise any more. The pipeline-library
+  // path in GetPipelineState relies on ID3D12PipelineLibrary's own
+  // documented thread-safety and takes no lock here.)
   std::mutex m_pipeline_cache_mutex;
-
-  RFILE* m_shader_index_file = nullptr;
-  RFILE* m_shader_blob_file = nullptr;
-  CacheIndex m_shader_index;
 
   RFILE* m_pipeline_index_file = nullptr;
   RFILE* m_pipeline_blob_file = nullptr;
