@@ -123,37 +123,25 @@ private:
   void DestroyPipelines();
   void ClearDisplayPipelines();
 
-  // Lazy batch-fragment-shader-blob + PSO compile path.
-  //
-  // GetBatchFragmentShader returns a non-null ComPtr to the
-  // ID3DBlob holding the compiled HLSL bytecode for the requested
-  // (filter, render_mode, texture_mode)
-  // tuple, generating the shader source via a temporary shadergen
-  // bound to that filter and feeding it through
-  // m_shader_cache.GetPixelShader on a cache miss. The temporary
-  // shadergen lets the worker / main thread fault in a non-current
-  // filter's sub-cube without having to reconstruct m_shadergen
-  // (which stays bound to the runtime-current m_texture_filtering
-  // for the non-batch helpers below). It also handles the
-  // Reserved_Direct16Bit (3) -> Direct16Bit (2) and
-  // Reserved_RawDirect16Bit (7) -> RawDirect16Bit (6) dedup at the
-  // blob array level.
+  // Lazy batch PSO compile path.
   //
   // GetBatchPipeline returns the ID3D12PipelineState for the full
-  // 7-D PSO matrix slot (filter added as the outermost dimension to
-  // the existing 6-D layout - mirrors the Vulkan dim-cache shape).
-  // It builds the gpbuilder state on demand, calling
-  // GetBatchFragmentShader for the bound shader with the same
-  // filter, then hands the descriptor to
-  // m_shader_cache.GetPipelineState (which hits the on-disk PSO
-  // cache where possible, only paying the actual driver compile on
-  // cold runs). Reserved_* texture-mode PSOs inherit the canonical
-  // PSO ComPtr.
+  // 7-D PSO matrix slot (filter as the outermost dimension over the
+  // existing 6-D layout - mirrors the Vulkan dim-cache shape). It
+  // builds the gpbuilder state on demand, pulling the fragment-
+  // shader bytecode directly from the D3DCommon::EmbeddedShaders
+  // pre-baked pickers (every batch FS variant is pre-baked as of
+  // the f2620c1 arc completion - no runtime shadergen + D3DCompile)
+  // and the vertex-shader bytecode from m_batch_vertex_shader_blobs
+  // (still runtime-compiled; only 2 variants). It then hands the
+  // descriptor to m_shader_cache.GetPipelineState (which hits the
+  // on-disk PSO cache where possible, only paying the actual driver
+  // compile on cold runs). Reserved_* texture-mode PSOs inherit the
+  // canonical PSO ComPtr.
   //
-  // Both helpers serialise their cache + array mutations through
-  // m_batch_shader_mutex. The fast path is one uncontended lock
-  // per DrawBatchVertices call.
-  ComPtr<ID3DBlob> GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode);
+  // Mutations to the PSO cache + array are serialised through
+  // m_batch_shader_mutex. The fast path is one uncontended lock-free
+  // atomic load per DrawBatchVertices call.
   ComPtr<ID3D12PipelineState> GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode, uint8_t texture_mode, uint8_t transparency_mode);
 
   // Lazy non-batch PSO compile path.
@@ -284,25 +272,24 @@ private:
   std::thread m_shader_compile_thread;
   std::atomic<bool> m_shader_compile_thread_quit{false};
 
-  // Vertex and fragment shader bytecode blobs for the lazy PSO
-  // builder. Used to be locals in CompilePipelines (the previous
-  // implementation built the entire matrix synchronously and only
-  // needed them for the duration of that function). With lazy /
-  // background compile they must outlive CompilePipelines so the
-  // PSO-builder helper can fetch the bound bytecode when faulting
-  // in a PSO. The fragment-shader matrix is keyed on
-  // (render, texture) only - the depth/transparency dimensions of
-  // m_batch_pipelines don't enter the fragment shader source, the
-  // dithering dim was collapsed when DITHERING moved to u_dithering
-  // (f7f9e53), and the interlacing dim was collapsed when
-  // INTERLACING moved to u_interlacing (this commit's predecessor).
+  // Vertex shader bytecode blobs for the lazy PSO builder. Used to
+  // be locals in CompilePipelines (the previous implementation built
+  // the entire matrix synchronously and only needed them for the
+  // duration of that function). With lazy / background compile they
+  // must outlive CompilePipelines so the PSO-builder helper can fetch
+  // the bound bytecode when faulting in a PSO.
   //
-  // Same fast/slow-path split as m_batch_pipelines above:
-  // m_batch_fragment_shader_blobs owns the ComPtr; the parallel
-  // _fastpath array is the lock-free view.
+  // The fragment-shader side no longer needs a parallel blob matrix:
+  // every batch FS variant is pre-baked (the batch FS pre-bake arc
+  // completed at f2620c1), so GetBatchPipeline pulls FS bytecode
+  // directly from the D3DCommon::EmbeddedShaders pickers rather than
+  // a runtime-compiled m_batch_fragment_shader_blobs cache. The
+  // matrix + its lock-free fast-path view + the GetBatchFragmentShader
+  // helper that populated them were removed together with this
+  // cleanup. The vertex shader is still runtime-compiled via
+  // shader_cache (only 2 variants, [textured]), so its blob array
+  // stays.
   DimensionalArray<ComPtr<ID3DBlob>, 2> m_batch_vertex_shader_blobs;            // [textured]
-  DimensionalArray<ComPtr<ID3DBlob>, 9, 4, 7> m_batch_fragment_shader_blobs;    // [filter][render][texture]
-  DimensionalArray<std::atomic<ID3DBlob*>, 9, 4, 7> m_batch_fragment_shader_blobs_fastpath{};
 
   // [wrapped][interlaced]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2> m_vram_fill_pipelines;

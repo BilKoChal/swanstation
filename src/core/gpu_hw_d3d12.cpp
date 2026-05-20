@@ -399,11 +399,11 @@ void GPU_HW_D3D12::UpdateSettings()
 
   // Stop the background batch-compile worker BEFORE UpdateHWSettings
   // writes m_texture_filtering. The worker captures m_texture_filtering
-  // at launch and uses it for every GetBatchPipeline / GetBatchFragmentShader
-  // call - if the runloop thread flips it mid-iteration the worker
-  // would split its filter-index read across old / new values,
-  // installing a FS blob compiled with one filter into a sub-cube
-  // indexed by another. Joining first eliminates the race; the next
+  // at launch and uses it for every GetBatchPipeline call - if the
+  // runloop thread flips it mid-iteration the worker would split its
+  // filter-index read across old / new values, installing a PSO built
+  // with one filter into a sub-cube indexed by another. Joining first
+  // eliminates the race; the next
   // CompilePipelines below restarts a worker for the new filter as
   // appropriate. StopShaderCompileThread is idempotent, so the
   // matching call inside CompilePipelines itself just becomes a
@@ -492,13 +492,12 @@ void GPU_HW_D3D12::UpdateSettings()
     {
       // Filter changed but nothing in non_dim_diff (and the cbuffer-
       // only members in dim_diff don't move HLSL, so this is
-      // effectively "only filter changed"). m_batch_pipelines and
-      // m_batch_fragment_shader_blobs are filter-dimensioned: the
-      // previous filter's sub-cube remains populated and reachable,
-      // so DestroyPipelines would just throw away valid PSOs. Skip
-      // it and just call CompilePipelines, which lazy-populates the
-      // new filter's sub-cube on top: in Enabled mode the
-      // precompile_sync loop walks the matrix calling
+      // effectively "only filter changed"). m_batch_pipelines is
+      // filter-dimensioned: the previous filter's sub-cube remains
+      // populated and reachable, so DestroyPipelines would just
+      // throw away valid PSOs. Skip it and just call CompilePipelines,
+      // which lazy-populates the new filter's sub-cube on top: in
+      // Enabled mode the precompile_sync loop walks the matrix calling
       // GetBatchPipeline with the new m_texture_filtering, so the
       // other sub-cubes are untouched. In Lazy / Disabled the new
       // sub-cube stays empty until first draw / the worker reaches
@@ -837,9 +836,9 @@ bool GPU_HW_D3D12::CompilePipelines()
 
   // Vertex shaders are still always compiled synchronously - there
   // are only two (textured / not) and we need them for the lazy
-  // PSO builder. The FS matrix is filled through the lazy helper
-  // GetBatchFragmentShader (in precompile_sync / on demand at draw
-  // time / via the worker), so no parallel reference is needed.
+  // PSO builder. The fragment shaders are all pre-baked (consumed
+  // directly by GetBatchPipeline via the D3DCommon::EmbeddedShaders
+  // pickers), so there is no FS blob matrix to fill.
   auto& batch_vertex_shaders = m_batch_vertex_shader_blobs;
 
   for (uint8_t textured = 0; textured < 2; textured++)
@@ -852,23 +851,24 @@ bool GPU_HW_D3D12::CompilePipelines()
     progress.Increment();
   }
 
-  // Batch fragment shader matrix and PSO matrix. Behaviour depends
-  // on g_settings.gpu_shader_precompile_mode (see core/types.h):
+  // Batch PSO matrix. Behaviour depends on
+  // g_settings.gpu_shader_precompile_mode (see core/types.h):
   //
-  //   - Enabled : compile every batch fragment shader and every PSO
-  //               right here, exactly like the original code path.
-  //   - Lazy    : leave the matrices empty for now; spawn a worker
+  //   - Enabled : build every reachable batch PSO right here. The FS
+  //               bytecode comes from the pre-baked pickers (no
+  //               D3DCompile), so the only cost is the driver PSO
+  //               compile + on-disk PSO cache lookup.
+  //   - Lazy    : leave the matrix empty for now; spawn a worker
   //               thread at the end of CompilePipelines that fills
-  //               them in the background.
-  //   - Disabled: leave the matrices empty. GetBatchFragmentShader
-  //               and GetBatchPipeline fault each combo in on the
-  //               main thread the first time the game draws it.
+  //               it in the background.
+  //   - Disabled: leave the matrix empty. GetBatchPipeline faults
+  //               each combo in on the main thread the first time
+  //               the game draws it.
   //
-  // GetBatchFragmentShader / GetBatchPipeline handle the
-  // Reserved_*Direct16Bit dedup internally; the precompile loop
-  // doesn't need to special-case them - the second call for a
-  // duplicate is a cheap pointer copy after the canonical mode has
-  // filled the canonical slot.
+  // GetBatchPipeline handles the Reserved_*Direct16Bit dedup
+  // internally; the precompile loop doesn't need to special-case
+  // them - the second call for a duplicate is a cheap pointer copy
+  // after the canonical mode has filled the canonical slot.
   //
   // Structurally unreachable cells (reserved texture modes, two-pass
   // fallback render modes with no texture, single-pass dual-source
@@ -876,14 +876,14 @@ bool GPU_HW_D3D12::CompilePipelines()
   if (precompile_sync)
   {
     const bool dual_source = m_supports_dual_source_blend;
-    // The dim cache makes m_batch_pipelines / m_batch_fragment_shader_blobs
-    // filter-dimensioned. precompile_sync walks ONLY the current
-    // m_texture_filtering sub-cube, not the full 7-filter matrix -
-    // pre-filling six unused sub-cubes would multiply the cold-cache
-    // D3DCompile pass by 7x for no gain (the game can only be running
-    // under one filter at a time, and the other sub-cubes get faulted
-    // in on demand if the user later flips the filter setting and
-    // UpdateSettings calls CompilePipelines again).
+    // The dim cache makes m_batch_pipelines filter-dimensioned.
+    // precompile_sync walks ONLY the current m_texture_filtering
+    // sub-cube, not the full 7-filter matrix - pre-filling six unused
+    // sub-cubes would multiply the cold-cache PSO build pass by 7x
+    // for no gain (the game can only be running under one filter at a
+    // time, and the other sub-cubes get faulted in on demand if the
+    // user later flips the filter setting and UpdateSettings calls
+    // CompilePipelines again).
     const GPUTextureFilter cur_filter = m_texture_filtering;
     for (uint8_t render_mode = 0; render_mode < 4; render_mode++)
     {
@@ -935,10 +935,10 @@ bool GPU_HW_D3D12::CompilePipelines()
       }
     }
   }
-  // For Lazy and Disabled: the matrices stay empty here, filled on
-  // demand by GetBatchFragmentShader / GetBatchPipeline. The
-  // background-thread launch for Lazy happens at the end of this
-  // function, after the rest of the non-batch pipelines are built.
+  // For Lazy and Disabled: the matrix stays empty here, filled on
+  // demand by GetBatchPipeline. The background-thread launch for
+  // Lazy happens at the end of this function, after the rest of the
+  // non-batch pipelines are built.
 
   // Non-batch pipelines (VRAM fill / copy / write / update depth /
   // readback, display, copy/blit). On 'Enabled' build them all
@@ -1104,12 +1104,13 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   // transparency_mode, texture_mode) order
   // - the same order CompilePipelines uses for the Enabled precompile
   // loop - and calls GetBatchPipeline on each cell. GetBatchPipeline
-  // internally calls GetBatchFragmentShader for the bound shader, so
-  // the worker fills both the fragment-shader-blob array and the PSO
-  // array as it goes. The quit flag is checked between cells so
-  // DestroyPipelines can bring the worker down within at most one
-  // PSO compile worth of latency (D3D12 PSO compiles can be ~50-200
-  // ms for the heavier filters - the same cell-level bound applies
+  // pulls the FS bytecode from the pre-baked pickers and the VS from
+  // m_batch_vertex_shader_blobs, then builds + caches the PSO, so the
+  // worker fills the PSO array as it goes. The quit flag is checked
+  // between cells so DestroyPipelines can bring the worker down within
+  // at most one PSO compile worth of latency (D3D12 PSO compiles can
+  // be ~50-200 ms for the heavier filters - the same cell-level bound
+  // applies
   // to ShaderCompileThreadEntryPoint on the D3D11 side).
   //
   // Structurally unreachable cells are skipped via
@@ -1148,122 +1149,18 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   }
 }
 
-GPU_HW_D3D12::ComPtr<ID3DBlob> GPU_HW_D3D12::GetBatchFragmentShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode)
-{
-  // Reserved_*Direct16Bit shader-source dedup is applied at the
-  // matrix level. Two slots end up holding the same ComPtr; ID3DBlob
-  // is refcounted so sharing the reference across slots is safe and
-  // the destructor on DestroyPipelines just drops the refcount twice.
-  // The parallel _fastpath atomic array gets the same raw pointer
-  // in both slots, which is safe because the ComPtr keeps the blob
-  // alive for the lifetime of the GPU backend.
-  const uint8_t lookup_mode = (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
-                         (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
-                                                                                                      texture_mode;
-  const uint8_t filter_idx = static_cast<uint8_t>(filter);
-
-  // Fast path: lock-free acquire-load. Both the worker (via
-  // GetBatchPipeline -> here) and the main thread (same) can read
-  // a slot concurrently without serialising against each other or
-  // each other's slow-path compiles.
-  std::atomic<ID3DBlob*>& fast_slot =
-    m_batch_fragment_shader_blobs_fastpath[filter_idx][render_mode][texture_mode];
-  ID3DBlob* existing = fast_slot.load(std::memory_order_acquire);
-  if (existing)
-  {
-    ComPtr<ID3DBlob> ret;
-    ret.Attach(existing);
-    existing->AddRef();
-    return ret;
-  }
-
-  // Slow path: compile WITHOUT m_batch_shader_mutex held. The shader
-  // cache itself is thread-safe (it has its own internal locking
-  // that does NOT span D3DCompile), so multiple threads can compile
-  // different shaders here in parallel. Two threads compiling the
-  // SAME shader is harmless - both produce identical DXBC and the
-  // cache dedups internally via its own double-check.
-  //
-  // Construct a per-call shadergen bound to the requested filter
-  // rather than reusing m_shadergen (which is pinned to the
-  // runtime-current m_texture_filtering for the non-batch helpers).
-  // Filter is the only setting that differs between this shadergen
-  // and m_shadergen - all other inputs come from member state that
-  // is single-valued per session. The construction itself is a
-  // handful of POD copies; the expensive work is the
-  // GenerateBatchFragmentShader call + D3DCompile that follow, and
-  // those are unchanged from the pre-dim-cache path.
-  GPU_HW_ShaderGen tmp_shadergen(
-    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-    m_scaled_dithering, filter, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-    m_supports_dual_source_blend);
-  // dithering / interlacing both pass false to
-  // GenerateBatchFragmentShader for source stability across backends.
-  // Both shadergen parameters are no-ops as of 3af8e02 (DITHERING)
-  // and eb42ffb (INTERLACING) respectively - the FS body now reads
-  // u_dithering and u_interlacing from the batch UBO. Passing any
-  // value yields identical DXBC; consistent false here keeps the
-  // disk shader cache hash stable across the matrix collapse so
-  // existing on-disk cache entries from the previous (false, false)
-  // slot continue to hit.
-  const std::string fs = tmp_shadergen.GenerateBatchFragmentShader(
-    static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), false, false);
-  ComPtr<ID3DBlob> fresh_blob = m_shader_cache.GetPixelShader(fs);
-  if (!fresh_blob)
-  {
-    Log_ErrorPrintf("Lazy batch fragment shader compile failed for (f=%u, rm=%u, tm=%u)",
-                    static_cast<uint8_t>(filter), render_mode, texture_mode);
-    return {};
-  }
-
-  // Publish step: take the helper mutex briefly to write the
-  // canonical slot, the dup slot (for Reserved_* texture modes),
-  // and the fast-path atomics. The mutex window is microseconds -
-  // no D3DCompile call inside it.
-  std::lock_guard<std::mutex> lock(m_batch_shader_mutex);
-
-  existing = fast_slot.load(std::memory_order_relaxed);
-  if (existing)
-  {
-    ComPtr<ID3DBlob> ret;
-    ret.Attach(existing);
-    existing->AddRef();
-    return ret;
-  }
-
-  ComPtr<ID3DBlob>& canonical_slot =
-    m_batch_fragment_shader_blobs[filter_idx][render_mode][lookup_mode];
-
-  if (!canonical_slot)
-  {
-    canonical_slot = fresh_blob;
-    m_batch_fragment_shader_blobs_fastpath[filter_idx][render_mode][lookup_mode]
-      .store(canonical_slot.Get(), std::memory_order_release);
-  }
-
-  if (lookup_mode != texture_mode)
-  {
-    ComPtr<ID3DBlob>& dup_slot =
-      m_batch_fragment_shader_blobs[filter_idx][render_mode][texture_mode];
-    if (!dup_slot)
-      dup_slot = canonical_slot;
-  }
-
-  // Publish the caller's slot.
-  fast_slot.store(canonical_slot.Get(), std::memory_order_release);
-  return canonical_slot;
-}
-
 GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUTextureFilter filter, uint8_t depth_test, uint8_t render_mode,
                                                                          uint8_t texture_mode, uint8_t transparency_mode)
 {
   // Reserved_*Direct16Bit PSO dedup. Because the only texture_mode-
   // dependent input to the PSO is the bound fragment shader (which
-  // is itself dedup'd in GetBatchFragmentShader), the resulting PSO
-  // for the Reserved_* modes is bit-identical to the canonical mode
-  // and we can share the ComPtr across both slots. The atomic
-  // _fastpath array gets the same raw pointer in both slots, kept
-  // alive by the ComPtr for the lifetime of the GPU backend.
+  // the pre-baked picker collapses - Reserved_Direct16Bit and
+  // Direct16Bit map to the same .inc blob, likewise the Raw
+  // variants), the resulting PSO for the Reserved_* modes is bit-
+  // identical to the canonical mode and we can share the ComPtr
+  // across both slots. The atomic _fastpath array gets the same raw
+  // pointer in both slots, kept alive by the ComPtr for the lifetime
+  // of the GPU backend.
   const uint8_t lookup_mode = (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_Direct16Bit))    ? 2u :
                          (texture_mode == static_cast<uint8_t>(GPUTextureMode::Reserved_RawDirect16Bit)) ? 6u :
                                                                                                       texture_mode;
@@ -1284,34 +1181,31 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
     return ret;
   }
 
-  // Compile WITHOUT m_batch_shader_mutex held. The shader cache
-  // itself is thread-safe (it has its own internal locking
-  // that does NOT span D3DCompile), so multiple threads can compile
-  // different shaders here in parallel. Two threads compiling the
-  // SAME shader is harmless - both produce identical DXBC and the
-  // cache dedups internally via its own double-check.
+  // Build the PSO WITHOUT m_batch_shader_mutex held. The on-disk PSO
+  // cache (m_shader_cache.GetPipelineState) is thread-safe via its
+  // own internal locking, so multiple threads can build different
+  // PSOs here in parallel. Two threads building the SAME PSO is
+  // harmless - both produce identical state objects and the cache
+  // dedups internally via its own double-check.
   //
-  // Untextured slice (lookup_mode == GPUTextureMode::Disabled) takes
-  // the pre-baked fast path - D3DCommon::EmbeddedShaders::PickBatchUntexturedFS
-  // picks the right .inc-supplied DXBC blob from the 12-variant
-  // table. Textured slices fall through to either the pre-baked
-  // Nearest picker (a7f5717) or GetBatchFragmentShader (shadergen
-  // + D3DCompile) for the remaining 3 filters. The matrix slot for
-  // untextured stays empty across all sessions; nothing reads from
-  // it on this path. As subsequent commits land the remaining 3
-  // textured filter templates (Bilinear / JINC2 / xBR), the
-  // shadergen branch shrinks until every batch FS variant is
-  // pre-baked.
+  // Every batch FS variant is pre-baked (the batch FS pre-bake arc
+  // completed at f2620c1). The fragment-shader bytecode comes from
+  // the D3DCommon::EmbeddedShaders pickers:
+  //   - Untextured (lookup_mode == GPUTextureMode::Disabled):
+  //     PickBatchUntexturedFS (12-variant table).
+  //   - Textured + Nearest:   PickBatchTexturedNearestFS (72).
+  //   - Textured + Bilinear:  PickBatchTexturedBilinearFS (144).
+  //   - Textured + JINC2:     PickBatchTexturedJINC2FS (144).
+  //   - Textured + xBR:       PickBatchTexturedXBRFS (144).
+  // No runtime shadergen + D3DCompile remains on this path.
   const bool textured = (static_cast<GPUTextureMode>(lookup_mode) != GPUTextureMode::Disabled);
 
   // Mirror of the shadergen formula in
   // GPU_HW_ShaderGen::GenerateBatchFragmentShader. The bit drives
-  // both the FS variant choice (via PickBatch*FSBytecode below)
+  // both the FS variant choice (via the PickBatch*FS pickers below)
   // AND the PSO blend state (via SetBlendState below for SRC1_*-
-  // using cells), so it must come from the same input set for
-  // both consumers. Identical for textured / untextured slices;
-  // pre-baked pickers and the shadergen GetBatchFragmentShader
-  // path all consume the same bit.
+  // using cells), so it must come from the same input set for both
+  // consumers. Identical for textured / untextured slices.
   const bool use_dual_source =
     m_supports_dual_source_blend &&
     ((render_mode != static_cast<uint8_t>(GPU_HW::BatchRenderMode::TransparencyDisabled) &&
@@ -1388,12 +1282,10 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
       // GPUTextureFilter::Count is unreachable here (the filter enum
       // is set from settings and validated at parse time), so this
       // arm covers exactly {xBR, xBRBinAlpha}. The shadergen +
-      // D3DCompile fallback that used to live here is deleted - the
-      // tmp_shadergen path on D3D11 and the GetBatchFragmentShader
-      // call on D3D12 are no longer reached. GetBatchFragmentShader
-      // itself remains in place for any remaining non-batch callers
-      // (display-shader emission, etc.) but is no longer invoked
-      // from the batch FS path.
+      // D3DCompile fallback that used to live here was removed when
+      // xBR became pre-baked; the GetBatchFragmentShader helper that
+      // backed it has been deleted from this TU entirely (the batch
+      // FS path is 100% pre-baked).
       const bool binalpha = (filter == GPUTextureFilter::xBRBinAlpha);
       const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedXBRFS(
         lookup_mode, binalpha, use_dual_source, m_multisamples,
@@ -2250,8 +2142,6 @@ void GPU_HW_D3D12::DestroyPipelines()
   // the runloop thread), so memory_order_relaxed is sufficient.
   m_batch_pipelines_fastpath.enumerate(
     [](std::atomic<ID3D12PipelineState*>& s) { s.store(nullptr, std::memory_order_relaxed); });
-  m_batch_fragment_shader_blobs_fastpath.enumerate(
-    [](std::atomic<ID3DBlob*>& s) { s.store(nullptr, std::memory_order_relaxed); });
 
   // Same pattern for the non-batch fast-path mirrors added when
   // these pipelines moved onto the lazy-fault path.
@@ -2274,7 +2164,6 @@ void GPU_HW_D3D12::DestroyPipelines()
   m_vram_readback_pipeline.Reset();
   m_vram_update_depth_pipeline.Reset();
 
-  m_batch_fragment_shader_blobs = {};
   m_batch_vertex_shader_blobs = {};
 
   m_display_pipelines = {};
