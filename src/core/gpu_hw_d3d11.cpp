@@ -1447,27 +1447,28 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
   }
   else
   {
-    // xBR / xBRBinAlpha still go through shadergen + D3DCompile.
-    // The else arm shrinks to just the xBR family after this
-    // commit; the final foundation + activation pair removes it
-    // entirely.
+    // Fifth and final pre-baked batch FS slice (e07ce04 foundation
+    // + this commit's activation). The remaining filter values are
+    // xBR / xBRBinAlpha by elimination. Picker structure identical
+    // to Bilinear / JINC2; the body of the picked DXBC is xBR's
+    // 5x5 neighbourhood + 4-quadrant blend decision tree + per-
+    // quadrant line-blend special cases. binalpha drives the
+    // BINALPHA -D arm: xBRBinAlpha quantises the blend-weighted
+    // alpha to {0, 1} before the `ialpha < 0.5 ? discard : ...`
+    // test.
     //
-    // Construct a per-call shadergen bound to the requested filter
-    // rather than reusing m_shadergen (which is pinned to the
-    // runtime-current m_texture_filtering for the non-batch helpers).
-    // Filter is the only setting that differs between this shadergen
-    // and m_shadergen - all other inputs come from member state that
-    // is single-valued per session. Construction is a handful of POD
-    // copies; the expensive work is GenerateBatchFragmentShader +
-    // D3DCompile + CreatePixelShader that follow, all unchanged from
-    // the pre-dim-cache path.
-    GPU_HW_ShaderGen tmp_shadergen(
-      m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-      m_scaled_dithering, filter, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-      m_supports_dual_source_blend);
-    const std::string ps = tmp_shadergen.GenerateBatchFragmentShader(
-      static_cast<BatchRenderMode>(render_mode), static_cast<GPUTextureMode>(lookup_mode), dithering, interlacing);
-    fresh = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+    // GPUTextureFilter::Count is unreachable here (the filter enum
+    // is set from settings and validated at parse time), so this
+    // arm covers exactly {xBR, xBRBinAlpha}. The shadergen +
+    // tmp_shadergen + m_shader_cache.GetPixelShader fallback path
+    // that used to live here is deleted - all batch FS variants
+    // now consume pre-baked DXBC via D3DCommon::EmbeddedShaders
+    // pickers.
+    const bool binalpha = (filter == GPUTextureFilter::xBRBinAlpha);
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedXBRFS(
+      lookup_mode, binalpha, use_dual_source, m_multisamples,
+      m_per_sample_shading, m_disable_color_perspective);
+    fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
   }
 
   if (!fresh)

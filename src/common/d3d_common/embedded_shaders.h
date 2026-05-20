@@ -147,6 +147,27 @@ Bytecode PickBatchTexturedJINC2FS(uint8_t lookup_mode, bool binalpha,
                                    bool per_sample_shading,
                                    bool disable_color_perspective);
 
+// Textured + xBR-family batch FS variant picker. Selects from the
+// 144 blobs at embedded_dxbc/batch_textured_xbr_ps_*.inc. Identical
+// signature to the Bilinear / JINC2 pickers (`binalpha` selects
+// between xBR and xBRBinAlpha enum values via the BINALPHA -D
+// macro arm). The runtime cost difference vs Bilinear / JINC2 is
+// in the FS body, not in the picker: xBR samples a 5x5 neighbourhood,
+// runs a 4-quadrant blend decision tree on YCbCr distances, and
+// applies per-quadrant line-blend special cases.
+//
+// 6 (tex_mode) x 2 (binalpha) x 2 (dual) x 3 (interp) x 2 (persp)
+// = 144 entries.
+//
+// xBR is the last filter template to be pre-baked. After this
+// activation lands, the shadergen-fallback else arm in
+// GetBatchPipeline / GetBatchPixelShader becomes unreachable and
+// is deleted (along with the tmp_shadergen helper on D3D11).
+Bytecode PickBatchTexturedXBRFS(uint8_t lookup_mode, bool binalpha,
+                                 bool use_dual_source, uint32_t multisamples,
+                                 bool per_sample_shading,
+                                 bool disable_color_perspective);
+
 // --------------------------------------------------------------------
 
 // ---- Downsample pre-bake pickers -----------------------------------
@@ -1334,6 +1355,322 @@ extern const uint8_t k_batch_textured_jinc2_ps_p8r1_d1_sample_n1_b0[];
 extern const size_t k_batch_textured_jinc2_ps_p8r1_d1_sample_n1_b0_size_bytes;
 extern const uint8_t k_batch_textured_jinc2_ps_p8r1_d1_sample_n1_b1[];
 extern const size_t k_batch_textured_jinc2_ps_p8r1_d1_sample_n1_b1_size_bytes;
+
+// Textured + xBR-family batch FS pre-baked DXBC blobs.
+// 144 .inc files at src/common/d3d_common/embedded_dxbc/
+// batch_textured_xbr_ps_*.inc.
+//
+// Variant axes (5, all -D macros to fxc) - identical shape to
+// the Bilinear / JINC2 families:
+//   * 6 texture mode combos (3 -D: PALETTE_4_BIT / PALETTE_8_BIT /
+//     RAW_TEXTURE; PALETTE_4_BIT and PALETTE_8_BIT mutually exclusive)
+//   * USE_DUAL_SOURCE (0/1)
+//   * INTERP_CENTROID / INTERP_SAMPLE (none/centroid/sample tri-state)
+//   * NOPERSP (0/1)
+//   * BINALPHA (0/1) - gates the ialpha >= 0.5 quantisation in
+//     FilteredSampleFromVRAM. BINALPHA=0 => xBR; BINALPHA=1 =>
+//     xBRBinAlpha.
+//
+// 6 x 2 x 3 x 2 x 2 = 144 blobs. Variant suffix:
+//   pXrY_d{0,1}_{none,centroid,sample}_n{0,1}_b{0,1}
+//
+// Per-variant DXBC size is the largest of any pre-baked batch FS
+// template (48-60 KiB), because xBR samples a 5x5 neighbourhood,
+// runs a 4-quadrant blend decision tree on YCbCr distances, and
+// applies per-quadrant line-blend special cases. ~7 MiB embedded
+// total. fxc /O3 cannot fold the data-dependent control flow even
+// with constant BINALPHA.
+//
+// Foundation commit: e07ce04. Consumed by PickBatchTexturedXBRFS.
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_none_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_none_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_none_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_none_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_none_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_none_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_none_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_none_n1_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b1_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b0[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b0_size_bytes;
+extern const uint8_t k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b1[];
+extern const size_t k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b1_size_bytes;
+
 
 
 

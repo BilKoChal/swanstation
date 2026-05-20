@@ -471,6 +471,151 @@ namespace D3DCommon::EmbeddedShaders {
 #include "embedded_dxbc/batch_textured_jinc2_ps_p8r1_d1_sample_n1_b0.inc"
 #include "embedded_dxbc/batch_textured_jinc2_ps_p8r1_d1_sample_n1_b1.inc"
 
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d0_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r0_d1_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d0_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p0r1_d1_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d0_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r0_d1_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d0_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p4r1_d1_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d0_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r0_d1_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d0_sample_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_centroid_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_centroid_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_centroid_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_centroid_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_none_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_none_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_none_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_none_n1_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_sample_n0_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_sample_n0_b1.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_sample_n1_b0.inc"
+#include "embedded_dxbc/batch_textured_xbr_ps_p8r1_d1_sample_n1_b1.inc"
+
 #include "embedded_dxbc/adaptive_downsample_blur_ps.inc"
 #include "embedded_dxbc/adaptive_downsample_composite_ps_s16.inc"
 #include "embedded_dxbc/adaptive_downsample_composite_ps_s2.inc"
@@ -1906,6 +2051,525 @@ Bytecode PickBatchTexturedJINC2FS(
            k_batch_textured_jinc2_ps_p8r1_d1_sample_n0_b1_size_bytes},
           {k_batch_textured_jinc2_ps_p8r1_d1_sample_n1_b1,
            k_batch_textured_jinc2_ps_p8r1_d1_sample_n1_b1_size_bytes}},
+        },
+      },
+    },
+  };
+
+  return k_blobs[tm_idx][b_idx][dual_idx][interp_idx][persp_idx];
+}
+
+Bytecode PickBatchTexturedXBRFS(
+    uint8_t lookup_mode, bool binalpha, bool use_dual_source,
+    uint32_t multisamples, bool per_sample_shading,
+    bool disable_color_perspective)
+{
+  // Identical encoding to PickBatchTexturedBilinearFS /
+  // PickBatchTexturedJINC2FS - the three filter families only
+  // differ in their HLSL bodies, not in the axis layout that the
+  // picker indexes. See the Bilinear picker for the tm_idx /
+  // interp_idx / persp_idx / dual_idx / b_idx derivation; the same
+  // logic applies verbatim here.
+  const uint8_t actual_mode = lookup_mode & 0x3u;
+  const bool raw = (lookup_mode & 0x4u) != 0;
+  unsigned tm_idx;
+  if (actual_mode == 2u)        // Direct16Bit family
+    tm_idx = raw ? 1u : 0u;
+  else if (actual_mode == 0u)   // Palette4Bit family
+    tm_idx = raw ? 3u : 2u;
+  else                          // actual_mode == 1u (Palette8Bit family)
+    tm_idx = raw ? 5u : 4u;
+
+  const unsigned interp_idx =
+    per_sample_shading ? 2u : ((multisamples > 1u) ? 1u : 0u);
+  const unsigned persp_idx = disable_color_perspective ? 1u : 0u;
+  const unsigned dual_idx = use_dual_source ? 1u : 0u;
+  const unsigned b_idx = binalpha ? 1u : 0u;
+
+  static const Bytecode k_blobs[6][2][2][3][2] = {
+    // tm = p0r0 (Direct16Bit)
+    {
+      // binalpha = xBR
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r0_d0_none_n0_b0,
+           k_batch_textured_xbr_ps_p0r0_d0_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d0_none_n1_b0,
+           k_batch_textured_xbr_ps_p0r0_d0_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b0,
+           k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b0,
+           k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b0_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r0_d1_none_n0_b0,
+           k_batch_textured_xbr_ps_p0r0_d1_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d1_none_n1_b0,
+           k_batch_textured_xbr_ps_p0r0_d1_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b0,
+           k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b0,
+           k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b0_size_bytes}},
+        },
+      },
+      // binalpha = xBRBinAlpha
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r0_d0_none_n0_b1,
+           k_batch_textured_xbr_ps_p0r0_d0_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d0_none_n1_b1,
+           k_batch_textured_xbr_ps_p0r0_d0_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p0r0_d0_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p0r0_d0_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b1,
+           k_batch_textured_xbr_ps_p0r0_d0_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b1,
+           k_batch_textured_xbr_ps_p0r0_d0_sample_n1_b1_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r0_d1_none_n0_b1,
+           k_batch_textured_xbr_ps_p0r0_d1_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d1_none_n1_b1,
+           k_batch_textured_xbr_ps_p0r0_d1_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p0r0_d1_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p0r0_d1_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b1,
+           k_batch_textured_xbr_ps_p0r0_d1_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b1,
+           k_batch_textured_xbr_ps_p0r0_d1_sample_n1_b1_size_bytes}},
+        },
+      },
+    },
+    // tm = p0r1 (RawDirect16Bit)
+    {
+      // binalpha = xBR
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r1_d0_none_n0_b0,
+           k_batch_textured_xbr_ps_p0r1_d0_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d0_none_n1_b0,
+           k_batch_textured_xbr_ps_p0r1_d0_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b0,
+           k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b0,
+           k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b0_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r1_d1_none_n0_b0,
+           k_batch_textured_xbr_ps_p0r1_d1_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d1_none_n1_b0,
+           k_batch_textured_xbr_ps_p0r1_d1_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b0,
+           k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b0,
+           k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b0_size_bytes}},
+        },
+      },
+      // binalpha = xBRBinAlpha
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r1_d0_none_n0_b1,
+           k_batch_textured_xbr_ps_p0r1_d0_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d0_none_n1_b1,
+           k_batch_textured_xbr_ps_p0r1_d0_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p0r1_d0_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p0r1_d0_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b1,
+           k_batch_textured_xbr_ps_p0r1_d0_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b1,
+           k_batch_textured_xbr_ps_p0r1_d0_sample_n1_b1_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p0r1_d1_none_n0_b1,
+           k_batch_textured_xbr_ps_p0r1_d1_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d1_none_n1_b1,
+           k_batch_textured_xbr_ps_p0r1_d1_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p0r1_d1_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p0r1_d1_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b1,
+           k_batch_textured_xbr_ps_p0r1_d1_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b1,
+           k_batch_textured_xbr_ps_p0r1_d1_sample_n1_b1_size_bytes}},
+        },
+      },
+    },
+    // tm = p4r0 (Palette4Bit)
+    {
+      // binalpha = xBR
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r0_d0_none_n0_b0,
+           k_batch_textured_xbr_ps_p4r0_d0_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d0_none_n1_b0,
+           k_batch_textured_xbr_ps_p4r0_d0_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b0,
+           k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b0,
+           k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b0_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r0_d1_none_n0_b0,
+           k_batch_textured_xbr_ps_p4r0_d1_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d1_none_n1_b0,
+           k_batch_textured_xbr_ps_p4r0_d1_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b0,
+           k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b0,
+           k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b0_size_bytes}},
+        },
+      },
+      // binalpha = xBRBinAlpha
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r0_d0_none_n0_b1,
+           k_batch_textured_xbr_ps_p4r0_d0_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d0_none_n1_b1,
+           k_batch_textured_xbr_ps_p4r0_d0_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p4r0_d0_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p4r0_d0_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b1,
+           k_batch_textured_xbr_ps_p4r0_d0_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b1,
+           k_batch_textured_xbr_ps_p4r0_d0_sample_n1_b1_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r0_d1_none_n0_b1,
+           k_batch_textured_xbr_ps_p4r0_d1_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d1_none_n1_b1,
+           k_batch_textured_xbr_ps_p4r0_d1_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p4r0_d1_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p4r0_d1_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b1,
+           k_batch_textured_xbr_ps_p4r0_d1_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b1,
+           k_batch_textured_xbr_ps_p4r0_d1_sample_n1_b1_size_bytes}},
+        },
+      },
+    },
+    // tm = p4r1 (RawPalette4Bit)
+    {
+      // binalpha = xBR
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r1_d0_none_n0_b0,
+           k_batch_textured_xbr_ps_p4r1_d0_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d0_none_n1_b0,
+           k_batch_textured_xbr_ps_p4r1_d0_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b0,
+           k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b0,
+           k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b0_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r1_d1_none_n0_b0,
+           k_batch_textured_xbr_ps_p4r1_d1_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d1_none_n1_b0,
+           k_batch_textured_xbr_ps_p4r1_d1_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b0,
+           k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b0,
+           k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b0_size_bytes}},
+        },
+      },
+      // binalpha = xBRBinAlpha
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r1_d0_none_n0_b1,
+           k_batch_textured_xbr_ps_p4r1_d0_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d0_none_n1_b1,
+           k_batch_textured_xbr_ps_p4r1_d0_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p4r1_d0_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p4r1_d0_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b1,
+           k_batch_textured_xbr_ps_p4r1_d0_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b1,
+           k_batch_textured_xbr_ps_p4r1_d0_sample_n1_b1_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p4r1_d1_none_n0_b1,
+           k_batch_textured_xbr_ps_p4r1_d1_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d1_none_n1_b1,
+           k_batch_textured_xbr_ps_p4r1_d1_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p4r1_d1_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p4r1_d1_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b1,
+           k_batch_textured_xbr_ps_p4r1_d1_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b1,
+           k_batch_textured_xbr_ps_p4r1_d1_sample_n1_b1_size_bytes}},
+        },
+      },
+    },
+    // tm = p8r0 (Palette8Bit)
+    {
+      // binalpha = xBR
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r0_d0_none_n0_b0,
+           k_batch_textured_xbr_ps_p8r0_d0_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d0_none_n1_b0,
+           k_batch_textured_xbr_ps_p8r0_d0_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b0,
+           k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b0,
+           k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b0_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r0_d1_none_n0_b0,
+           k_batch_textured_xbr_ps_p8r0_d1_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d1_none_n1_b0,
+           k_batch_textured_xbr_ps_p8r0_d1_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b0,
+           k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b0,
+           k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b0_size_bytes}},
+        },
+      },
+      // binalpha = xBRBinAlpha
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r0_d0_none_n0_b1,
+           k_batch_textured_xbr_ps_p8r0_d0_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d0_none_n1_b1,
+           k_batch_textured_xbr_ps_p8r0_d0_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p8r0_d0_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p8r0_d0_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b1,
+           k_batch_textured_xbr_ps_p8r0_d0_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b1,
+           k_batch_textured_xbr_ps_p8r0_d0_sample_n1_b1_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r0_d1_none_n0_b1,
+           k_batch_textured_xbr_ps_p8r0_d1_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d1_none_n1_b1,
+           k_batch_textured_xbr_ps_p8r0_d1_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p8r0_d1_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p8r0_d1_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b1,
+           k_batch_textured_xbr_ps_p8r0_d1_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b1,
+           k_batch_textured_xbr_ps_p8r0_d1_sample_n1_b1_size_bytes}},
+        },
+      },
+    },
+    // tm = p8r1 (RawPalette8Bit)
+    {
+      // binalpha = xBR
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r1_d0_none_n0_b0,
+           k_batch_textured_xbr_ps_p8r1_d0_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d0_none_n1_b0,
+           k_batch_textured_xbr_ps_p8r1_d0_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b0,
+           k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b0,
+           k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b0_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r1_d1_none_n0_b0,
+           k_batch_textured_xbr_ps_p8r1_d1_none_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d1_none_n1_b0,
+           k_batch_textured_xbr_ps_p8r1_d1_none_n1_b0_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b0,
+           k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b0,
+           k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b0_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b0,
+           k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b0_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b0,
+           k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b0_size_bytes}},
+        },
+      },
+      // binalpha = xBRBinAlpha
+      {
+        // no dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r1_d0_none_n0_b1,
+           k_batch_textured_xbr_ps_p8r1_d0_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d0_none_n1_b1,
+           k_batch_textured_xbr_ps_p8r1_d0_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p8r1_d0_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p8r1_d0_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b1,
+           k_batch_textured_xbr_ps_p8r1_d0_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b1,
+           k_batch_textured_xbr_ps_p8r1_d0_sample_n1_b1_size_bytes}},
+        },
+        // dual
+        {
+          // interp = none
+          {{k_batch_textured_xbr_ps_p8r1_d1_none_n0_b1,
+           k_batch_textured_xbr_ps_p8r1_d1_none_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d1_none_n1_b1,
+           k_batch_textured_xbr_ps_p8r1_d1_none_n1_b1_size_bytes}},
+          // interp = centroid
+          {{k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b1,
+           k_batch_textured_xbr_ps_p8r1_d1_centroid_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b1,
+           k_batch_textured_xbr_ps_p8r1_d1_centroid_n1_b1_size_bytes}},
+          // interp = sample
+          {{k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b1,
+           k_batch_textured_xbr_ps_p8r1_d1_sample_n0_b1_size_bytes},
+          {k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b1,
+           k_batch_textured_xbr_ps_p8r1_d1_sample_n1_b1_size_bytes}},
         },
       },
     },

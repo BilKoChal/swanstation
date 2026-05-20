@@ -892,34 +892,24 @@ bool GPU_HW_D3D12::CompilePipelines()
         if (!IsBatchShaderReachable(static_cast<BatchRenderMode>(render_mode), texture_mode, dual_source))
           continue;
 
-        // Pre-baked variants skip the GetBatchFragmentShader cache-
-        // warm step - the bytecode is statically linked, no
-        // D3DCompile to run. Pre-baked templates so far:
+        // All batch FS variants are pre-baked as of the e07ce04 +
+        // <this-commit> arc completion. No shadergen + D3DCompile
+        // call needed during precompile_sync's warmup; the
+        // GetBatchPipeline path consumes pre-baked DXBC via
+        // D3DCommon::EmbeddedShaders pickers in all cases:
         //   - Untextured (texture_mode == Disabled): commits
         //     9e6f933 / b6d1903 / c01f8ae (re-bake).
         //   - Textured + Nearest: commits 9e4c33d + a7f5717.
         //   - Textured + Bilinear / BilinearBinAlpha: commits
         //     269a2a0 + f2ae92a.
         //   - Textured + JINC2 / JINC2BinAlpha: commits
-        //     17a0c66 + this one.
-        // The one remaining textured filter template (xBR /
-        // xBRBinAlpha) is still runtime-compiled and lands in the
-        // final foundation + activation pair. progress.Increment
-        // ticks regardless so the user-facing progress bar reads the
-        // same count.
-        const bool pre_baked =
-          (static_cast<GPUTextureMode>(texture_mode) == GPUTextureMode::Disabled) ||
-          (cur_filter == GPUTextureFilter::Nearest) ||
-          (cur_filter == GPUTextureFilter::Bilinear) ||
-          (cur_filter == GPUTextureFilter::BilinearBinAlpha) ||
-          (cur_filter == GPUTextureFilter::JINC2) ||
-          (cur_filter == GPUTextureFilter::JINC2BinAlpha);
-        if (!pre_baked)
-        {
-          ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode);
-          if (!blob)
-            return false;
-        }
+        //     17a0c66 + 6afe8c2.
+        //   - Textured + xBR / xBRBinAlpha: commits e07ce04 +
+        //     this one.
+        // progress.Increment ticks for each reachable cell so the
+        // user-facing progress bar reads the same count it did pre-
+        // pre-bake; the cells just complete quickly because no
+        // D3DCompile runs.
         progress.Increment();
       }
     }
@@ -1329,7 +1319,6 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
      filter != GPUTextureFilter::Nearest);
 
   D3D12_SHADER_BYTECODE fs_bc;
-  ComPtr<ID3DBlob> fs_blob;  // null on the pre-baked path; held for ref-life otherwise
   if (textured)
   {
     if (filter == GPUTextureFilter::Nearest)
@@ -1386,15 +1375,31 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
     }
     else
     {
-      // xBR / xBRBinAlpha still go through shadergen + D3DCompile.
-      // The else arm shrinks to just the xBR family until its
-      // foundation + activation pair lands; after that the else
-      // becomes unreachable and is deleted.
-      fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
-      if (!fs_blob)
-        return {};
-      fs_bc.pShaderBytecode = fs_blob->GetBufferPointer();
-      fs_bc.BytecodeLength = fs_blob->GetBufferSize();
+      // Fifth and final pre-baked batch FS slice (e07ce04 foundation
+      // + this commit's activation). The remaining filter values are
+      // xBR / xBRBinAlpha by elimination. Same picker shape as
+      // Bilinear / JINC2; the body of the picked DXBC is xBR's
+      // 5x5 neighbourhood + 4-quadrant blend decision tree + per-
+      // quadrant line-blend special cases. binalpha drives the
+      // BINALPHA -D arm: xBRBinAlpha quantises the blend-weighted
+      // alpha to {0, 1} before the `ialpha < 0.5 ? discard : ...`
+      // test.
+      //
+      // GPUTextureFilter::Count is unreachable here (the filter enum
+      // is set from settings and validated at parse time), so this
+      // arm covers exactly {xBR, xBRBinAlpha}. The shadergen +
+      // D3DCompile fallback that used to live here is deleted - the
+      // tmp_shadergen path on D3D11 and the GetBatchFragmentShader
+      // call on D3D12 are no longer reached. GetBatchFragmentShader
+      // itself remains in place for any remaining non-batch callers
+      // (display-shader emission, etc.) but is no longer invoked
+      // from the batch FS path.
+      const bool binalpha = (filter == GPUTextureFilter::xBRBinAlpha);
+      const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedXBRFS(
+        lookup_mode, binalpha, use_dual_source, m_multisamples,
+        m_per_sample_shading, m_disable_color_perspective);
+      fs_bc.pShaderBytecode = bc.data;
+      fs_bc.BytecodeLength = bc.size;
     }
   }
   else
