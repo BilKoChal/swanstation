@@ -2297,6 +2297,21 @@ void GPU_HW_D3D12::UpdateDisplay()
 void GPU_HW_D3D12::DownsampleFramebuffer(D3D12::Texture& source, uint32_t left, uint32_t top, uint32_t width,
                                          uint32_t height)
 {
+  // If the box downsample PSO is unavailable (CompileDownsamplePipeline
+  // returned false and left m_downsample_pipeline null - e.g. a pre-baked
+  // FS variant that D3D12 PSO validation rejects), do NOT proceed to
+  // SetPipelineState below: ID3D12GraphicsCommandList::SetPipelineState
+  // dereferences its argument and a null PSO faults. Downsampling is a
+  // quality filter, not a correctness requirement, so degrade gracefully
+  // by presenting the upscaled source rect directly - identical to the
+  // non-downsampling path in UpdateDisplay.
+  if (!m_downsample_pipeline)
+  {
+    m_host_display->SetDisplayTexture(&source, HostDisplayPixelFormat::RGBA8, source.GetWidth(), source.GetHeight(),
+                                      left, top, width, height);
+    return;
+  }
+
   // Box-filter resolve of the upscaled source rect down to native PSX
   // resolution. The source rect is in scaled pixels; dividing by
   // m_resolution_scale gives the destination rect in the unscaled
