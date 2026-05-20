@@ -133,6 +133,7 @@ private:
   void DestroyStateObjects();
 
   bool CompileShaders();
+  bool CompileDownsampleShaders();
   void DestroyShaders();
   bool RebuildDisplayPixelShaders();
 

@@ -614,9 +614,24 @@ void GPU_HW_D3D11::UpdateSettings()
   // shader matrix, VRAM ops pixel shaders, and state objects all
   // stay valid; only the 6-slot display pixel shader cache needs
   // to go. Mirrors the D3D12 partial-clear from 57ac62e.
-  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed, display_only_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed,
-                   &display_only_source_changed);
+  bool framebuffer_changed, shaders_changed, only_dim_changed, downsample_changed, shader_source_changed,
+    display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, &downsample_changed,
+                   &shader_source_changed, &display_only_source_changed);
+
+  // A downsample-mode change that UpdateHWSettings did not already fold
+  // into framebuffer_changed (Disabled <-> Box - it only sets
+  // framebuffer_changed when Adaptive is involved) still needs the
+  // downsample texture created or freed for the new mode. D3D11's
+  // CreateFramebuffer is monolithic (it rebuilds the VRAM/display
+  // textures too, unlike the Vulkan backend's separate
+  // CreateDownsampleResources), so route it through the normal
+  // ReadVRAM -> CreateFramebuffer -> UpdateVRAM framebuffer round-trip
+  // rather than recreating just the downsample texture in isolation.
+  // Downsample toggling is a rare user action, so the extra round-trip
+  // is not a concern.
+  if (downsample_changed && !framebuffer_changed)
+    framebuffer_changed = true;
 
   if (framebuffer_changed)
   {
@@ -700,6 +715,22 @@ void GPU_HW_D3D11::UpdateSettings()
       CompileShaders();
     }
   }
+
+  // Downsample-mode transition. GPU_HW::UpdateHWSettings deliberately
+  // keeps downsample mode out of shaders_changed entirely (it does not
+  // touch the batch matrix) and out of framebuffer_changed unless
+  // Adaptive is on one side, surfacing it via downsample_changed for the
+  // backend to service. shader_source_changed was therefore false for a
+  // downsample-only change, so CompileShaders did not run and the new
+  // mode's downsample pixel shaders are still null - Adaptive would
+  // composite a black mip pyramid (black screen) and Box would draw with
+  // a null pixel shader. The texture side is handled by the
+  // downsample_changed -> framebuffer_changed promotion above (which
+  // routes Box/Disabled transitions through the same ReadVRAM ->
+  // CreateFramebuffer -> UpdateVRAM round-trip that keys the downsample
+  // texture on the new mode); here we just rebuild the shaders.
+  if (downsample_changed)
+    CompileDownsampleShaders();
 
   if (framebuffer_changed)
   {
@@ -1192,6 +1223,28 @@ bool GPU_HW_D3D11::CompileShaders()
   for (uint8_t i = 0; i < 6; i++)
     progress.Increment();
 
+  if (!CompileDownsampleShaders())
+    return false;
+
+  progress.Increment();
+
+#undef UPDATE_PROGRESS
+
+  return true;
+}
+
+bool GPU_HW_D3D11::CompileDownsampleShaders()
+{
+  // (Re)create the downsample-pass pixel shaders for the current
+  // m_downsample_mode / m_resolution_scale. Split out of CompileShaders
+  // so UpdateSettings can rebuild just these on a downsample-mode change:
+  // GPU_HW::UpdateHWSettings deliberately keeps downsample mode out of
+  // its shaders_changed diff (it does not touch the batch matrix) and
+  // surfaces it via downsample_changed instead, so without this the
+  // shaders stay null after a runtime Disabled/Box/Adaptive switch -
+  // Adaptive then composites a black pyramid (black screen) and Box
+  // draws with a null shader. Disabled is a no-op (the existing handles,
+  // if any, are simply unused).
   if (m_downsample_mode == GPUDownsampleMode::Adaptive)
   {
     // Pre-baked path. 4 picker calls + 4 CreatePixelShader calls
@@ -1243,10 +1296,6 @@ bool GPU_HW_D3D11::CompileShaders()
     if (!m_downsample_first_pass_pixel_shader)
       return false;
   }
-
-  progress.Increment();
-
-#undef UPDATE_PROGRESS
 
   return true;
 }
