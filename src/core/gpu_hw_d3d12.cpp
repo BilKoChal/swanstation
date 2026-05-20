@@ -426,9 +426,19 @@ void GPU_HW_D3D12::UpdateSettings()
   // nothing else affecting shader source changed. The batch matrix
   // and VRAM ops PSOs stay valid; only the 6-slot display PSO
   // cache needs to go.
-  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed, display_only_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed,
-                   &display_only_source_changed);
+  bool framebuffer_changed, shaders_changed, only_dim_changed, downsample_changed, shader_source_changed,
+    display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, &downsample_changed,
+                   &shader_source_changed, &display_only_source_changed);
+
+  // A downsample-mode change UpdateHWSettings did not fold into
+  // framebuffer_changed (Disabled <-> Box; it only sets that flag when
+  // Adaptive is involved, which D3D12 never selects) still needs the box
+  // downsample texture created or freed. CreateFramebuffer (re)builds it
+  // for the new mode, so route the change through the normal ReadVRAM ->
+  // CreateFramebuffer -> UpdateVRAM round-trip below.
+  if (downsample_changed && !framebuffer_changed)
+    framebuffer_changed = true;
 
   if (framebuffer_changed)
   {
@@ -518,6 +528,14 @@ void GPU_HW_D3D12::UpdateSettings()
       CompilePipelines();
     }
   }
+
+  // Rebuild the box downsample PSO for the new mode. shader_source_changed
+  // was false for a downsample-only change, so CompilePipelines above did
+  // not run; without this m_downsample_pipeline would be stale (or null)
+  // after a Disabled <-> Box toggle. The texture side is handled by the
+  // downsample_changed -> framebuffer_changed promotion above.
+  if (downsample_changed)
+    CompileDownsamplePipeline();
 
   // this has to be done here, because otherwise we're using destroyed pipelines in the same cmdbuffer
   if (framebuffer_changed)
@@ -2211,9 +2229,17 @@ void GPU_HW_D3D12::UpdateDisplay()
              (scaled_vram_offset_y + scaled_display_height) <= m_vram_texture.GetHeight())
     {
       m_vram_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-      m_host_display->SetDisplayTexture(&m_vram_texture, HostDisplayPixelFormat::RGBA8, m_vram_texture.GetWidth(),
-                                        m_vram_texture.GetHeight(), scaled_vram_offset_x, scaled_vram_offset_y,
-                                        scaled_display_width, scaled_display_height);
+      if (IsUsingDownsampling())
+      {
+        DownsampleFramebuffer(m_vram_texture, scaled_vram_offset_x, scaled_vram_offset_y, scaled_display_width,
+                              scaled_display_height);
+      }
+      else
+      {
+        m_host_display->SetDisplayTexture(&m_vram_texture, HostDisplayPixelFormat::RGBA8, m_vram_texture.GetWidth(),
+                                          m_vram_texture.GetHeight(), scaled_vram_offset_x, scaled_vram_offset_y,
+                                          scaled_display_width, scaled_display_height);
+      }
     }
     else
     {
@@ -2249,18 +2275,68 @@ void GPU_HW_D3D12::UpdateDisplay()
       m_display_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
       m_vram_texture.TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-      m_host_display->SetDisplayTexture(&m_display_texture, HostDisplayPixelFormat::RGBA8, m_display_texture.GetWidth(),
-                                        m_display_texture.GetHeight(), 0, 0, scaled_display_width,
-                                        scaled_display_height);
+      if (IsUsingDownsampling())
+      {
+        // DownsampleFramebuffer resolves m_display_texture into the native-
+        // resolution m_downsample_texture and calls RestoreGraphicsAPIState
+        // + SetDisplayTexture itself.
+        DownsampleFramebuffer(m_display_texture, 0, 0, scaled_display_width, scaled_display_height);
+      }
+      else
+      {
+        m_host_display->SetDisplayTexture(&m_display_texture, HostDisplayPixelFormat::RGBA8,
+                                          m_display_texture.GetWidth(), m_display_texture.GetHeight(), 0, 0,
+                                          scaled_display_width, scaled_display_height);
 
-      RestoreGraphicsAPIState();
+        RestoreGraphicsAPIState();
+      }
     }
   }
 }
 
-void GPU_HW_D3D12::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+void GPU_HW_D3D12::DownsampleFramebuffer(D3D12::Texture& source, uint32_t left, uint32_t top, uint32_t width,
+                                         uint32_t height)
 {
-  if (IsUsingSoftwareRendererForReadbacks())
+  // Box-filter resolve of the upscaled source rect down to native PSX
+  // resolution. The source rect is in scaled pixels; dividing by
+  // m_resolution_scale gives the destination rect in the unscaled
+  // m_downsample_texture. The box PS reads RESOLUTION_SCALE^2 source
+  // texels per output pixel via Load (the scale is baked into the PSO),
+  // so the only binding is the source SRV at root param 1 under
+  // m_single_sampler_root_signature - the same Load-only binding shape as
+  // the display draw, which is why no cbuffer (param 0) and no sampler
+  // (param 2) are bound. The viewport is placed at ds_left/ds_top so the
+  // PS's base_coords = v_pos * scale lands on the source rect's origin.
+  const uint32_t ds_left = left / m_resolution_scale;
+  const uint32_t ds_top = top / m_resolution_scale;
+  const uint32_t ds_width = width / m_resolution_scale;
+  const uint32_t ds_height = height / m_resolution_scale;
+  static constexpr float clear_color[4] = {};
+
+  ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
+
+  m_downsample_texture.TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
+  source.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+  cmdlist->ClearRenderTargetView(m_downsample_texture.GetRTVOrDSVDescriptor(), clear_color, 0, nullptr);
+  cmdlist->OMSetRenderTargets(1, &m_downsample_texture.GetRTVOrDSVDescriptor().cpu_handle, FALSE, nullptr);
+  cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
+  cmdlist->SetGraphicsRootDescriptorTable(1, source.GetSRVDescriptor());
+  cmdlist->SetPipelineState(m_downsample_pipeline.Get());
+  D3D12::SetViewportAndScissor(cmdlist, ds_left, ds_top, ds_width, ds_height);
+  cmdlist->DrawInstanced(3, 1, 0, 0);
+
+  m_downsample_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+  RestoreGraphicsAPIState();
+
+  m_host_display->SetDisplayTexture(&m_downsample_texture, HostDisplayPixelFormat::RGBA8,
+                                    m_downsample_texture.GetWidth(), m_downsample_texture.GetHeight(), ds_left, ds_top,
+                                    ds_width, ds_height);
+}
+
+void GPU_HW_D3D12::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{  if (IsUsingSoftwareRendererForReadbacks())
   {
     ReadSoftwareRendererVRAM(x, y, width, height);
     return;

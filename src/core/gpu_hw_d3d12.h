@@ -89,6 +89,7 @@ public:
 protected:
   void ClearDisplay() override;
   void UpdateDisplay() override;
+  void DownsampleFramebuffer(D3D12::Texture& source, uint32_t left, uint32_t top, uint32_t width, uint32_t height);
   void ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
   void FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) override;
   void UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask) override;
