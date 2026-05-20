@@ -53,7 +53,11 @@ public:
   // would both leak file handles and double-count m_shader_index /
   // m_pipeline_index entries. Mirrors the equivalent accessor on
   // D3D11::ShaderCache.
-  bool IsOpen() const { return m_shader_index_file != nullptr; }
+  // True once Open() has run. Previously keyed off m_shader_index_file,
+  // but the shader bytecode cache is no longer opened (it's scrubbed
+  // instead - every shader is pre-baked), so track open state
+  // explicitly. Used by the caller's "open once" guard.
+  bool IsOpen() const { return m_open; }
 
   ALWAYS_INLINE ComPtr<ID3DBlob> GetVertexShader(std::string_view shader_code)
   {
@@ -192,6 +196,7 @@ private:
   bool m_use_pipeline_cache = false;
   bool m_use_pipeline_library = false;
   bool m_debug = false;
+  bool m_open = false;
 };
 
 } // namespace D3D12

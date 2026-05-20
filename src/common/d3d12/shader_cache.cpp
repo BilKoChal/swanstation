@@ -50,15 +50,18 @@ static_assert(sizeof(CacheIndexEntry) == 32, "CacheIndexEntry must stay 32 bytes
 // at ~1.5 MB, because PCSX2 caches at the shader-bytecode level only
 // and lets the runtime build PSOs from cached bytecode on demand.
 //
-// We keep the shader bytecode cache (d3d12_shaders_sm50.bin); that's
-// the expensive recompile to save. Driver-side PSO assembly from
-// already-compiled DXBC is fast - sub-millisecond on modern desktop
-// GPUs - so re-doing it each cold start is not a real cost. The
-// only path that benefited from the persistent PSO cache was a
-// huge-matrix synchronous "Enabled" precompile, and even there the
-// 75 MB file did very little because reading it back and feeding
-// CachedPSO to CreateGraphicsPipelineState was not meaningfully
-// faster than just rebuilding from cached shader bytecode.
+// The shader bytecode cache that this rationale used to point to as
+// "the expensive recompile to save" is itself gone now: every D3D12
+// shader is pre-baked DXBC (D3DCommon::EmbeddedShaders), so there is no
+// runtime HLSL compile to cache and Open() scrubs the orphaned
+// d3d_shaders_<sm> files rather than creating them. Driver-side PSO
+// assembly from already-compiled DXBC is fast - sub-millisecond on
+// modern desktop GPUs - so re-doing it each cold start is not a real
+// cost, and the per-PSO blob cache stays disabled. The one cache that
+// remains worthwhile is the ID3D12PipelineLibrary (opened separately
+// below): a single compact driver-managed file that dedups PSO state
+// internally, which is why CanUsePipelineCache (the per-PSO blob path)
+// returns false while the pipeline library path is still used.
 static bool CanUsePipelineCache()
 {
   return false;
@@ -101,14 +104,24 @@ void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEA
 
   if (!base_path.empty())
   {
-    const std::string base_shader_filename = GetCacheBaseFileName(base_path, "shaders", feature_level, debug);
-    const std::string shader_index_filename = base_shader_filename + ".idx";
-    const std::string shader_blob_filename = base_shader_filename + ".bin";
-
-    if (!ReadExisting(shader_index_filename, shader_blob_filename, m_shader_index_file, m_shader_blob_file,
-                      m_shader_index))
+    // The shader bytecode cache is gone: every D3D12 shader is
+    // pre-baked DXBC consumed from D3DCommon::EmbeddedShaders, so
+    // nothing compiles HLSL or calls GetShaderBlob any more, and the
+    // D3D11 backend already stopped opening this file. Rather than
+    // create an empty d3d_shaders_<sm>.{idx,bin} every launch, scrub
+    // the orphaned pair (the unified bytecode cache this backend used
+    // to write, shared with the now-removed D3D11 cache). Same cheap
+    // path_is_valid+unlink self-healing pattern as the pipeline / legacy
+    // scrubs below. The pipeline-library cache (opened further down) is
+    // unaffected - it is what makes PSO creation cheap and stays.
     {
-      CreateNew(shader_index_filename, shader_blob_filename, m_shader_index_file, m_shader_blob_file);
+      const std::string base_shader_filename = GetCacheBaseFileName(base_path, "shaders", feature_level, debug);
+      const std::string shader_index_filename = base_shader_filename + ".idx";
+      const std::string shader_blob_filename = base_shader_filename + ".bin";
+      if (path_is_valid(shader_index_filename.c_str()))
+        filestream_delete(shader_index_filename.c_str());
+      if (path_is_valid(shader_blob_filename.c_str()))
+        filestream_delete(shader_blob_filename.c_str());
     }
 
     if (m_use_pipeline_cache)
@@ -187,6 +200,8 @@ void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEA
       }
     }
   }
+
+  m_open = true;
 }
 
 void ShaderCache::InvalidatePipelineCache()
