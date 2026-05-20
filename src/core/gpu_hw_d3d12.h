@@ -201,6 +201,7 @@ private:
   D3D12::Texture m_vram_readback_texture;
   D3D12::StagingTexture m_vram_readback_staging_texture;
   D3D12::Texture m_display_texture;
+  D3D12::Texture m_downsample_texture;
 
   D3D12::DescriptorHandle m_point_sampler;
   D3D12::DescriptorHandle m_linear_sampler;

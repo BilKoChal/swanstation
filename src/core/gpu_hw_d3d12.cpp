@@ -706,6 +706,25 @@ bool GPU_HW_D3D12::CreateFramebuffer()
   m_vram_depth_texture.TransitionToState(D3D12_RESOURCE_STATE_DEPTH_WRITE);
   m_vram_read_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+  // Box downsample target. Resolves the upscaled VRAM/display texture
+  // down to native PSX resolution in a single pass, so it is sized at
+  // VRAM_WIDTH x VRAM_HEIGHT (unscaled) regardless of m_resolution_scale.
+  // Only Box is created here - D3D12 does not yet support the Adaptive
+  // mode (m_supports_adaptive_downsampling stays false), and
+  // GetDownsampleMode falls a user Adaptive selection back to Box, so
+  // this covers both selections on D3D12.
+  if (m_downsample_mode == GPUDownsampleMode::Box)
+  {
+    if (!m_downsample_texture.Create(VRAM_WIDTH, VRAM_HEIGHT, 1, texture_format, texture_format, texture_format,
+                                     DXGI_FORMAT_UNKNOWN, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET))
+    {
+      return false;
+    }
+
+    D3D12::SetObjectName(m_downsample_texture, "Downsample Texture");
+    m_downsample_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
+
   ClearDisplay();
   SetFullVRAMDirtyRectangle();
   return true;
@@ -729,6 +748,7 @@ void GPU_HW_D3D12::DestroyFramebuffer()
   m_vram_texture.Destroy(false);
   m_vram_readback_texture.Destroy(false);
   m_display_texture.Destroy(false);
+  m_downsample_texture.Destroy(false);
   m_vram_readback_staging_texture.Destroy(false);
 }
 
