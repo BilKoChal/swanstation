@@ -1,6 +1,5 @@
 #include "gpu_hw_d3d12.h"
 #include "common/align.h"
-#include "common/d3d11/shader_compiler.h"
 #include "common/d3d12/context.h"
 #include "common/d3d12/descriptor_heap_manager.h"
 #include "common/d3d_common/embedded_shaders.h"
@@ -583,7 +582,11 @@ void GPU_HW_D3D12::SetCapabilities()
   m_max_resolution_scale = max_texture_scale;
 
   m_max_multisamples = 1;
-  for (uint32_t multisamples = 2; multisamples < D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT; multisamples++)
+  // DXGI hard cap on multisample sample count (the D3D11_/D3D12_
+  // MAX_MULTISAMPLE_SAMPLE_COUNT defines, both == 32). Hardcoded so
+  // this D3D12 TU doesn't pull in d3d11.h just for the constant (the
+  // D3D12_ spelling isn't present in the MinGW headers).
+  for (uint32_t multisamples = 2; multisamples < 32; multisamples++)
   {
     D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS fd = {DXGI_FORMAT_R8G8B8A8_UNORM, static_cast<UINT>(multisamples)};
 

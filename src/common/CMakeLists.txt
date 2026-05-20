@@ -130,7 +130,6 @@ if(WIN32)
     )
   endif()
 
-  target_link_libraries(common PRIVATE d3dcompiler.lib)
 endif()
 
 if(ANDROID)

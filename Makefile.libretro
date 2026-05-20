@@ -165,10 +165,10 @@ else ifeq ($(platform), win)
    CXX     ?= g++
    SHARED  := -shared -Wl,--no-undefined -Wl,--version-script=link.T
    LDFLAGS += -static-libgcc -static-libstdc++
-   # winmm: timeBeginPeriod (used by core), d3dcompiler/d3d11/dxgi for D3D11
+   # winmm: timeBeginPeriod (used by core), d3d11/dxgi for D3D11
    # The bundled vulkan-loader resolves the Vulkan ICD at runtime through
    # LoadLibrary, so no -lvulkan-1 is required at link time.
-   LDFLAGS += -lwinmm -ld3d11 -ld3dcompiler -ldxgi -lopengl32 -lgdi32 -luser32 -lkernel32
+   LDFLAGS += -lwinmm -ld3d11 -ldxgi -lopengl32 -lgdi32 -luser32 -lkernel32
 
 # Generic Windows fallback (covers e.g. `make platform=win-x86_64`)
 else ifneq (,$(findstring win,$(platform)))
@@ -177,7 +177,7 @@ else ifneq (,$(findstring win,$(platform)))
    CXX     ?= g++
    SHARED  := -shared -Wl,--no-undefined -Wl,--version-script=link.T
    LDFLAGS += -static-libgcc -static-libstdc++
-   LDFLAGS += -lwinmm -ld3d11 -ld3dcompiler -ldxgi -lopengl32 -lgdi32 -luser32 -lkernel32
+   LDFLAGS += -lwinmm -ld3d11 -ldxgi -lopengl32 -lgdi32 -luser32 -lkernel32
 
 # Unrecognised platform - emit a clear error rather than silently building
 # something broken.

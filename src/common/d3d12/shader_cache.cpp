@@ -1,10 +1,8 @@
 #include "shader_cache.h"
-#include "../d3d11/shader_compiler.h"
 #include "../file_system.h"
 #include "../log.h"
 #include "../md5_digest.h"
 #include <cstring>
-#include <d3dcompiler.h>
 
 #include <file/file_path.h>
 
@@ -24,18 +22,15 @@ struct CacheIndexEntry
 };
 #pragma pack(pop)
 
-// The on-disk shader bytecode cache (d3d_shaders_<sm>.bin) is shared
-// with the D3D11 backend, so this struct MUST stay byte-for-byte
-// identical to D3D11::CacheIndexEntry in
-// src/common/d3d11/shader_cache.cpp. The shader_type field stores
-// EntryType cast to uint32_t; the four shader-stage values
-// (VertexShader/GeometryShader/PixelShader/ComputeShader == 0/1/2/3)
-// are aligned with D3D11's ShaderCompiler::Type. EntryType also has
-// GraphicsPipeline (4), but that only keys the (disabled) D3D12
-// pipelines cache, never the shared bytecode file. If either side's
-// layout or the type enum values change, bump FILE_VERSION on both
-// to invalidate cross-written caches.
-static_assert(sizeof(CacheIndexEntry) == 32, "CacheIndexEntry must stay 32 bytes for cross-backend cache sharing");
+// On-disk index record for the (disabled) D3D12 per-PSO pipeline blob
+// cache. This used to be byte-for-byte shared with the D3D11 backend's
+// bytecode cache, but that cache - and the whole D3D11::ShaderCache
+// class - has been removed (every shader is pre-baked now), so there
+// is no longer a cross-backend file to stay in sync with. The struct
+// is kept only for the per-PSO pipelines cache's on-disk format; the
+// 32-byte size assert guards that format's stability across builds.
+// shader_type stores EntryType cast to uint32_t.
+static_assert(sizeof(CacheIndexEntry) == 32, "CacheIndexEntry must stay 32 bytes for on-disk pipeline-cache format stability");
 
 // Pipeline-state-object disk caching has been disabled.
 //

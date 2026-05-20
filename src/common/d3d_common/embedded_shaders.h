@@ -25,11 +25,12 @@
 // (cbuffer at b0, Texture2D at t0, SamplerState at s0) are honoured
 // by both backends and live in the DXBC reflection metadata.
 //
-// This path replaces the runtime HLSL -> DXBC step done in
-// D3D11::ShaderCompiler::CompileShader (shared between the D3D11 and
-// D3D12 backends) for the shaders that have been pre-baked. Until
-// every shader has been pre-baked, the runtime path and D3DCompile
-// still cover the remainder.
+// This path replaces the runtime HLSL -> DXBC step that used to be
+// done in D3D11::ShaderCompiler::CompileShader (the D3DCompile call
+// shared between the D3D11 and D3D12 backends). Every shader is now
+// pre-baked, so that step - and D3DCompile / the d3dcompiler
+// dependency along with it - has been removed entirely; both backends
+// consume these .inc blobs and never compile HLSL at runtime.
 //
 // Mirror of src/common/vulkan/embedded_shaders.h for the Vulkan
 // backend. As individual shaders get migrated off the runtime
