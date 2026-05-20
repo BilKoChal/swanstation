@@ -1,10 +1,11 @@
 #include "shader_cache.h"
 #include "../file_system.h"
 #include "../log.h"
-#include "../md5_digest.h"
 #include "../string_util.h"
 
 #include <file/file_path.h>
+
+#include "xxhash.h"
 
 Log_SetChannel(GL::ShaderCache);
 
@@ -202,44 +203,40 @@ ShaderCache::CacheIndexKey ShaderCache::GetCacheKey(const std::string_view& vert
                                                     const std::string_view& geometry_shader,
                                                     const std::string_view& fragment_shader)
 {
-  union ShaderHash
-  {
-    struct
-    {
-      uint64_t low;
-      uint64_t high;
-    };
-    uint8_t bytes[16];
-  };
+  // Each stage is hashed independently - the cache key stores a separate
+  // 128-bit hash per stage - so programs that share one stage (e.g. the
+  // same vertex shader) still differ on the others. XXH3 (128-bit)
+  // replaces MD5 here: much faster and collision-resistant enough for a
+  // local shader-cache key. An empty stage keeps a zero hash, exactly
+  // as the old MD5 path did (it skipped empty stages without hashing).
+  uint64_t vertex_low = 0, vertex_high = 0;
+  uint64_t geometry_low = 0, geometry_high = 0;
+  uint64_t fragment_low = 0, fragment_high = 0;
 
-  ShaderHash vertex_hash = {};
-  ShaderHash geometry_hash = {};
-  ShaderHash fragment_hash = {};
-
-  MD5Digest digest;
   if (!vertex_shader.empty())
   {
-    digest.Update(vertex_shader.data(), static_cast<uint32_t>(vertex_shader.length()));
-    digest.Final(vertex_hash.bytes);
+    const XXH128_hash_t h = XXH3_128bits(vertex_shader.data(), vertex_shader.length());
+    vertex_low = h.low64;
+    vertex_high = h.high64;
   }
 
   if (!geometry_shader.empty())
   {
-    digest.Reset();
-    digest.Update(geometry_shader.data(), static_cast<uint32_t>(geometry_shader.length()));
-    digest.Final(geometry_hash.bytes);
+    const XXH128_hash_t h = XXH3_128bits(geometry_shader.data(), geometry_shader.length());
+    geometry_low = h.low64;
+    geometry_high = h.high64;
   }
 
   if (!fragment_shader.empty())
   {
-    digest.Reset();
-    digest.Update(fragment_shader.data(), static_cast<uint32_t>(fragment_shader.length()));
-    digest.Final(fragment_hash.bytes);
+    const XXH128_hash_t h = XXH3_128bits(fragment_shader.data(), fragment_shader.length());
+    fragment_low = h.low64;
+    fragment_high = h.high64;
   }
 
-  return CacheIndexKey{vertex_hash.low,   vertex_hash.high,   static_cast<uint32_t>(vertex_shader.length()),
-                       geometry_hash.low, geometry_hash.high, static_cast<uint32_t>(geometry_shader.length()),
-                       fragment_hash.low, fragment_hash.high, static_cast<uint32_t>(fragment_shader.length())};
+  return CacheIndexKey{vertex_low,   vertex_high,   static_cast<uint32_t>(vertex_shader.length()),
+                       geometry_low, geometry_high, static_cast<uint32_t>(geometry_shader.length()),
+                       fragment_low, fragment_high, static_cast<uint32_t>(fragment_shader.length())};
 }
 
 std::string ShaderCache::GetIndexFileName() const

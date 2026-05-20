@@ -35,7 +35,10 @@ public:
                                     const std::string_view fragment_shader, const PreLinkCallback& callback = {});
 
 private:
-  static constexpr uint32_t FILE_VERSION = 4;
+  // Bumped 4 -> 5 when the cache key hash moved from MD5 to XXH3_128bits;
+  // the change alters every key, so an old (v4) gl_programs cache is
+  // discarded and rebuilt once on first run with this build.
+  static constexpr uint32_t FILE_VERSION = 5;
 
   struct CacheIndexKey
   {
