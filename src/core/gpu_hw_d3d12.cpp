@@ -213,13 +213,48 @@ void LibretroD3D12HostDisplay::EndSetDisplayPixels()
 
 bool LibretroD3D12HostDisplay::CreateResources()
 {
-  // Nothing to do up front - the framebuffer is sized lazily in
-  // CheckFramebufferSize when Render() sees the first display frame.
+  // Build the display blit pipeline. m_framebuffer itself is sized lazily
+  // in CheckFramebufferSize when Render() sees the first display frame.
+  D3D12::RootSignatureBuilder rsbuilder;
+  rsbuilder.SetInputAssemblerFlag();
+  rsbuilder.Add32BitConstants(0, 4, D3D12_SHADER_VISIBILITY_PIXEL);
+  rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+  rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+  m_display_root_signature = rsbuilder.Create();
+  if (!m_display_root_signature)
+    return false;
+
+  D3D12::GraphicsPipelineBuilder gpbuilder;
+  gpbuilder.SetRootSignature(m_display_root_signature.Get());
+  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+  gpbuilder.SetVertexShader(D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs,
+                            static_cast<uint32_t>(D3DCommon::EmbeddedShaders::k_fullscreen_quad_vs_size_bytes));
+  gpbuilder.SetPixelShader(D3DCommon::EmbeddedShaders::k_copy_ps,
+                           static_cast<uint32_t>(D3DCommon::EmbeddedShaders::k_copy_ps_size_bytes));
+  gpbuilder.SetNoCullRasterizationState();
+  gpbuilder.SetNoDepthTestState();
+  gpbuilder.SetNoBlendingState();
+  gpbuilder.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
+  m_display_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice());
+  if (!m_display_pipeline)
+    return false;
+
+  D3D12_SAMPLER_DESC sampler_desc = {};
+  D3D12::SetDefaultSampler(&sampler_desc);
+  sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+  if (!g_d3d12_context->GetSamplerHeapManager().Allocate(&m_point_sampler))
+    return false;
+  g_d3d12_context->GetDevice()->CreateSampler(&sampler_desc, m_point_sampler.cpu_handle);
+
   return true;
 }
 
 void LibretroD3D12HostDisplay::DestroyResources()
 {
+  if (m_point_sampler)
+    g_d3d12_context->GetSamplerHeapManager().Free(&m_point_sampler);
+  m_display_pipeline.Reset();
+  m_display_root_signature.Reset();
   m_framebuffer.Destroy(false);
 }
 
@@ -251,36 +286,65 @@ bool LibretroD3D12HostDisplay::Render()
   if (!CheckFramebufferSize(display_width, display_height))
     return false;
 
-  // The GPU_HW_D3D12 path already produced the display image inside its
-  // own m_display_texture (or m_vram_texture) and called SetDisplayTexture
-  // with a D3D12::Texture* handle. For the libretro D3D12 frontend we
-  // do not need to perform an additional blit through a vertex/pixel
-  // shader pair the way D3D11 does - the source texture is already the
-  // composited display image, so we forward its resource directly to the
-  // frontend via set_texture.
+  // The GPU_HW_D3D12 path produced the display image inside its own
+  // m_display_texture / m_vram_texture / m_downsample_texture and called
+  // SetDisplayTexture with a D3D12::Texture* handle plus a view sub-rect.
+  // The content does NOT always sit at the texture origin: the box
+  // downsample resolve writes at (view_x, view_y) (the box PS ties its
+  // read offset to its write offset), and the direct-VRAM present path
+  // points at the display region's VRAM offset. The libretro
+  // set_texture / RETRO_HW_FRAME_BUFFER_VALID interface only carries a
+  // width/height and always presents from (0,0), so forwarding the raw
+  // resource showed the wrong sub-rect whenever the view offset was
+  // non-zero. Double-buffered titles flip the display between VRAM y=0
+  // and y~=240 every frame, which made the downsampled output flicker at
+  // 30Hz between the resolved region and the cleared/other buffer.
   //
-  // m_framebuffer therefore acts as a stable holder of an RTV-bindable
-  // resource only when the source path itself isn't already in
-  // PIXEL_SHADER_RESOURCE form. The current GPU_HW_D3D12::UpdateDisplay
-  // call sites guarantee the display texture is left in
-  // PIXEL_SHADER_RESOURCE state at end-of-frame, so the simpler model
-  // is: transition that texture into m_required_state and hand it over.
-  //
-  // We keep m_framebuffer around because future work (software cursor
-  // composition, lightgun crosshair overlay) will need an owned RTV
-  // to draw onto, matching what gpu_hw_d3d11.cpp does. For now it's
-  // unused on the present path.
+  // Composite the (view_x, view_y, view_w, view_h) sub-rect into
+  // m_framebuffer (a (0,0)-origin RTV we own) and hand that to the
+  // frontend, exactly like the D3D11 and Vulkan backends. The blit also
+  // upscales the native-resolution downsampled image to the display size,
+  // matching their SSAA output.
   D3D12::Texture* const display_texture = static_cast<D3D12::Texture*>(const_cast<void*>(m_display_texture_handle));
-  display_texture->TransitionToState(m_required_state);
+
+  ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
+  m_framebuffer.TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
+  display_texture->TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+  cmdlist->OMSetRenderTargets(1, &m_framebuffer.GetRTVOrDSVDescriptor().cpu_handle, FALSE, nullptr);
+  RenderDisplay(0, 0, static_cast<int32_t>(display_width), static_cast<int32_t>(display_height), display_texture,
+                m_display_texture_width, m_display_texture_height, m_display_texture_view_x, m_display_texture_view_y,
+                m_display_texture_view_width, m_display_texture_view_height);
+
+  m_framebuffer.TransitionToState(m_required_state);
 
   // Flush our pending command list before handing the texture over -
   // otherwise the frontend may read stale contents.
   g_d3d12_context->ExecuteCommandList(false);
 
-  m_set_texture(m_frontend_handle, display_texture->GetResource(), DXGI_FORMAT_R8G8B8A8_UNORM);
-  g_retro_video_refresh_callback(RETRO_HW_FRAME_BUFFER_VALID, m_display_texture_view_width,
-                                 m_display_texture_view_height, 0);
+  m_set_texture(m_frontend_handle, m_framebuffer.GetResource(), DXGI_FORMAT_R8G8B8A8_UNORM);
+  g_retro_video_refresh_callback(RETRO_HW_FRAME_BUFFER_VALID, display_width, display_height, 0);
   return true;
+}
+
+void LibretroD3D12HostDisplay::RenderDisplay(int32_t left, int32_t top, int32_t width, int32_t height,
+                                             D3D12::Texture* texture, int32_t texture_width, int32_t texture_height,
+                                             int32_t view_x, int32_t view_y, int32_t view_width, int32_t view_height)
+{
+  ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
+
+  const float uniforms[4] = {static_cast<float>(view_x) / static_cast<float>(texture_width),
+                             static_cast<float>(view_y) / static_cast<float>(texture_height),
+                             static_cast<float>(view_width) / static_cast<float>(texture_width),
+                             static_cast<float>(view_height) / static_cast<float>(texture_height)};
+
+  cmdlist->SetGraphicsRootSignature(m_display_root_signature.Get());
+  cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), uniforms, 0);
+  cmdlist->SetGraphicsRootDescriptorTable(1, texture->GetSRVDescriptor());
+  cmdlist->SetGraphicsRootDescriptorTable(2, m_point_sampler.gpu_handle);
+  cmdlist->SetPipelineState(m_display_pipeline.Get());
+  D3D12::SetViewportAndScissor(cmdlist, left, top, width, height);
+  cmdlist->DrawInstanced(3, 1, 0, 0);
 }
 
 GPU_HW_D3D12::GPU_HW_D3D12() = default;

@@ -59,6 +59,16 @@ private:
 
   bool CheckFramebufferSize(uint32_t width, uint32_t height);
 
+  // Composite the (view_x, view_y, view_width, view_height) sub-rect of the
+  // source display texture into m_framebuffer at the (left, top, width,
+  // height) draw rect, sampling via the copy pixel shader. Mirrors
+  // LibretroD3D11HostDisplay::RenderDisplay / the Vulkan equivalent so the
+  // frontend always receives a (0,0)-origin image regardless of where the
+  // source content sits in its texture.
+  void RenderDisplay(int32_t left, int32_t top, int32_t width, int32_t height, D3D12::Texture* texture,
+                     int32_t texture_width, int32_t texture_height, int32_t view_x, int32_t view_y,
+                     int32_t view_width, int32_t view_height);
+
   // retro_hw_render_interface_d3d12::set_texture callback - the frontend
   // reads from this resource in m_required_state to compose the final
   // output frame. We hand it the framebuffer texture (post our display
@@ -68,6 +78,15 @@ private:
   D3D12_RESOURCE_STATES m_required_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
   D3D12::Texture m_framebuffer;
+
+  // Display blit pipeline (fullscreen-quad VS + copy PS). Built in
+  // CreateResources, used by RenderDisplay. The root signature shape
+  // matches GPU_HW_D3D12::m_single_sampler_root_signature: 32-bit
+  // constants at b0 (the source UV rect), an SRV table at t0, and a
+  // sampler table at s0.
+  ComPtr<ID3D12RootSignature> m_display_root_signature;
+  ComPtr<ID3D12PipelineState> m_display_pipeline;
+  D3D12::DescriptorHandle m_point_sampler;
 };
 
 class GPU_HW_D3D12 : public GPU_HW
