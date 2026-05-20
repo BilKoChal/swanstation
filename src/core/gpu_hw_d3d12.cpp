@@ -682,6 +682,7 @@ void GPU_HW_D3D12::SetCapabilities()
 
   m_supports_dual_source_blend = true;
   m_supports_per_sample_shading = true;
+  m_supports_adaptive_downsampling = true;
   m_supports_disable_color_perspective = true;
   Log_InfoPrintf("Dual-source blend: %s", m_supports_dual_source_blend ? "supported" : "not supported");
   Log_InfoPrintf("Per-sample shading: %s", m_supports_per_sample_shading ? "supported" : "not supported");
@@ -2565,6 +2566,15 @@ void GPU_HW_D3D12::UpdateDisplay()
 void GPU_HW_D3D12::DownsampleFramebuffer(D3D12::Texture& source, uint32_t left, uint32_t top, uint32_t width,
                                          uint32_t height)
 {
+  if (m_downsample_mode == GPUDownsampleMode::Adaptive)
+    DownsampleFramebufferAdaptive(source, left, top, width, height);
+  else
+    DownsampleFramebufferBoxFilter(source, left, top, width, height);
+}
+
+void GPU_HW_D3D12::DownsampleFramebufferBoxFilter(D3D12::Texture& source, uint32_t left, uint32_t top, uint32_t width,
+                                                  uint32_t height)
+{
   // If the box downsample PSO is unavailable (CompileDownsamplePipeline
   // returned false and left m_downsample_pipeline null - e.g. a pre-baked
   // FS variant that D3D12 PSO validation rejects), do NOT proceed to
@@ -2616,6 +2626,136 @@ void GPU_HW_D3D12::DownsampleFramebuffer(D3D12::Texture& source, uint32_t left, 
   m_host_display->SetDisplayTexture(&m_downsample_texture, HostDisplayPixelFormat::RGBA8,
                                     m_downsample_texture.GetWidth(), m_downsample_texture.GetHeight(), ds_left, ds_top,
                                     ds_width, ds_height);
+}
+
+void GPU_HW_D3D12::DownsampleFramebufferAdaptive(D3D12::Texture& source, uint32_t left, uint32_t top, uint32_t width,
+                                                 uint32_t height)
+{
+  // Degrade gracefully if any adaptive PSO failed to build (a null PSO
+  // faults SetPipelineState), mirroring the box-filter guard: present the
+  // upscaled source rect directly.
+  if (!m_downsample_first_pass_pipeline || !m_downsample_mid_pass_pipeline || !m_downsample_blur_pass_pipeline ||
+      !m_downsample_composite_pipeline)
+  {
+    m_host_display->SetDisplayTexture(&source, HostDisplayPixelFormat::RGBA8, source.GetWidth(), source.GetHeight(),
+                                      left, top, width, height);
+    return;
+  }
+
+  ID3D12GraphicsCommandList* cmdlist = g_d3d12_context->GetCommandList();
+  const uint32_t levels = m_downsample_mip_levels;
+  const uint32_t tex_width = VRAM_WIDTH * m_resolution_scale;
+  const uint32_t tex_height = VRAM_HEIGHT * m_resolution_scale;
+  static constexpr float clear_color[4] = {};
+
+  // Per-subresource (mip) transition. The pyramid is a single resource
+  // but the generation loop reads mip[level-1] (PIXEL_SHADER_RESOURCE)
+  // while writing mip[level] (RENDER_TARGET), so each mip's state is
+  // tracked and barriered independently.
+  const auto transition_mip = [&](uint32_t mip, D3D12_RESOURCE_STATES to) {
+    if (m_downsample_mip_states[mip] == to)
+      return;
+
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = m_downsample_mip_resource.Get();
+    barrier.Transition.Subresource = mip;
+    barrier.Transition.StateBefore = m_downsample_mip_states[mip];
+    barrier.Transition.StateAfter = to;
+    cmdlist->ResourceBarrier(1, &barrier);
+    m_downsample_mip_states[mip] = to;
+  };
+
+  // Copy the source sub-rect into mip 0 (at the same offset, so the
+  // generation viewports at left>>level / top>>level stay aligned).
+  source.TransitionToState(D3D12_RESOURCE_STATE_COPY_SOURCE);
+  transition_mip(0, D3D12_RESOURCE_STATE_COPY_DEST);
+  {
+    D3D12_TEXTURE_COPY_LOCATION dst = {};
+    dst.pResource = m_downsample_mip_resource.Get();
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst.SubresourceIndex = 0;
+    D3D12_TEXTURE_COPY_LOCATION src = {};
+    src.pResource = source.GetResource();
+    src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src.SubresourceIndex = 0;
+    const D3D12_BOX src_box = {left, top, 0, left + width, top + height, 1};
+    cmdlist->CopyTextureRegion(&dst, left, top, 0, &src, &src_box);
+  }
+  transition_mip(0, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+  // Build the energy mip pyramid: each level reads the previous mip and
+  // writes its own, first pass at level 1, mid pass thereafter.
+  for (uint32_t level = 1; level < levels; level++)
+  {
+    transition_mip(level, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    cmdlist->ClearRenderTargetView(m_downsample_mip_rtvs[level].cpu_handle, clear_color, 0, nullptr);
+    cmdlist->OMSetRenderTargets(1, &m_downsample_mip_rtvs[level].cpu_handle, FALSE, nullptr);
+    cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
+
+    const SmoothingUBOData ubo = GetSmoothingUBO(level, left, top, width, height, tex_width, tex_height);
+    cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(ubo) / sizeof(uint32_t), &ubo, 0);
+    cmdlist->SetGraphicsRootDescriptorTable(1, m_downsample_mip_srvs[level - 1].gpu_handle);
+    cmdlist->SetGraphicsRootDescriptorTable(2, m_point_sampler.gpu_handle);
+    cmdlist->SetPipelineState((level == 1) ? m_downsample_first_pass_pipeline.Get()
+                                           : m_downsample_mid_pass_pipeline.Get());
+    D3D12::SetViewportAndScissor(cmdlist, left >> level, top >> level, width >> level, height >> level);
+    cmdlist->DrawInstanced(3, 1, 0, 0);
+
+    transition_mip(level, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
+
+  // Blur the lowest mip into the single-channel weight texture.
+  {
+    const uint32_t last_level = levels - 1;
+    m_downsample_weight_texture.TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    cmdlist->ClearRenderTargetView(m_downsample_weight_texture.GetRTVOrDSVDescriptor().cpu_handle, clear_color, 0,
+                                   nullptr);
+    cmdlist->OMSetRenderTargets(1, &m_downsample_weight_texture.GetRTVOrDSVDescriptor().cpu_handle, FALSE, nullptr);
+    cmdlist->SetGraphicsRootSignature(m_single_sampler_root_signature.Get());
+
+    const SmoothingUBOData ubo = GetSmoothingUBO(last_level, left, top, width, height, tex_width, tex_height);
+    cmdlist->SetGraphicsRoot32BitConstants(0, sizeof(ubo) / sizeof(uint32_t), &ubo, 0);
+    cmdlist->SetGraphicsRootDescriptorTable(1, m_downsample_mip_srvs[last_level].gpu_handle);
+    cmdlist->SetGraphicsRootDescriptorTable(2, m_point_sampler.gpu_handle);
+    cmdlist->SetPipelineState(m_downsample_blur_pass_pipeline.Get());
+    D3D12::SetViewportAndScissor(cmdlist, left >> last_level, top >> last_level, width >> last_level,
+                                 height >> last_level);
+    cmdlist->DrawInstanced(3, 1, 0, 0);
+
+    m_downsample_weight_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
+
+  // Composite the colour pyramid (trilinear) blended by the weight
+  // (linear) into the display texture at the view offset.
+  {
+    m_display_texture.TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    cmdlist->OMSetRenderTargets(1, &m_display_texture.GetRTVOrDSVDescriptor().cpu_handle, FALSE, nullptr);
+    cmdlist->SetGraphicsRootSignature(m_downsample_composite_root_signature.Get());
+
+    // The composite FS does not read b0, but the root signature declares
+    // it to match the shared downsample binding layout; push zeroes.
+    const float composite_ubo[6] = {};
+    cmdlist->SetGraphicsRoot32BitConstants(0, 6, composite_ubo, 0);
+    cmdlist->SetGraphicsRootDescriptorTable(1, m_downsample_full_srv.gpu_handle);
+    cmdlist->SetGraphicsRootDescriptorTable(2, m_downsample_weight_texture.GetSRVDescriptor().gpu_handle);
+    cmdlist->SetGraphicsRootDescriptorTable(3, m_trilinear_sampler.gpu_handle);
+    cmdlist->SetGraphicsRootDescriptorTable(4, m_linear_sampler.gpu_handle);
+    cmdlist->SetPipelineState(m_downsample_composite_pipeline.Get());
+    D3D12::SetViewportAndScissor(cmdlist, left, top, width, height);
+    cmdlist->DrawInstanced(3, 1, 0, 0);
+
+    m_display_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
+
+  RestoreGraphicsAPIState();
+
+  m_host_display->SetDisplayTexture(&m_display_texture, HostDisplayPixelFormat::RGBA8, m_display_texture.GetWidth(),
+                                    m_display_texture.GetHeight(), left, top, width, height);
 }
 
 void GPU_HW_D3D12::ReadVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
