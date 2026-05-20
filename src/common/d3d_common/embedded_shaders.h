@@ -220,6 +220,43 @@ Bytecode PickAdaptiveDownsampleCompositeFS(uint32_t resolution_scale);
 Bytecode PickBoxSampleDownsampleFS(uint32_t resolution_scale);
 
 // --------------------------------------------------------------------
+// Non-batch op pickers. These centralise the variant selection for the
+// VRAM-ops / copy fragment shaders so both D3D backends share one
+// selection point rather than open-coding the same index logic. The
+// returned bytecode is consumed identically: D3D11 wraps it via
+// ShaderCompiler::CreatePixelShader, D3D12 via a D3D12_SHADER_BYTECODE
+// in the PSO. (The D3D12 backend still open-codes these inline at its
+// PSO sites today; it can migrate onto these pickers as a later
+// no-functional-change dedup.)
+
+// Copy / blit FS. Single variant, no axes.
+Bytecode PickCopyFS();
+
+// VRAM fill FS. 8 variants: pgxp_depth x wrapped x interlaced. pgxp is
+// the m_pgxp_depth_buffer session flag; wrapped / interlaced are the
+// per-fill flags. Mirror of GenerateVRAMFillFragmentShader plus the
+// PGXP_DEPTH macro the shadergen baked from m_pgxp_depth.
+Bytecode PickVRAMFillFS(bool pgxp_depth, bool wrapped, bool interlaced);
+
+// VRAM readback FS. 6 variants on multisamples ∈ {1, 2, 4, 8, 16, 32};
+// the >1 variants unroll the MSAA sample-resolve loop. Out-of-set
+// values fall back to the m1 (non-MSAA) variant.
+Bytecode PickVRAMReadFS(uint32_t multisamples);
+
+// VRAM write FS. 2 variants on the pgxp_depth (m_pgxp_depth_buffer)
+// flag. The shadergen use_ssbo dimension is GLSL/Vulkan-only and
+// always false on D3D, so it doesn't appear here.
+Bytecode PickVRAMWriteFS(bool pgxp_depth);
+
+// VRAM copy FS. 2 variants on the pgxp_depth (m_pgxp_depth_buffer)
+// flag.
+Bytecode PickVRAMCopyFS(bool pgxp_depth);
+
+// VRAM update-depth FS. 2 variants on msaa (m_multisamples > 1); the
+// MSAA variant binds Texture2DMS and reads SV_SampleIndex.
+Bytecode PickVRAMUpdateDepthFS(bool msaa);
+
+// --------------------------------------------------------------------
 
 // Fullscreen-quad vertex shader. Emits a fullscreen triangle in NDC
 // from SV_VertexID 0..2 via the standard bit-shift trick - equivalent

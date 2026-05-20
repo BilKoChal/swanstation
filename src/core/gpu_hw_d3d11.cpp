@@ -1150,7 +1150,10 @@ bool GPU_HW_D3D11::CompileShaders()
   // safe to start before the non-batch builds below because the
   // worker only walks m_batch_pixel_shaders.
 
-  m_copy_pixel_shader = shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateCopyFragmentShader());
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickCopyFS();
+    m_copy_pixel_shader = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   if (!m_copy_pixel_shader)
     return false;
 
@@ -1160,9 +1163,10 @@ bool GPU_HW_D3D11::CompileShaders()
   {
     for (uint8_t interlaced = 0; interlaced < 2; interlaced++)
     {
-      const std::string ps =
-        shadergen.GenerateVRAMFillFragmentShader(static_cast<bool>(wrapped), static_cast<bool>(interlaced));
-      m_vram_fill_pixel_shaders[wrapped][interlaced] = shader_cache.GetPixelShader(m_device.Get(), ps);
+      const auto bc = D3DCommon::EmbeddedShaders::PickVRAMFillFS(
+        m_pgxp_depth_buffer, static_cast<bool>(wrapped), static_cast<bool>(interlaced));
+      m_vram_fill_pixel_shaders[wrapped][interlaced] =
+        D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
       if (!m_vram_fill_pixel_shaders[wrapped][interlaced])
         return false;
 
@@ -1170,27 +1174,41 @@ bool GPU_HW_D3D11::CompileShaders()
     }
   }
 
-  m_vram_read_pixel_shader = shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateVRAMReadFragmentShader());
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickVRAMReadFS(m_multisamples);
+    m_vram_read_pixel_shader =
+      D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   if (!m_vram_read_pixel_shader)
     return false;
 
   progress.Increment();
 
-  m_vram_write_pixel_shader =
-    shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateVRAMWriteFragmentShader(false));
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickVRAMWriteFS(m_pgxp_depth_buffer);
+    m_vram_write_pixel_shader =
+      D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   if (!m_vram_write_pixel_shader)
     return false;
 
   progress.Increment();
 
-  m_vram_copy_pixel_shader = shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateVRAMCopyFragmentShader());
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickVRAMCopyFS(m_pgxp_depth_buffer);
+    m_vram_copy_pixel_shader =
+      D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   if (!m_vram_copy_pixel_shader)
     return false;
 
   progress.Increment();
 
-  m_vram_update_depth_pixel_shader =
-    shader_cache.GetPixelShader(m_device.Get(), shadergen.GenerateVRAMUpdateDepthFragmentShader());
+  {
+    const auto bc = D3DCommon::EmbeddedShaders::PickVRAMUpdateDepthFS(m_multisamples > 1);
+    m_vram_update_depth_pixel_shader =
+      D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   if (!m_vram_update_depth_pixel_shader)
     return false;
 

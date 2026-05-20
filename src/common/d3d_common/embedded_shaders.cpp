@@ -2599,6 +2599,69 @@ Bytecode PickBatchTexturedXBRFS(
 // builds also assert via the static array indexing (caller
 // is expected to filter via GetDownsampleMode upstream).
 
+Bytecode PickCopyFS()
+{
+  return Bytecode{k_copy_ps, k_copy_ps_size_bytes};
+}
+
+Bytecode PickVRAMFillFS(bool pgxp_depth, bool wrapped, bool interlaced)
+{
+  // [pgxp][wrapped][interlaced]. Same table the D3D12 backend builds
+  // inline at GetVRAMFillPipeline.
+  static const Bytecode k_blobs[2][2][2] = {
+    // pgxp = 0
+    {{{k_vram_fill_ps_p0w0i0, k_vram_fill_ps_p0w0i0_size_bytes},
+      {k_vram_fill_ps_p0w0i1, k_vram_fill_ps_p0w0i1_size_bytes}},
+     {{k_vram_fill_ps_p0w1i0, k_vram_fill_ps_p0w1i0_size_bytes},
+      {k_vram_fill_ps_p0w1i1, k_vram_fill_ps_p0w1i1_size_bytes}}},
+    // pgxp = 1
+    {{{k_vram_fill_ps_p1w0i0, k_vram_fill_ps_p1w0i0_size_bytes},
+      {k_vram_fill_ps_p1w0i1, k_vram_fill_ps_p1w0i1_size_bytes}},
+     {{k_vram_fill_ps_p1w1i0, k_vram_fill_ps_p1w1i0_size_bytes},
+      {k_vram_fill_ps_p1w1i1, k_vram_fill_ps_p1w1i1_size_bytes}}},
+  };
+  return k_blobs[pgxp_depth ? 1 : 0][wrapped ? 1 : 0][interlaced ? 1 : 0];
+}
+
+Bytecode PickVRAMReadFS(uint32_t multisamples)
+{
+  // Power-of-2 multisample counts up to 32 are the only reachable
+  // values (the driver only exposes those quality levels and the UI
+  // dropdown restricts to them). Anything else falls back to m1 -
+  // matches the D3D12 GetVRAMReadbackPipeline switch + default.
+  switch (multisamples)
+  {
+    case 2:  return {k_vram_read_ps_m2,  k_vram_read_ps_m2_size_bytes};
+    case 4:  return {k_vram_read_ps_m4,  k_vram_read_ps_m4_size_bytes};
+    case 8:  return {k_vram_read_ps_m8,  k_vram_read_ps_m8_size_bytes};
+    case 16: return {k_vram_read_ps_m16, k_vram_read_ps_m16_size_bytes};
+    case 32: return {k_vram_read_ps_m32, k_vram_read_ps_m32_size_bytes};
+    case 1:
+    default: return {k_vram_read_ps_m1,  k_vram_read_ps_m1_size_bytes};
+  }
+}
+
+Bytecode PickVRAMWriteFS(bool pgxp_depth)
+{
+  if (pgxp_depth)
+    return {k_vram_write_ps_pgxp1, k_vram_write_ps_pgxp1_size_bytes};
+  return {k_vram_write_ps_pgxp0, k_vram_write_ps_pgxp0_size_bytes};
+}
+
+Bytecode PickVRAMCopyFS(bool pgxp_depth)
+{
+  if (pgxp_depth)
+    return {k_vram_copy_ps_pgxp1, k_vram_copy_ps_pgxp1_size_bytes};
+  return {k_vram_copy_ps_pgxp0, k_vram_copy_ps_pgxp0_size_bytes};
+}
+
+Bytecode PickVRAMUpdateDepthFS(bool msaa)
+{
+  if (msaa)
+    return {k_vram_update_depth_ps_msaa1, k_vram_update_depth_ps_msaa1_size_bytes};
+  return {k_vram_update_depth_ps_msaa0, k_vram_update_depth_ps_msaa0_size_bytes};
+}
+
 Bytecode PickAdaptiveDownsampleBlurFS()
 {
   return Bytecode{k_adaptive_downsample_blur_ps,
