@@ -453,6 +453,112 @@ ShaderCache::CompileAndAddPipeline(ID3D12Device* device, const CacheIndexKey& ke
   return pso;
 }
 
+ShaderCache::CacheIndexKey ShaderCache::GetPipelineCacheKey(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc)
+{
+  MD5Digest digest;
+  uint32_t length = sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
+
+  if (gpdesc.VS.BytecodeLength > 0)
+  {
+    digest.Update(gpdesc.VS.pShaderBytecode, static_cast<uint32_t>(gpdesc.VS.BytecodeLength));
+    length += static_cast<uint32_t>(gpdesc.VS.BytecodeLength);
+  }
+  if (gpdesc.GS.BytecodeLength > 0)
+  {
+    digest.Update(gpdesc.GS.pShaderBytecode, static_cast<uint32_t>(gpdesc.GS.BytecodeLength));
+    length += static_cast<uint32_t>(gpdesc.GS.BytecodeLength);
+  }
+  if (gpdesc.PS.BytecodeLength > 0)
+  {
+    digest.Update(gpdesc.PS.pShaderBytecode, static_cast<uint32_t>(gpdesc.PS.BytecodeLength));
+    length += static_cast<uint32_t>(gpdesc.PS.BytecodeLength);
+  }
+
+  digest.Update(&gpdesc.BlendState, sizeof(gpdesc.BlendState));
+  digest.Update(&gpdesc.SampleMask, sizeof(gpdesc.SampleMask));
+  digest.Update(&gpdesc.RasterizerState, sizeof(gpdesc.RasterizerState));
+  digest.Update(&gpdesc.DepthStencilState, sizeof(gpdesc.DepthStencilState));
+
+  for (uint32_t i = 0; i < gpdesc.InputLayout.NumElements; i++)
+  {
+    const D3D12_INPUT_ELEMENT_DESC& ie = gpdesc.InputLayout.pInputElementDescs[i];
+    digest.Update(ie.SemanticName, static_cast<uint32_t>(std::strlen(ie.SemanticName)));
+    digest.Update(&ie.SemanticIndex, sizeof(ie.SemanticIndex));
+    digest.Update(&ie.Format, sizeof(ie.Format));
+    digest.Update(&ie.InputSlot, sizeof(ie.InputSlot));
+    digest.Update(&ie.AlignedByteOffset, sizeof(ie.AlignedByteOffset));
+    digest.Update(&ie.InputSlotClass, sizeof(ie.InputSlotClass));
+    digest.Update(&ie.InstanceDataStepRate, sizeof(ie.InstanceDataStepRate));
+    length += sizeof(D3D12_INPUT_ELEMENT_DESC);
+  }
+
+  digest.Update(&gpdesc.IBStripCutValue, sizeof(gpdesc.IBStripCutValue));
+  digest.Update(&gpdesc.PrimitiveTopologyType, sizeof(gpdesc.PrimitiveTopologyType));
+  digest.Update(&gpdesc.NumRenderTargets, sizeof(gpdesc.NumRenderTargets));
+  digest.Update(gpdesc.RTVFormats, sizeof(gpdesc.RTVFormats));
+  digest.Update(&gpdesc.DSVFormat, sizeof(gpdesc.DSVFormat));
+  digest.Update(&gpdesc.SampleDesc, sizeof(gpdesc.SampleDesc));
+  digest.Update(&gpdesc.Flags, sizeof(gpdesc.Flags));
+
+  MD5Hash h;
+  digest.Final(h.hash);
+
+  return CacheIndexKey{h.low, h.high, length, EntryType::GraphicsPipeline};
+}
+
+ShaderCache::ComPtr<ID3D12PipelineState> ShaderCache::GetPipelineState(ID3D12Device* device,
+                                                                       const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc)
+{
+  const auto key = GetPipelineCacheKey(desc);
+
+  // Pipeline library path (D3D12.1+). Try LoadGraphicsPipeline first
+  // for a microsecond-cost cache hit; on miss fall through to
+  // CreateGraphicsPipelineState and best-effort StorePipeline. The
+  // library handles its own internal dedup of shader bytecode across
+  // PSOs, so the cached file stays compact (PCSX2-style sizes).
+  //
+  // ID3D12PipelineLibrary methods are documented thread-safe by
+  // Microsoft; no cache mutex is held across LoadGraphicsPipeline,
+  // CreateGraphicsPipelineState, or StorePipeline. Lock-free
+  // compile property from 75e8269 is preserved.
+  //
+  // StorePipeline returns E_INVALIDARG when an entry with the same
+  // name already exists (race loser, or repeated call). That's an
+  // expected outcome, not a failure - the PSO we just compiled is
+  // equivalent to whatever's already stored. Ignore the result.
+  if (m_use_pipeline_library && m_pipeline_library)
+  {
+    WCHAR name[33];
+    FormatPipelineLibraryName(key, name);
+
+    ComPtr<ID3D12PipelineState> pso;
+    HRESULT hr = m_pipeline_library->LoadGraphicsPipeline(name, &desc, IID_PPV_ARGS(pso.GetAddressOf()));
+    if (SUCCEEDED(hr))
+      return pso;
+
+    hr = device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(pso.GetAddressOf()));
+    if (FAILED(hr))
+    {
+      Log_ErrorPrintf("CreateGraphicsPipelineState failed: %08X", hr);
+      return {};
+    }
+
+    m_pipeline_library->StorePipeline(name, pso.Get());
+    return pso;
+  }
+
+  // No pipeline library available (pre-D3D12.1 / older Windows):
+  // compile the PSO directly. The per-PSO on-disk blob cache that used
+  // to provide a read fallback here is disabled
+  // (CanUsePipelineCache() == false), and reading a cached blob back
+  // required D3DCreateBlob from d3dcompiler - now that the d3dcompiler
+  // dependency is gone, just build the PSO from the pre-baked DXBC each
+  // time (cheap driver-side assembly). CompileAndAddPipeline does the
+  // CreateGraphicsPipelineState and, with m_pipeline_blob_file null,
+  // skips the (dead) disk-cache write.
+  return CompileAndAddPipeline(device, key, desc);
+}
+
 std::string ShaderCache::GetPipelineLibraryFilename(const std::string_view& base_path, D3D_FEATURE_LEVEL feature_level,
                                                     bool debug)
 {
