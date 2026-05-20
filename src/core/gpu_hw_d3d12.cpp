@@ -699,6 +699,8 @@ void GPU_HW_D3D12::DestroyResources()
 
   g_d3d12_context->GetSamplerHeapManager().Free(&m_point_sampler);
   g_d3d12_context->GetSamplerHeapManager().Free(&m_linear_sampler);
+  if (m_trilinear_sampler)
+    g_d3d12_context->GetSamplerHeapManager().Free(&m_trilinear_sampler);
   g_d3d12_context->GetDescriptorHeapManager().Free(&m_texture_stream_buffer_srv);
 
   m_vertex_stream_buffer.Destroy(false);
@@ -727,6 +729,21 @@ bool GPU_HW_D3D12::CreateRootSignatures()
   if (!m_single_sampler_root_signature)
     return false;
 
+  // Adaptive downsample composite: b0 push constants (the SmoothingUBO -
+  // unused by the composite FS but kept in the binding layout to match
+  // the other downsample passes), two SRVs (color pyramid at t0, weight
+  // at t1), and two samplers (trilinear at s0, linear at s1). Separate
+  // single-descriptor tables per register avoid any contiguous-descriptor
+  // requirement on the heap allocator.
+  rsbuilder.Add32BitConstants(0, MAX_PUSH_CONSTANTS_SIZE / sizeof(uint32_t), D3D12_SHADER_VISIBILITY_ALL);
+  rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+  rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+  rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+  rsbuilder.AddDescriptorTable(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+  m_downsample_composite_root_signature = rsbuilder.Create();
+  if (!m_downsample_composite_root_signature)
+    return false;
+
   return true;
 }
 
@@ -749,6 +766,15 @@ bool GPU_HW_D3D12::CreateSamplers()
     return false;
 
   g_d3d12_context->GetDevice()->CreateSampler(&desc, m_linear_sampler.cpu_handle);
+
+  // Trilinear (mip-interpolating) sampler for the adaptive composite's
+  // colour-pyramid SampleLevel. Matches D3D11's m_trilinear_sampler_state.
+  desc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+
+  if (!g_d3d12_context->GetSamplerHeapManager().Allocate(&m_trilinear_sampler))
+    return false;
+
+  g_d3d12_context->GetDevice()->CreateSampler(&desc, m_trilinear_sampler.cpu_handle);
   return true;
 }
 
@@ -1269,32 +1295,110 @@ bool GPU_HW_D3D12::CompileDownsamplePipeline()
   // fullscreen-quad VS plus one source SRV and the point sampler under
   // m_single_sampler_root_signature is the entire binding set, identical
   // in shape to the display PSO. Built once per session (and rebuilt by
-  // UpdateSettings on a downsample-mode / resolution-scale change). D3D12
-  // only supports Box (GetDownsampleMode falls Adaptive back to Box while
-  // m_supports_adaptive_downsampling is false), so Disabled/Adaptive are
-  // a no-op and leave m_downsample_pipeline null.
-  if (m_downsample_mode != GPUDownsampleMode::Box)
+  // UpdateSettings on a downsample-mode / resolution-scale change).
+  if (m_downsample_mode == GPUDownsampleMode::Box)
+  {
+    const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
+    const auto fs_bc = D3DCommon::EmbeddedShaders::PickBoxSampleDownsampleFS(m_resolution_scale);
+    const D3D12_SHADER_BYTECODE fs{fs_bc.data, fs_bc.size};
+
+    D3D12::GraphicsPipelineBuilder gpbuilder;
+    gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
+    gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    gpbuilder.SetVertexShader(vs);
+    gpbuilder.SetPixelShader(fs);
+    gpbuilder.SetNoCullRasterizationState();
+    gpbuilder.SetNoDepthTestState();
+    gpbuilder.SetNoBlendingState();
+    gpbuilder.SetRenderTarget(0, m_downsample_texture.GetFormat());
+
+    m_downsample_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+    if (!m_downsample_pipeline)
+      return false;
+
+    D3D12::SetObjectName(m_downsample_pipeline.Get(), "Downsample Pipeline");
+    return true;
+  }
+
+  if (m_downsample_mode != GPUDownsampleMode::Adaptive)
     return true;
 
-  const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
-  const auto fs_bc = D3DCommon::EmbeddedShaders::PickBoxSampleDownsampleFS(m_resolution_scale);
-  const D3D12_SHADER_BYTECODE fs{fs_bc.data, fs_bc.size};
+  // Adaptive downsample: four pre-baked passes. The mip-generation
+  // (first/mid) and blur passes share the UV-quad VS and
+  // m_single_sampler_root_signature (b0 SmoothingUBO + 1 SRV + 1 sampler);
+  // the composite pass uses the fullscreen-quad VS (it reads SV_Position,
+  // not the interpolated UV) and the two-SRV/two-sampler composite root
+  // signature. RT formats: the colour-pyramid passes write RGBA8, the
+  // blur writes the R8 weight, the composite writes the RGBA8 display
+  // texture.
+  ID3D12Device* const device = g_d3d12_context->GetDevice();
+  const D3D12_SHADER_BYTECODE uv_vs{D3DCommon::EmbeddedShaders::k_uv_quad_vs,
+                                    D3DCommon::EmbeddedShaders::k_uv_quad_vs_size_bytes};
 
-  D3D12::GraphicsPipelineBuilder gpbuilder;
-  gpbuilder.SetRootSignature(m_single_sampler_root_signature.Get());
-  gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(vs);
-  gpbuilder.SetPixelShader(fs);
-  gpbuilder.SetNoCullRasterizationState();
-  gpbuilder.SetNoDepthTestState();
-  gpbuilder.SetNoBlendingState();
-  gpbuilder.SetRenderTarget(0, m_downsample_texture.GetFormat());
+  {
+    const auto fs = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleMipFS(true);
+    D3D12::GraphicsPipelineBuilder b;
+    b.SetRootSignature(m_single_sampler_root_signature.Get());
+    b.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    b.SetVertexShader(uv_vs);
+    b.SetPixelShader(D3D12_SHADER_BYTECODE{fs.data, fs.size});
+    b.SetNoCullRasterizationState();
+    b.SetNoDepthTestState();
+    b.SetNoBlendingState();
+    b.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
+    m_downsample_first_pass_pipeline = b.Create(device, m_shader_cache, false);
+  }
+  {
+    const auto fs = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleMipFS(false);
+    D3D12::GraphicsPipelineBuilder b;
+    b.SetRootSignature(m_single_sampler_root_signature.Get());
+    b.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    b.SetVertexShader(uv_vs);
+    b.SetPixelShader(D3D12_SHADER_BYTECODE{fs.data, fs.size});
+    b.SetNoCullRasterizationState();
+    b.SetNoDepthTestState();
+    b.SetNoBlendingState();
+    b.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
+    m_downsample_mid_pass_pipeline = b.Create(device, m_shader_cache, false);
+  }
+  {
+    const auto fs = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleBlurFS();
+    D3D12::GraphicsPipelineBuilder b;
+    b.SetRootSignature(m_single_sampler_root_signature.Get());
+    b.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    b.SetVertexShader(uv_vs);
+    b.SetPixelShader(D3D12_SHADER_BYTECODE{fs.data, fs.size});
+    b.SetNoCullRasterizationState();
+    b.SetNoDepthTestState();
+    b.SetNoBlendingState();
+    b.SetRenderTarget(0, DXGI_FORMAT_R8_UNORM);
+    m_downsample_blur_pass_pipeline = b.Create(device, m_shader_cache, false);
+  }
+  {
+    const D3D12_SHADER_BYTECODE composite_vs = GetFullscreenQuadVertexShader();
+    const auto fs = D3DCommon::EmbeddedShaders::PickAdaptiveDownsampleCompositeFS(m_resolution_scale);
+    D3D12::GraphicsPipelineBuilder b;
+    b.SetRootSignature(m_downsample_composite_root_signature.Get());
+    b.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    b.SetVertexShader(composite_vs);
+    b.SetPixelShader(D3D12_SHADER_BYTECODE{fs.data, fs.size});
+    b.SetNoCullRasterizationState();
+    b.SetNoDepthTestState();
+    b.SetNoBlendingState();
+    b.SetRenderTarget(0, m_display_texture.GetFormat());
+    m_downsample_composite_pipeline = b.Create(device, m_shader_cache, false);
+  }
 
-  m_downsample_pipeline = gpbuilder.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
-  if (!m_downsample_pipeline)
+  if (!m_downsample_first_pass_pipeline || !m_downsample_mid_pass_pipeline || !m_downsample_blur_pass_pipeline ||
+      !m_downsample_composite_pipeline)
+  {
     return false;
+  }
 
-  D3D12::SetObjectName(m_downsample_pipeline.Get(), "Downsample Pipeline");
+  D3D12::SetObjectName(m_downsample_first_pass_pipeline.Get(), "Adaptive Downsample First Pass");
+  D3D12::SetObjectName(m_downsample_mid_pass_pipeline.Get(), "Adaptive Downsample Mid Pass");
+  D3D12::SetObjectName(m_downsample_blur_pass_pipeline.Get(), "Adaptive Downsample Blur Pass");
+  D3D12::SetObjectName(m_downsample_composite_pipeline.Get(), "Adaptive Downsample Composite");
   return true;
 }
 
@@ -2222,6 +2326,10 @@ void GPU_HW_D3D12::DestroyPipelines()
   m_copy_pipeline.Reset();
 
   m_downsample_pipeline.Reset();
+  m_downsample_first_pass_pipeline.Reset();
+  m_downsample_mid_pass_pipeline.Reset();
+  m_downsample_blur_pass_pipeline.Reset();
+  m_downsample_composite_pipeline.Reset();
 }
 
 void GPU_HW_D3D12::ClearDisplayPipelines()

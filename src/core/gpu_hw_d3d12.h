@@ -242,6 +242,7 @@ private:
 
   D3D12::DescriptorHandle m_point_sampler;
   D3D12::DescriptorHandle m_linear_sampler;
+  D3D12::DescriptorHandle m_trilinear_sampler;
 
   D3D12::StreamBuffer m_vertex_stream_buffer;
   D3D12::StreamBuffer m_uniform_stream_buffer;
@@ -344,6 +345,15 @@ private:
   std::atomic<ID3D12PipelineState*> m_copy_pipeline_fastpath{nullptr};
 
   ComPtr<ID3D12PipelineState> m_downsample_pipeline;
+  // Adaptive downsample pipelines. The mip-generation (first/mid) and
+  // blur passes reuse m_single_sampler_root_signature (b0 + 1 SRV + 1
+  // sampler) and the UV-quad VS; the composite pass needs two SRVs +
+  // two samplers, so it gets its own root signature.
+  ComPtr<ID3D12RootSignature> m_downsample_composite_root_signature;
+  ComPtr<ID3D12PipelineState> m_downsample_first_pass_pipeline;
+  ComPtr<ID3D12PipelineState> m_downsample_mid_pass_pipeline;
+  ComPtr<ID3D12PipelineState> m_downsample_blur_pass_pipeline;
+  ComPtr<ID3D12PipelineState> m_downsample_composite_pipeline;
   D3D12::Texture m_vram_write_replacement_texture;
   D3D12::StreamBuffer m_texture_replacment_stream_buffer;
 };
