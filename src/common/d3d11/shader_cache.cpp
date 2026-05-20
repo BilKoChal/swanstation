@@ -23,6 +23,17 @@ struct CacheIndexEntry
 };
 #pragma pack(pop)
 
+// The on-disk shader bytecode cache (d3d_shaders_<sm>.bin) is shared
+// with the D3D12 backend, so this struct MUST stay byte-for-byte
+// identical to D3D12::CacheIndexEntry in
+// src/common/d3d12/shader_cache.cpp. The shader_type field stores
+// ShaderCompiler::Type cast to uint32_t; those values are aligned
+// with D3D12's EntryType for the four shader stages
+// (Vertex/Geometry/Pixel/Compute == 0/1/2/3). If either side's
+// layout or the type enum values change, bump FILE_VERSION on both
+// to invalidate cross-written caches.
+static_assert(sizeof(CacheIndexEntry) == 32, "CacheIndexEntry must stay 32 bytes for cross-backend cache sharing");
+
 ShaderCache::ShaderCache() = default;
 
 ShaderCache::~ShaderCache()

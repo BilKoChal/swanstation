@@ -38,7 +38,14 @@ public:
   ComPtr<ID3D11PixelShader> GetPixelShader(ID3D11Device* device, std::string_view shader_code);
 
 private:
-  static constexpr uint32_t FILE_VERSION = 3;
+  // On-disk shader bytecode cache format version. Bumped to 4 when
+  // the cache file was unified with the D3D12 backend (both write
+  // d3d_shaders_<sm>.bin now). MUST match D3D12::ShaderCache::
+  // FILE_VERSION - the two backends share the same on-disk file, so
+  // any format change has to bump both in lockstep. The bump to 4
+  // invalidates the pre-unification D3D11 (v3) and D3D12 (v2) caches
+  // one final time.
+  static constexpr uint32_t FILE_VERSION = 4;
 
   struct CacheIndexKey
   {

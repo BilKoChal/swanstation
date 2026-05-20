@@ -12,6 +12,7 @@
 #include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "host_interface.h"
+#include "shader_cache_version.h"
 #include "system.h"
 #define HAVE_D3D12
 #include "libretro_d3d.h"
@@ -785,7 +786,7 @@ bool GPU_HW_D3D12::CompilePipelines()
   if (!m_shader_cache.IsOpen())
   {
     m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), g_d3d12_context->GetDevice(),
-                        g_d3d12_context->GetFeatureLevel(), false);
+                        g_d3d12_context->GetFeatureLevel(), SHADER_CACHE_VERSION, false);
   }
   // Convenience local reference for readability in the rest of this
   // function; the lazy helpers below also reach into m_shader_cache

@@ -24,6 +24,19 @@ struct CacheIndexEntry
 };
 #pragma pack(pop)
 
+// The on-disk shader bytecode cache (d3d_shaders_<sm>.bin) is shared
+// with the D3D11 backend, so this struct MUST stay byte-for-byte
+// identical to D3D11::CacheIndexEntry in
+// src/common/d3d11/shader_cache.cpp. The shader_type field stores
+// EntryType cast to uint32_t; the four shader-stage values
+// (VertexShader/GeometryShader/PixelShader/ComputeShader == 0/1/2/3)
+// are aligned with D3D11's ShaderCompiler::Type. EntryType also has
+// GraphicsPipeline (4), but that only keys the (disabled) D3D12
+// pipelines cache, never the shared bytecode file. If either side's
+// layout or the type enum values change, bump FILE_VERSION on both
+// to invalidate cross-written caches.
+static_assert(sizeof(CacheIndexEntry) == 32, "CacheIndexEntry must stay 32 bytes for cross-backend cache sharing");
+
 // Pipeline-state-object disk caching has been disabled.
 //
 // The previous implementation persisted each PSO's full
@@ -78,10 +91,12 @@ bool ShaderCache::CacheIndexKey::operator==(const CacheIndexKey& key) const
           source_length == key.source_length && type == key.type);
 }
 
-void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEATURE_LEVEL feature_level, bool debug)
+void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEATURE_LEVEL feature_level,
+                       uint32_t version, bool debug)
 {
   m_base_path = base_path;
   m_feature_level = feature_level;
+  m_version = version;
   m_debug = debug;
 
   if (!base_path.empty())
@@ -123,6 +138,35 @@ void ShaderCache::Open(std::string_view base_path, ID3D12Device* device, D3D_FEA
         filestream_delete(pipelines_index_filename.c_str());
       if (path_is_valid(pipelines_blob_filename.c_str()))
         filestream_delete(pipelines_blob_filename.c_str());
+    }
+
+    // Scrub the pre-unification per-backend shader bytecode cache
+    // (d3d12_shaders_<sm>.{idx,bin}). The shaders cache now lives at
+    // the backend-neutral d3d_shaders_<sm>.* shared with the D3D11
+    // backend, so the old d3d12_-prefixed file is orphaned. Same
+    // self-healing rationale as the pipelines scrub above - cheap
+    // path_is_valid+unlink on every Open, removes ~900 KB of dead
+    // cache across the one-time upgrade. Built from the literal
+    // legacy prefix rather than GetCacheBaseFileName("shaders") since
+    // the latter now returns the new neutral name.
+    {
+      std::string legacy_shaders(base_path);
+      legacy_shaders += "d3d12_shaders_";
+      switch (feature_level)
+      {
+        case D3D_FEATURE_LEVEL_10_0: legacy_shaders += "sm40"; break;
+        case D3D_FEATURE_LEVEL_10_1: legacy_shaders += "sm41"; break;
+        case D3D_FEATURE_LEVEL_11_0: legacy_shaders += "sm50"; break;
+        default:                     legacy_shaders += "unk";  break;
+      }
+      if (debug)
+        legacy_shaders += "_debug";
+      const std::string legacy_index = legacy_shaders + ".idx";
+      const std::string legacy_blob = legacy_shaders + ".bin";
+      if (path_is_valid(legacy_index.c_str()))
+        filestream_delete(legacy_index.c_str());
+      if (path_is_valid(legacy_blob.c_str()))
+        filestream_delete(legacy_blob.c_str());
     }
 
     // ID3D12PipelineLibrary path (D3D12.1, Windows 10 v1703+). We try
@@ -192,7 +236,9 @@ bool ShaderCache::CreateNew(const std::string& index_filename, const std::string
   }
 
   const uint32_t index_version = FILE_VERSION;
-  if (rfwrite(&index_version, sizeof(index_version), 1, index_file) != 1)
+  const uint32_t data_version = m_version;
+  if (rfwrite(&index_version, sizeof(index_version), 1, index_file) != 1 ||
+      rfwrite(&data_version, sizeof(data_version), 1, index_file) != 1)
   {
     Log_ErrorPrintf("Failed to write version to index file '%s'", index_filename.c_str());
     rfclose(index_file);
@@ -221,10 +267,12 @@ bool ShaderCache::ReadExisting(const std::string& index_filename, const std::str
   if (!index_file)
     return false;
 
-  uint32_t file_version;
-  if (rfread(&file_version, sizeof(file_version), 1, index_file) != 1 || file_version != FILE_VERSION)
+  uint32_t file_version = 0;
+  uint32_t data_version = 0;
+  if (rfread(&file_version, sizeof(file_version), 1, index_file) != 1 || file_version != FILE_VERSION ||
+      rfread(&data_version, sizeof(data_version), 1, index_file) != 1 || data_version != m_version)
   {
-    Log_ErrorPrintf("Bad file version in '%s'", index_filename.c_str());
+    Log_ErrorPrintf("Bad file/data version in '%s'", index_filename.c_str());
     rfclose(index_file);
     index_file = nullptr;
     return false;
@@ -276,9 +324,22 @@ std::string ShaderCache::GetCacheBaseFileName(const std::string_view& base_path,
                                               D3D_FEATURE_LEVEL feature_level, bool debug)
 {
   std::string base_filename(base_path);
-  base_filename += "d3d12_";
-  base_filename += type;
-  base_filename += "_";
+
+  // The shader bytecode cache ("shaders") is API-neutral DXBC keyed
+  // by HLSL hash, byte-compatible with the D3D11 backend's cache, so
+  // it uses the backend-neutral "d3d_shaders_" prefix and both
+  // backends share one file. The pipeline caches ("pipelines",
+  // "pipeline_library") are D3D12-only - the disabled per-PSO blob
+  // cache and the driver-managed ID3D12PipelineLibrary - so they
+  // keep the "d3d12_" prefix.
+  if (type == "shaders")
+    base_filename += "d3d_shaders_";
+  else
+  {
+    base_filename += "d3d12_";
+    base_filename += type;
+    base_filename += "_";
+  }
 
   switch (feature_level)
   {
