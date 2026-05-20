@@ -2662,6 +2662,48 @@ Bytecode PickVRAMUpdateDepthFS(bool msaa)
   return {k_vram_update_depth_ps_msaa0, k_vram_update_depth_ps_msaa0_size_bytes};
 }
 
+Bytecode PickDisplayFS(bool depth_24, uint32_t interlace_mode, bool smooth_chroma, uint32_t multisamples)
+{
+  // ms_idx over {1,2,4,8,16,32}; out-of-set falls back to m1, same
+  // predicate/fallback shape as PickVRAMReadFS and the D3D12
+  // GetDisplayPipeline MultisamplesIndex lambda.
+  uint32_t ms_idx;
+  switch (multisamples)
+  {
+    case 2:  ms_idx = 1; break;
+    case 4:  ms_idx = 2; break;
+    case 8:  ms_idx = 3; break;
+    case 16: ms_idx = 4; break;
+    case 32: ms_idx = 5; break;
+    case 1:
+    default: ms_idx = 0; break;
+  }
+
+#define D(n) {k_display_ps_##n, k_display_ps_##n##_size_bytes}
+  // depth_24 == 0: no smooth_chroma dimension (the 16-bit body never
+  // touches the chroma helpers). [interlace][ms].
+  static const Bytecode k_d0[3][6] = {
+    {D(d0i0c0m01), D(d0i0c0m02), D(d0i0c0m04), D(d0i0c0m08), D(d0i0c0m16), D(d0i0c0m32)},
+    {D(d0i1c0m01), D(d0i1c0m02), D(d0i1c0m04), D(d0i1c0m08), D(d0i1c0m16), D(d0i1c0m32)},
+    {D(d0i2c0m01), D(d0i2c0m02), D(d0i2c0m04), D(d0i2c0m08), D(d0i2c0m16), D(d0i2c0m32)},
+  };
+  // depth_24 == 1: [interlace][smooth_chroma][ms].
+  static const Bytecode k_d1[3][2][6] = {
+    {{D(d1i0c0m01), D(d1i0c0m02), D(d1i0c0m04), D(d1i0c0m08), D(d1i0c0m16), D(d1i0c0m32)},
+     {D(d1i0c1m01), D(d1i0c1m02), D(d1i0c1m04), D(d1i0c1m08), D(d1i0c1m16), D(d1i0c1m32)}},
+    {{D(d1i1c0m01), D(d1i1c0m02), D(d1i1c0m04), D(d1i1c0m08), D(d1i1c0m16), D(d1i1c0m32)},
+     {D(d1i1c1m01), D(d1i1c1m02), D(d1i1c1m04), D(d1i1c1m08), D(d1i1c1m16), D(d1i1c1m32)}},
+    {{D(d1i2c0m01), D(d1i2c0m02), D(d1i2c0m04), D(d1i2c0m08), D(d1i2c0m16), D(d1i2c0m32)},
+     {D(d1i2c1m01), D(d1i2c1m02), D(d1i2c1m04), D(d1i2c1m08), D(d1i2c1m16), D(d1i2c1m32)}},
+  };
+#undef D
+
+  const uint32_t i = (interlace_mode < 3u) ? interlace_mode : 0u;
+  if (depth_24)
+    return k_d1[i][smooth_chroma ? 1 : 0][ms_idx];
+  return k_d0[i][ms_idx];
+}
+
 Bytecode PickAdaptiveDownsampleBlurFS()
 {
   return Bytecode{k_adaptive_downsample_blur_ps,

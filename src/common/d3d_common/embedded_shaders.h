@@ -256,6 +256,20 @@ Bytecode PickVRAMCopyFS(bool pgxp_depth);
 // MSAA variant binds Texture2DMS and reads SV_SampleIndex.
 Bytecode PickVRAMUpdateDepthFS(bool msaa);
 
+// Display / present FS. 54 variants on
+// depth_24 x interlace_mode x smooth_chroma x multisamples:
+//   - depth_24:       0, 1
+//   - interlace_mode: 0, 1, 2 (None / InterleavedFields / SeparateFields)
+//   - smooth_chroma:  only present on depth_24 == 1 (the 16-bit body
+//                     never touches the chroma helpers, so fxc emits
+//                     identical DXBC for c0/c1 at depth_24 == 0;
+//                     smooth_chroma is ignored when depth_24 is false)
+//   - multisamples:   1, 2, 4, 8, 16, 32 (out-of-set falls back to m1)
+// = 3*6 (depth_24=0) + 3*2*6 (depth_24=1) = 18 + 36 = 54. Mirror of
+// GenerateDisplayFragmentShader; smooth_chroma is the caller's
+// (depth_24 && m_chroma_smoothing), multisamples is m_multisamples.
+Bytecode PickDisplayFS(bool depth_24, uint32_t interlace_mode, bool smooth_chroma, uint32_t multisamples);
+
 // --------------------------------------------------------------------
 
 // Fullscreen-quad vertex shader. Emits a fullscreen triangle in NDC

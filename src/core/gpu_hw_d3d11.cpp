@@ -1588,35 +1588,33 @@ void GPU_HW_D3D11::DestroyShaders()
 
 bool GPU_HW_D3D11::RebuildDisplayPixelShaders()
 {
-  // (Re)compile the 2x3 display pixel shader matrix against the
-  // current m_chroma_smoothing. Called from CompileShaders during
-  // the initial build and from UpdateSettings on a
-  // chroma_smoothing-only flip - chroma_smoothing is a DefineMacro
-  // inside GenerateDisplayFragmentShader only (see
-  // gpu_hw_shadergen.cpp:1056), so the batch pixel shader matrix
-  // and the VRAM ops pixel shaders stay valid through a chroma
-  // toggle and don't need rebuilding. Costs 6 D3DCompile +
-  // CreatePixelShader calls (a fraction of a second on a modern
-  // GPU) instead of a full CompileShaders pass walking the entire
-  // 144-cell batch matrix.
+  // (Re)select the 2x3 display pixel shader matrix
+  // (m_display_pixel_shaders[depth_24bit][interlacing]) from the
+  // pre-baked DXBC via D3DCommon::EmbeddedShaders::PickDisplayFS.
+  // Called from CompileShaders during the initial build and from
+  // UpdateSettings on a chroma_smoothing-only flip - smooth_chroma is
+  // an axis of the display FS only, so the batch pixel shader matrix
+  // and the VRAM ops pixel shaders stay valid through a chroma toggle
+  // and don't need rebuilding. Cost is 6 CreatePixelShader calls
+  // wrapping pre-baked blobs (no D3DCompile) instead of a full
+  // CompileShaders pass walking the entire batch matrix.
   //
-  // chroma_smoothing only takes effect on the depth_24bit paths
-  // (see the '&& m_chroma_smoothing' guard below), so technically
-  // only three of the six display shaders depend on it. Rebuilding
-  // all six anyway keeps this path simple - on a chroma toggle the
-  // three depth_24bit=false shaders re-resolve to cache hits on
-  // their existing HLSL hashes (instant), and the three
-  // depth_24bit=true shaders pick up the new SMOOTH_CHROMA value.
-  if (!m_shadergen)
-    return false;
+  // smooth_chroma only takes effect on the depth_24bit paths, so the
+  // three depth_24bit=false cells pass smooth_chroma=false (PickDisplayFS
+  // ignores the axis there - the picker's d0 table has no chroma
+  // dimension), and the three depth_24bit=true cells pick up the
+  // current m_chroma_smoothing. The session m_multisamples is the
+  // fourth picker axis. No m_shadergen dependency - the display FS is
+  // fully pre-baked.
   for (uint8_t depth_24bit = 0; depth_24bit < 2; depth_24bit++)
   {
     for (uint8_t interlacing = 0; interlacing < 3; interlacing++)
     {
-      const std::string ps = m_shadergen->GenerateDisplayFragmentShader(
-        static_cast<bool>(depth_24bit), static_cast<InterlacedRenderMode>(interlacing),
-        static_cast<bool>(depth_24bit) && m_chroma_smoothing);
-      m_display_pixel_shaders[depth_24bit][interlacing] = m_shader_cache.GetPixelShader(m_device.Get(), ps);
+      const bool smooth_chroma = static_cast<bool>(depth_24bit) && m_chroma_smoothing;
+      const auto bc = D3DCommon::EmbeddedShaders::PickDisplayFS(
+        static_cast<bool>(depth_24bit), interlacing, smooth_chroma, m_multisamples);
+      m_display_pixel_shaders[depth_24bit][interlacing] =
+        D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
       if (!m_display_pixel_shaders[depth_24bit][interlacing])
         return false;
     }
