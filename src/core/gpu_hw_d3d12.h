@@ -14,6 +14,7 @@
 #include <mutex>
 #include <thread>
 #include <tuple>
+#include <vector>
 #include <wrl/client.h>
 #include <libretro.h>
 
@@ -223,6 +224,21 @@ private:
   D3D12::StagingTexture m_vram_readback_staging_texture;
   D3D12::Texture m_display_texture;
   D3D12::Texture m_downsample_texture;
+
+  // Adaptive downsample pyramid. D3D12::Texture is single-mip, so the
+  // mip chain is managed as a raw resource with manually-built views: a
+  // full-chain SRV for the composite pass (samp0, SampleLevel across
+  // mips), a per-mip SRV for each generation/blur pass's read, and a
+  // per-mip RTV for each generation pass's write. Per-subresource (mip)
+  // resource states are tracked in m_downsample_mip_states because the
+  // generation loop reads mip[n-1] while writing mip[n].
+  Microsoft::WRL::ComPtr<ID3D12Resource> m_downsample_mip_resource;
+  std::vector<D3D12_RESOURCE_STATES> m_downsample_mip_states;
+  D3D12::DescriptorHandle m_downsample_full_srv;
+  std::vector<D3D12::DescriptorHandle> m_downsample_mip_srvs;
+  std::vector<D3D12::DescriptorHandle> m_downsample_mip_rtvs;
+  D3D12::Texture m_downsample_weight_texture;
+  uint32_t m_downsample_mip_levels = 0;
 
   D3D12::DescriptorHandle m_point_sampler;
   D3D12::DescriptorHandle m_linear_sampler;

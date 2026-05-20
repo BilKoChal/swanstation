@@ -791,10 +791,6 @@ bool GPU_HW_D3D12::CreateFramebuffer()
   // Box downsample target. Resolves the upscaled VRAM/display texture
   // down to native PSX resolution in a single pass, so it is sized at
   // VRAM_WIDTH x VRAM_HEIGHT (unscaled) regardless of m_resolution_scale.
-  // Only Box is created here - D3D12 does not yet support the Adaptive
-  // mode (m_supports_adaptive_downsampling stays false), and
-  // GetDownsampleMode falls a user Adaptive selection back to Box, so
-  // this covers both selections on D3D12.
   if (m_downsample_mode == GPUDownsampleMode::Box)
   {
     if (!m_downsample_texture.Create(VRAM_WIDTH, VRAM_HEIGHT, 1, texture_format, texture_format, texture_format,
@@ -805,6 +801,86 @@ bool GPU_HW_D3D12::CreateFramebuffer()
 
     D3D12::SetObjectName(m_downsample_texture, "Downsample Texture");
     m_downsample_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
+  else if (m_downsample_mode == GPUDownsampleMode::Adaptive)
+  {
+    // Adaptive downsample pyramid. D3D12::Texture cannot create a mip
+    // chain, so build the resource and its views by hand. The pyramid is
+    // the scaled VRAM size with GetAdaptiveDownsamplingMipLevels() mips;
+    // the weight texture is single-channel at the lowest mip's size.
+    const uint32_t levels = GetAdaptiveDownsamplingMipLevels();
+    m_downsample_mip_levels = levels;
+
+    const D3D12_HEAP_PROPERTIES heap_properties = {D3D12_HEAP_TYPE_DEFAULT};
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = texture_width;
+    desc.Height = texture_height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = static_cast<UINT16>(levels);
+    desc.Format = texture_format;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE clear_value = {};
+    clear_value.Format = texture_format;
+    if (FAILED(g_d3d12_context->GetDevice()->CreateCommittedResource(
+          &heap_properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clear_value,
+          IID_PPV_ARGS(m_downsample_mip_resource.GetAddressOf()))))
+    {
+      return false;
+    }
+    D3D12::SetObjectName(m_downsample_mip_resource.Get(), "Adaptive Downsample Pyramid");
+    m_downsample_mip_states.assign(levels, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    // Full-chain SRV (all mips) for the composite pass's SampleLevel.
+    if (!g_d3d12_context->GetDescriptorHeapManager().Allocate(&m_downsample_full_srv))
+      return false;
+    {
+      D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+      srv_desc.Format = texture_format;
+      srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+      srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+      srv_desc.Texture2D.MostDetailedMip = 0;
+      srv_desc.Texture2D.MipLevels = levels;
+      g_d3d12_context->GetDevice()->CreateShaderResourceView(m_downsample_mip_resource.Get(), &srv_desc,
+                                                             m_downsample_full_srv.cpu_handle);
+    }
+
+    // Per-mip read SRV + write RTV.
+    m_downsample_mip_srvs.resize(levels);
+    m_downsample_mip_rtvs.resize(levels);
+    for (uint32_t i = 0; i < levels; i++)
+    {
+      if (!g_d3d12_context->GetDescriptorHeapManager().Allocate(&m_downsample_mip_srvs[i]))
+        return false;
+      D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+      srv_desc.Format = texture_format;
+      srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+      srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+      srv_desc.Texture2D.MostDetailedMip = i;
+      srv_desc.Texture2D.MipLevels = 1;
+      g_d3d12_context->GetDevice()->CreateShaderResourceView(m_downsample_mip_resource.Get(), &srv_desc,
+                                                             m_downsample_mip_srvs[i].cpu_handle);
+
+      if (!g_d3d12_context->GetRTVHeapManager().Allocate(&m_downsample_mip_rtvs[i]))
+        return false;
+      D3D12_RENDER_TARGET_VIEW_DESC rtv_desc = {};
+      rtv_desc.Format = texture_format;
+      rtv_desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+      rtv_desc.Texture2D.MipSlice = i;
+      g_d3d12_context->GetDevice()->CreateRenderTargetView(m_downsample_mip_resource.Get(), &rtv_desc,
+                                                           m_downsample_mip_rtvs[i].cpu_handle);
+    }
+
+    if (!m_downsample_weight_texture.Create(texture_width >> (levels - 1), texture_height >> (levels - 1), 1,
+                                            DXGI_FORMAT_R8_UNORM, DXGI_FORMAT_R8_UNORM, DXGI_FORMAT_R8_UNORM,
+                                            DXGI_FORMAT_UNKNOWN, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET))
+    {
+      return false;
+    }
+    D3D12::SetObjectName(m_downsample_weight_texture, "Adaptive Downsample Weight Texture");
+    m_downsample_weight_texture.TransitionToState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
   }
 
   ClearDisplay();
@@ -825,6 +901,26 @@ void GPU_HW_D3D12::ClearFramebuffer()
 
 void GPU_HW_D3D12::DestroyFramebuffer()
 {
+  // Adaptive pyramid views/resource (no-ops when Box/Disabled).
+  if (m_downsample_full_srv)
+    g_d3d12_context->GetDescriptorHeapManager().Free(&m_downsample_full_srv);
+  for (D3D12::DescriptorHandle& h : m_downsample_mip_srvs)
+  {
+    if (h)
+      g_d3d12_context->GetDescriptorHeapManager().Free(&h);
+  }
+  for (D3D12::DescriptorHandle& h : m_downsample_mip_rtvs)
+  {
+    if (h)
+      g_d3d12_context->GetRTVHeapManager().Free(&h);
+  }
+  m_downsample_mip_srvs.clear();
+  m_downsample_mip_rtvs.clear();
+  m_downsample_mip_states.clear();
+  m_downsample_mip_levels = 0;
+  m_downsample_weight_texture.Destroy(false);
+  m_downsample_mip_resource.Reset();
+
   m_vram_read_texture.Destroy(false);
   m_vram_depth_texture.Destroy(false);
   m_vram_texture.Destroy(false);
