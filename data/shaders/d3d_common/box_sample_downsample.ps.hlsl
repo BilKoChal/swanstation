@@ -41,8 +41,20 @@
 // only used by the Adaptive mip / blur / composite passes), so
 // no cbuffer is declared here.
 //
-// Box composite reads v_pos.xy (SV_Position), matching the shader
-// gen output's #if at the entry point.
+// Box composite reads v_pos.xy (SV_Position) and ignores the
+// interpolated texcoord. The unused v_tex0 : TEXCOORD0 input must
+// still be declared FIRST so fxc packs SV_Position at input
+// register 1, matching the fullscreen-quad vertex shader's output
+// signature (TEXCOORD0 -> reg0, SV_Position -> reg1). D3D12's
+// CreateGraphicsPipelineState links VS-output to PS-input by
+// register; if SV_Position landed at PS input register 0 (which
+// happens when TEXCOORD0 is omitted) it would have no matching VS
+// output and PSO creation would fail (returning null). This mirrors
+// GenerateBoxSampleDownsampleFragmentShader's
+// DeclareFragmentEntryPoint(ss, 0, 1, ...) which likewise declares
+// the texcoord, and the display pixel shaders, which keep an unused
+// TEXCOORD0 at reg0 for the same reason. D3D11 tolerated the missing
+// input because CreatePixelShader does not validate against the VS.
 
 #ifndef RESOLUTION_SCALE
 #  error "Compile with /D RESOLUTION_SCALE=<N>. See TEMPLATE_VARIANTS in tools/regen_d3d_common_dxbc.py."
@@ -52,6 +64,7 @@ Texture2D    samp0    : register(t0);
 SamplerState samp0_ss : register(s0);
 
 void main(
+  in float2 v_tex0 : TEXCOORD0,
   in float4 v_pos : SV_Position,
   out float4 o_col0 : SV_Target0)
 {
