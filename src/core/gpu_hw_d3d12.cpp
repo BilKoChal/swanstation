@@ -899,17 +899,21 @@ bool GPU_HW_D3D12::CompilePipelines()
         //     9e6f933 / b6d1903 / c01f8ae (re-bake).
         //   - Textured + Nearest: commits 9e4c33d + a7f5717.
         //   - Textured + Bilinear / BilinearBinAlpha: commits
-        //     269a2a0 + this one.
-        // The two remaining textured filter templates (JINC2 /
-        // xBR and their *BinAlpha variants) are still runtime-
-        // compiled and land in subsequent commits. progress.Increment
+        //     269a2a0 + f2ae92a.
+        //   - Textured + JINC2 / JINC2BinAlpha: commits
+        //     17a0c66 + this one.
+        // The one remaining textured filter template (xBR /
+        // xBRBinAlpha) is still runtime-compiled and lands in the
+        // final foundation + activation pair. progress.Increment
         // ticks regardless so the user-facing progress bar reads the
         // same count.
         const bool pre_baked =
           (static_cast<GPUTextureMode>(texture_mode) == GPUTextureMode::Disabled) ||
           (cur_filter == GPUTextureFilter::Nearest) ||
           (cur_filter == GPUTextureFilter::Bilinear) ||
-          (cur_filter == GPUTextureFilter::BilinearBinAlpha);
+          (cur_filter == GPUTextureFilter::BilinearBinAlpha) ||
+          (cur_filter == GPUTextureFilter::JINC2) ||
+          (cur_filter == GPUTextureFilter::JINC2BinAlpha);
         if (!pre_baked)
         {
           ComPtr<ID3DBlob> blob = GetBatchFragmentShader(cur_filter, render_mode, texture_mode);
@@ -1363,11 +1367,29 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
       fs_bc.pShaderBytecode = bc.data;
       fs_bc.BytecodeLength = bc.size;
     }
+    else if (filter == GPUTextureFilter::JINC2 ||
+             filter == GPUTextureFilter::JINC2BinAlpha)
+    {
+      // Fourth pre-baked batch FS slice (17a0c66 foundation + this
+      // commit's activation). Same picker shape as Bilinear; the
+      // body of the picked DXBC is what differs (16-tap sinc-
+      // windowed resampler with anti-ringing vs 4-tap bilinear).
+      // binalpha drives the BINALPHA -D arm of the JINC2 template
+      // - JINC2BinAlpha quantises the resampler-weighted alpha
+      // to {0, 1} before the `ialpha < 0.5 ? discard : ...` test.
+      const bool binalpha = (filter == GPUTextureFilter::JINC2BinAlpha);
+      const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedJINC2FS(
+        lookup_mode, binalpha, use_dual_source, m_multisamples,
+        m_per_sample_shading, m_disable_color_perspective);
+      fs_bc.pShaderBytecode = bc.data;
+      fs_bc.BytecodeLength = bc.size;
+    }
     else
     {
-      // JINC2 / JINC2BinAlpha / xBR / xBRBinAlpha still go through
-      // shadergen + D3DCompile. Pre-bake commits for the 2 remaining
-      // filter templates land subsequently.
+      // xBR / xBRBinAlpha still go through shadergen + D3DCompile.
+      // The else arm shrinks to just the xBR family until its
+      // foundation + activation pair lands; after that the else
+      // becomes unreachable and is deleted.
       fs_blob = GetBatchFragmentShader(filter, render_mode, lookup_mode);
       if (!fs_blob)
         return {};

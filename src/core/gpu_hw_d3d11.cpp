@@ -1400,6 +1400,9 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
   const bool textured_bilinear =
     !untextured && (filter == GPUTextureFilter::Bilinear ||
                     filter == GPUTextureFilter::BilinearBinAlpha);
+  const bool textured_jinc2 =
+    !untextured && (filter == GPUTextureFilter::JINC2 ||
+                    filter == GPUTextureFilter::JINC2BinAlpha);
 
   ComPtr<ID3D11PixelShader> fresh;
   if (untextured)
@@ -1429,12 +1432,25 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
       m_per_sample_shading, m_disable_color_perspective);
     fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
   }
+  else if (textured_jinc2)
+  {
+    // Fourth pre-baked batch FS slice. Picker structure identical
+    // to Bilinear's; the BINALPHA -D arm distinguishes JINC2 vs
+    // JINC2BinAlpha. The HLSL body's 16-tap sinc-windowed
+    // resampler with anti-ringing is what differentiates the
+    // runtime behaviour from Bilinear's 4-tap weighted average.
+    const bool binalpha = (filter == GPUTextureFilter::JINC2BinAlpha);
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchTexturedJINC2FS(
+      lookup_mode, binalpha, use_dual_source, m_multisamples,
+      m_per_sample_shading, m_disable_color_perspective);
+    fresh = D3D11::ShaderCompiler::CreatePixelShader(m_device.Get(), bc.data, bc.size);
+  }
   else
   {
-    // JINC2 / JINC2BinAlpha / xBR / xBRBinAlpha still go through
-    // shadergen + D3DCompile. The else arm will keep shrinking as
-    // the remaining 2 filter templates land their foundation +
-    // activation pairs.
+    // xBR / xBRBinAlpha still go through shadergen + D3DCompile.
+    // The else arm shrinks to just the xBR family after this
+    // commit; the final foundation + activation pair removes it
+    // entirely.
     //
     // Construct a per-call shadergen bound to the requested filter
     // rather than reusing m_shadergen (which is pinned to the
