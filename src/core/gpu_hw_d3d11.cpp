@@ -1088,11 +1088,11 @@ bool GPU_HW_D3D11::CompileShaders()
        {"ATTR", 3, DXGI_FORMAT_R32_UINT, 0, offsetof(BatchVertex, texpage), D3D11_INPUT_PER_VERTEX_DATA, 0},
        {"ATTR", 4, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(BatchVertex, uv_limits), D3D11_INPUT_PER_VERTEX_DATA, 0}}};
 
-    // we need a vertex shader...
-    ComPtr<ID3DBlob> vs_bytecode =
-      shader_cache.GetShaderBlob(D3D11::ShaderCompiler::Type::Vertex, shadergen.GenerateBatchVertexShader(true));
-    if (!vs_bytecode)
-      return false;
+    // we need a vertex shader's bytecode for the input layout. Use the
+    // pre-baked textured batch VS DXBC directly - the input layout only
+    // needs the bytecode's input signature, and the textured variant
+    // carries the full ATTR0..ATTR4 set.
+    const auto vs_bc = D3DCommon::EmbeddedShaders::PickBatchVertexShader(true);
 
     // num_attributes is now unconditionally attributes.size(). Before
     // the UV_LIMITS-to-cbuffer routing commit, this used to drop the
@@ -1105,8 +1105,8 @@ bool GPU_HW_D3D11::CompileShaders()
     // u_uv_limits cbuffer scalar.
     const UINT num_attributes = static_cast<UINT>(attributes.size());
     const HRESULT hr =
-      m_device->CreateInputLayout(attributes.data(), num_attributes, vs_bytecode->GetBufferPointer(),
-                                  vs_bytecode->GetBufferSize(), m_batch_input_layout.ReleaseAndGetAddressOf());
+      m_device->CreateInputLayout(attributes.data(), num_attributes, vs_bc.data,
+                                  vs_bc.size, m_batch_input_layout.ReleaseAndGetAddressOf());
     if (FAILED(hr))
     {
       Log_ErrorPrintf("CreateInputLayout failed: 0x%08X", hr);
@@ -1126,8 +1126,12 @@ bool GPU_HW_D3D11::CompileShaders()
 
   for (uint8_t textured = 0; textured < 2; textured++)
   {
-    const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
-    m_batch_vertex_shaders[textured] = shader_cache.GetVertexShader(m_device.Get(), vs);
+    // Pre-baked batch VS DXBC (PickBatchVertexShader); wrap into an
+    // ID3D11VertexShader via CreateVertexShader instead of compiling
+    // GenerateBatchVertexShader through shader_cache.
+    const auto bc = D3DCommon::EmbeddedShaders::PickBatchVertexShader(static_cast<bool>(textured));
+    m_batch_vertex_shaders[textured] =
+      D3D11::ShaderCompiler::CreateVertexShader(m_device.Get(), bc.data, bc.size);
     if (!m_batch_vertex_shaders[textured])
       return false;
 

@@ -5,7 +5,6 @@
 #include "common/d3d12/texture.h"
 #include "common/dimensional_array.h"
 #include "gpu_hw.h"
-#include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "texture_replacements.h"
 #include <array>
@@ -132,9 +131,9 @@ private:
   // shader bytecode directly from the D3DCommon::EmbeddedShaders
   // pre-baked pickers (every batch FS variant is pre-baked as of
   // the f2620c1 arc completion - no runtime shadergen + D3DCompile)
-  // and the vertex-shader bytecode from m_batch_vertex_shader_blobs
-  // (still runtime-compiled; only 2 variants). It then hands the
-  // descriptor to m_shader_cache.GetPipelineState (which hits the
+  // and the vertex-shader bytecode from the PickBatchVertexShader
+  // pre-baked picker (also pre-baked now; 2 variants). It then hands
+  // the descriptor to m_shader_cache.GetPipelineState (which hits the
   // on-disk PSO cache where possible, only paying the actual driver
   // compile on cold runs). Reserved_* texture-mode PSOs inherit the
   // canonical PSO ComPtr.
@@ -262,34 +261,27 @@ private:
   // already-compiled fragment shader - reads the corresponding
   // _fastpath atomic array with an acquire-load and does not take
   // this mutex. That decoupling is what keeps the runloop running
-  // while the background precompile worker is compiling other
-  // cells. m_shadergen is functionally stateless once constructed
-  // but we still pin its lifetime here because the helpers' slow
-  // path calls into it under the lock.
+  // while the background precompile worker is faulting in other
+  // cells.
+  //
+  // m_shader_cache is retained for the PSO pipeline-library cache
+  // (the gpbuilder.Create(device, m_shader_cache) calls). There is no
+  // m_shadergen member any more: every batch / VRAM-ops / display
+  // shader is pre-baked, so the D3D12 backend issues zero D3DCompile
+  // calls and never instantiates GPU_HW_ShaderGen.
   std::mutex m_batch_shader_mutex;
   D3D12::ShaderCache m_shader_cache;
-  std::unique_ptr<GPU_HW_ShaderGen> m_shadergen;
   std::thread m_shader_compile_thread;
   std::atomic<bool> m_shader_compile_thread_quit{false};
 
-  // Vertex shader bytecode blobs for the lazy PSO builder. Used to
-  // be locals in CompilePipelines (the previous implementation built
-  // the entire matrix synchronously and only needed them for the
-  // duration of that function). With lazy / background compile they
-  // must outlive CompilePipelines so the PSO-builder helper can fetch
-  // the bound bytecode when faulting in a PSO.
-  //
-  // The fragment-shader side no longer needs a parallel blob matrix:
-  // every batch FS variant is pre-baked (the batch FS pre-bake arc
-  // completed at f2620c1), so GetBatchPipeline pulls FS bytecode
-  // directly from the D3DCommon::EmbeddedShaders pickers rather than
-  // a runtime-compiled m_batch_fragment_shader_blobs cache. The
-  // matrix + its lock-free fast-path view + the GetBatchFragmentShader
-  // helper that populated them were removed together with this
-  // cleanup. The vertex shader is still runtime-compiled via
-  // shader_cache (only 2 variants, [textured]), so its blob array
-  // stays.
-  DimensionalArray<ComPtr<ID3DBlob>, 2> m_batch_vertex_shader_blobs;            // [textured]
+  // The fragment-shader side needs no blob matrix: every batch FS
+  // variant is pre-baked (the batch FS pre-bake arc completed at
+  // f2620c1), so GetBatchPipeline pulls FS bytecode directly from the
+  // D3DCommon::EmbeddedShaders pickers. The vertex shader is now
+  // pre-baked too (2 variants via PickBatchVertexShader), so the
+  // former m_batch_vertex_shader_blobs runtime-compiled cache is gone
+  // as well - GetBatchPipeline wraps the picked VS DXBC into a
+  // D3D12_SHADER_BYTECODE inline.
 
   // [wrapped][interlaced]
   DimensionalArray<ComPtr<ID3D12PipelineState>, 2, 2> m_vram_fill_pipelines;

@@ -103,6 +103,16 @@ struct Bytecode {
 // applied by the caller before invoking; the picker assumes 3 and
 // 7 are unreachable.
 
+// Batch vertex shader picker. Selects from the 2 blobs at
+// embedded_dxbc/batch_vertex_vs_{untextured,textured}.inc by the
+// TEXTURED axis. Unlike the FS pickers there is no interp / persp /
+// multisample axis: the runtime shadergen adds those qualifiers to the
+// VS outputs, but D3D fixes interpolation from the PS input signature,
+// so fxc emits identical VS DXBC across every interp / persp
+// permutation. The returned bytecode also feeds D3D11
+// CreateInputLayout for the matching vertex format.
+Bytecode PickBatchVertexShader(bool textured);
+
 // Untextured batch FS variant picker. Selects from the 12 blobs at
 // embedded_dxbc/batch_untextured_ps_*.inc.
 Bytecode PickBatchUntexturedFS(bool use_dual_source, uint32_t multisamples,
@@ -222,6 +232,24 @@ Bytecode PickBoxSampleDownsampleFS(uint32_t resolution_scale);
 // Source: data/shaders/d3d_common/fullscreen_quad.vs.hlsl
 extern const uint8_t k_fullscreen_quad_vs[];
 extern const size_t k_fullscreen_quad_vs_size_bytes;
+
+// Batch vertex shader. Equivalent to
+// GPU_HW_ShaderGen::GenerateBatchVertexShader(textured). Two variants
+// on the TEXTURED axis only - the textured form adds the
+// a_texcoord / a_texpage / a_uv_limits inputs and the v_tex0 /
+// v_texpage / v_uv_limits outputs. RESOLUTION_SCALE / PGXP_DEPTH /
+// UV_LIMITS are cbuffer-routed so they don't multiply the matrix, and
+// the interp / noperspective qualifiers the runtime shadergen adds to
+// the VS outputs don't affect the DXBC (D3D fixes interpolation from
+// the PS input signature), so there is no interp / persp axis here -
+// see PickBatchVertexShader. Consumed by both backends: the textured
+// blob also feeds D3D11 CreateInputLayout.
+//
+// Source: data/shaders/d3d_common/batch_vertex.vs.hlsl
+extern const uint8_t k_batch_vertex_vs_untextured[];
+extern const size_t k_batch_vertex_vs_untextured_size_bytes;
+extern const uint8_t k_batch_vertex_vs_textured[];
+extern const size_t k_batch_vertex_vs_textured_size_bytes;
 
 // Copy/blit pixel shader. Equivalent to
 // ShaderGen::GenerateCopyFragmentShader() in D3D12 mode. Single

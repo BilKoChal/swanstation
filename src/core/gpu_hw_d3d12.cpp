@@ -9,7 +9,6 @@
 #include "common/log.h"
 #include "common/thread_priority.h"
 #include "common/timer.h"
-#include "gpu_hw_shadergen.h"
 #include "host_display.h"
 #include "host_interface.h"
 #include "shader_cache_version.h"
@@ -788,16 +787,6 @@ bool GPU_HW_D3D12::CompilePipelines()
     m_shader_cache.Open(g_host_interface->GetShaderCacheBasePath(), g_d3d12_context->GetDevice(),
                         g_d3d12_context->GetFeatureLevel(), SHADER_CACHE_VERSION, false);
   }
-  // Convenience local reference for readability in the rest of this
-  // function; the lazy helpers below also reach into m_shader_cache
-  // through the member.
-  D3D12::ShaderCache& shader_cache = m_shader_cache;
-
-  m_shadergen = std::make_unique<GPU_HW_ShaderGen>(
-    m_host_display->GetRenderAPI(), m_resolution_scale, m_multisamples, m_per_sample_shading, m_true_color,
-    m_scaled_dithering, m_texture_filtering, m_using_uv_limits, m_pgxp_depth_buffer, m_disable_color_perspective,
-    m_supports_dual_source_blend);
-  GPU_HW_ShaderGen& shadergen = *m_shadergen;
 
   // Whether to walk the full batch / PSO matrix synchronously,
   // hand it to a background thread, or skip it entirely. See the
@@ -832,25 +821,15 @@ bool GPU_HW_D3D12::CompilePipelines()
   const uint32_t non_batch_progress_units = precompile_sync ? 17u : 0u;
 
   ShaderCompileProgressTracker progress("Compiling Pipelines",
-                                        2 + batch_shader_progress_units + batch_pipeline_progress_units +
+                                        batch_shader_progress_units + batch_pipeline_progress_units +
                                           non_batch_progress_units);
 
-  // Vertex shaders are still always compiled synchronously - there
-  // are only two (textured / not) and we need them for the lazy
-  // PSO builder. The fragment shaders are all pre-baked (consumed
-  // directly by GetBatchPipeline via the D3DCommon::EmbeddedShaders
-  // pickers), so there is no FS blob matrix to fill.
-  auto& batch_vertex_shaders = m_batch_vertex_shader_blobs;
-
-  for (uint8_t textured = 0; textured < 2; textured++)
-  {
-    const std::string vs = shadergen.GenerateBatchVertexShader(static_cast<bool>(textured));
-    batch_vertex_shaders[textured] = shader_cache.GetVertexShader(vs);
-    if (!batch_vertex_shaders[textured])
-      return false;
-
-    progress.Increment();
-  }
+  // The batch vertex shaders are pre-baked too (consumed directly by
+  // GetBatchPipeline via PickBatchVertexShader, the same way the
+  // fragment shaders pull from the FS pickers), so there is no VS blob
+  // matrix to fill and no synchronous compile here. With the batch VS
+  // pre-baked, the D3D12 backend issues zero D3DCompile calls at
+  // runtime - shadergen is gone entirely.
 
   // Batch PSO matrix. Behaviour depends on
   // g_settings.gpu_shader_precompile_mode (see core/types.h):
@@ -1106,7 +1085,7 @@ void GPU_HW_D3D12::ShaderCompileThreadEntryPoint()
   // - the same order CompilePipelines uses for the Enabled precompile
   // loop - and calls GetBatchPipeline on each cell. GetBatchPipeline
   // pulls the FS bytecode from the pre-baked pickers and the VS from
-  // m_batch_vertex_shader_blobs, then builds + caches the PSO, so the
+  // PickBatchVertexShader, then builds + caches the PSO, so the
   // worker fills the PSO array as it goes. The quit flag is checked
   // between cells so DestroyPipelines can bring the worker down within
   // at most one PSO compile worth of latency (D3D12 PSO compiles can
@@ -1329,7 +1308,14 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetBatchPipeline(GPUText
   }
 
   gpbuilder.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-  gpbuilder.SetVertexShader(m_batch_vertex_shader_blobs[static_cast<uint8_t>(textured)].Get());
+  {
+    // Pre-baked batch VS DXBC (batch_vertex_vs_{untextured,textured}.inc),
+    // wrapped in D3D12_SHADER_BYTECODE the same way the fullscreen-quad
+    // VS is. No runtime D3DCompile - this was the last shadergen call on
+    // the D3D12 backend.
+    const auto vs_bc = D3DCommon::EmbeddedShaders::PickBatchVertexShader(textured);
+    gpbuilder.SetVertexShader(D3D12_SHADER_BYTECODE{vs_bc.data, vs_bc.size});
+  }
   gpbuilder.SetPixelShader(fs_bc);
 
   gpbuilder.SetRasterizationState(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, false);
@@ -2087,8 +2073,8 @@ GPU_HW_D3D12::ComPtr<ID3D12PipelineState> GPU_HW_D3D12::GetCopyPipeline()
   const D3D12_SHADER_BYTECODE vs = GetFullscreenQuadVertexShader();
 
   // Pre-baked DXBC blob, same shape as the VS - statically linked
-  // from src/common/d3d12/embedded_dxbc/copy_ps.inc, single variant,
-  // no shader_cache lookup, no D3DCompile, no m_shadergen
+  // from src/common/d3d_common/embedded_dxbc/copy_ps.inc, single
+  // variant, no shader_cache lookup, no D3DCompile, no shadergen
   // dependency. The PSO compile below is the only remaining work.
   const D3D12_SHADER_BYTECODE fs = {
     D3DCommon::EmbeddedShaders::k_copy_ps,
@@ -2133,7 +2119,6 @@ void GPU_HW_D3D12::DestroyPipelines()
   // matrix - otherwise it would be writing into ComPtrs we're about
   // to default-construct.
   StopShaderCompileThread();
-  m_shadergen.reset();
 
   // Clear the atomic fast-path views BEFORE dropping the ComPtr
   // ownership so a hypothetical concurrent reader couldn't see a
@@ -2165,8 +2150,6 @@ void GPU_HW_D3D12::DestroyPipelines()
   m_vram_readback_pipeline.Reset();
   m_vram_update_depth_pipeline.Reset();
 
-  m_batch_vertex_shader_blobs = {};
-
   m_display_pipelines = {};
 
   // m_copy_pipeline was previously not cleared here - latent leak
@@ -2178,20 +2161,16 @@ void GPU_HW_D3D12::DestroyPipelines()
 void GPU_HW_D3D12::ClearDisplayPipelines()
 {
   // Partial destroy: drop just the display PSO cache. Used by
-  // UpdateSettings on a chroma_smoothing-only flip - chroma_smoothing
-  // is a DefineMacro inside GenerateDisplayFragmentShader only, so
-  // the batch matrix and the VRAM ops PSOs stay valid. The next
-  // UpdateDisplay call's GetDisplayPipeline will lazy-fault each
-  // (depth_24, interlace_mode) slot with HLSL re-generated against
-  // the new m_chroma_smoothing.
+  // UpdateSettings on a chroma_smoothing-only flip. chroma_smoothing
+  // selects among the pre-baked display FS variants, so the batch
+  // matrix and the VRAM ops PSOs stay valid; only the display PSOs
+  // need rebuilding. The next UpdateDisplay call's GetDisplayPipeline
+  // lazy-faults each (depth_24, interlace_mode) slot, picking the
+  // pre-baked display DXBC for the new m_chroma_smoothing.
   //
-  // No StopShaderCompileThread / m_shadergen.reset needed - the
-  // worker only walks the batch matrix, and m_shadergen doesn't
-  // hold chroma_smoothing as ctor state (GenerateDisplayFragmentShader
-  // takes it as a per-call parameter from the member
-  // m_chroma_smoothing, which UpdateHWSettings has already updated by
-  // the time we land here). UpdateSettings has already executed the
-  // command list to completion via g_d3d12_context->ExecuteCommandList(true),
+  // No StopShaderCompileThread needed - the worker only walks the
+  // batch matrix. UpdateSettings has already executed the command
+  // list to completion via g_d3d12_context->ExecuteCommandList(true),
   // so no in-flight draw references these PSOs.
   m_display_pipelines_fastpath.enumerate(
     [](std::atomic<ID3D12PipelineState*>& s) { s.store(nullptr, std::memory_order_relaxed); });

@@ -19,6 +19,8 @@
 namespace D3DCommon::EmbeddedShaders {
 
 #include "embedded_dxbc/fullscreen_quad_vs.inc"
+#include "embedded_dxbc/batch_vertex_vs_untextured.inc"
+#include "embedded_dxbc/batch_vertex_vs_textured.inc"
 #include "embedded_dxbc/copy_ps.inc"
 #include "embedded_dxbc/vram_copy_ps_pgxp0.inc"
 #include "embedded_dxbc/vram_copy_ps_pgxp1.inc"
@@ -651,6 +653,15 @@ namespace D3DCommon::EmbeddedShaders {
 // is consumed identically (D3D12 wraps in D3D12_SHADER_BYTECODE
 // for ID3D12PipelineState; D3D11 calls
 // ID3D11Device::CreatePixelShader(bytecode, size, ...)).
+
+Bytecode PickBatchVertexShader(bool textured)
+{
+  // Single TEXTURED axis - see the header for why there is no interp /
+  // persp / multisample axis (VS DXBC is invariant under those).
+  if (textured)
+    return {k_batch_vertex_vs_textured, k_batch_vertex_vs_textured_size_bytes};
+  return {k_batch_vertex_vs_untextured, k_batch_vertex_vs_untextured_size_bytes};
+}
 
 Bytecode PickBatchUntexturedFS(
     bool use_dual_source, uint32_t multisamples, bool per_sample_shading,

@@ -220,6 +220,24 @@ TEMPLATE_VARIANTS = {
     # Variant suffix: d{0,1}_{none,centroid,sample}_p{0,1}.
     # Alphabetical sort matches the natural nested-loop iteration
     # order in the matching helper at embedded_shaders.cpp.
+    # batch_vertex_vs: the batch vertex shader, shared by both D3D
+    # backends. 1 axis (TEXTURED) = 2 blobs. TEXTURED adds the
+    # a_texcoord/a_texpage/a_uv_limits inputs + v_tex0/v_texpage/
+    # v_uv_limits outputs. RESOLUTION_SCALE / PGXP_DEPTH / UV_LIMITS are
+    # cbuffer-routed so they don't multiply. Unlike the batch FS, there
+    # is NO interp/persp axis: the runtime shadergen adds centroid /
+    # sample / noperspective qualifiers to the VS outputs, but D3D fixes
+    # interpolation from the PS input signature, so fxc emits identical
+    # VS DXBC for every interp/persp permutation (verified by hashing).
+    # The matching interp axes live on the FS templates only.
+    #
+    # Variant suffix: untextured / textured. Picker at
+    # embedded_shaders.cpp indexes [textured].
+    "batch_vertex.vs.hlsl": [
+        ("untextured", []),
+        ("textured",   ["TEXTURED=1"]),
+    ],
+
     "batch_untextured.ps.hlsl": [
         # dual=0
         ("d0_none_p0",     []),
