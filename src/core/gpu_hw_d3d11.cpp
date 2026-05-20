@@ -585,8 +585,8 @@ void GPU_HW_D3D11::UpdateSettings()
   // at launch and uses it for every GetBatchPixelShader call - if
   // the runloop thread flips it mid-iteration the worker would split
   // its filter-index read across old / new values, installing a
-  // pixel shader compiled with one filter into a sub-cube indexed by
-  // another. Joining first eliminates the race; the next
+  // pixel shader for one filter into a sub-cube indexed by another.
+  // Joining first eliminates the race; the next
   // CompileShaders below restarts a worker for the new filter as
   // appropriate. StopShaderCompileThread is idempotent, so the
   // matching call inside DestroyShaders just becomes a no-op on
@@ -1276,15 +1276,18 @@ void GPU_HW_D3D11::ShaderCompileThreadEntryPoint()
   ThreadPriority::LowerCurrentThreadPriority();
 
   // Walk the matrix in (render, texture, dither, interlace) order
-  // and call GetBatchPixelShader on each cell. Each call runs the
-  // slow D3DCompile + CreatePixelShader lock-free and takes
-  // m_batch_shader_mutex only for the publish step (microsecond
-  // window). The main thread can race ahead and pre-fill any slot
-  // it actually needs at draw time without waiting for the worker
-  // to reach them, and the worker's race-loser detection picks up
-  // any slot the main thread filled first. The quit flag is
-  // checked between cells so DestroyShaders can bring the worker
-  // down within at most one shader-compile worth of latency.
+  // and call GetBatchPixelShader on each cell. Each call wraps the
+  // pre-baked DXBC blob into an ID3D11PixelShader via
+  // CreatePixelShader lock-free and takes m_batch_shader_mutex only
+  // for the publish step (microsecond window). No D3DCompile runs -
+  // the batch FS set is fully pre-baked (f2620c1), so per-cell cost
+  // is just the CreatePixelShader wrap. The main thread can race
+  // ahead and pre-fill any slot it actually needs at draw time
+  // without waiting for the worker to reach them, and the worker's
+  // race-loser detection picks up any slot the main thread filled
+  // first. The quit flag is checked between cells so DestroyShaders
+  // can bring the worker down within at most one CreatePixelShader
+  // worth of latency.
   //
   // Structurally unreachable cells are skipped via
   // IsBatchShaderReachable - see the comment on that helper in
@@ -1353,35 +1356,32 @@ ID3D11PixelShader* GPU_HW_D3D11::GetBatchPixelShader(GPUTextureFilter filter, ui
   if (existing)
     return existing;
 
-  // Slow path. Compile WITHOUT m_batch_shader_mutex held - that
-  // mutex was the head-of-line blocking culprit in the pre-fix
-  // design. m_shader_cache is internally thread-safe (it runs
-  // D3DCompile lock-free, takes its own mutex only for index /
-  // blob-file mutations and the disk-publish double-check), and
-  // ID3D11Device::CreatePixelShader is documented free-threaded
-  // by Microsoft, so multiple threads can compile different
-  // shaders here in parallel. Two threads racing to compile the
-  // SAME slot both produce equivalent ID3D11PixelShader objects;
-  // the loser's ComPtr is released when it falls out of scope
-  // below.
+  // Slow path. Build the ID3D11PixelShader WITHOUT
+  // m_batch_shader_mutex held - that mutex was the head-of-line
+  // blocking culprit in the pre-fix design.
+  // ID3D11Device::CreatePixelShader is documented free-threaded by
+  // Microsoft, so multiple threads can wrap different pre-baked DXBC
+  // blobs into ID3D11PixelShader objects here in parallel. Two
+  // threads racing to wrap the SAME slot both produce equivalent
+  // objects; the loser's ComPtr is released when it falls out of
+  // scope below.
   //
-  // Two paths converge on the same `fresh` ComPtr:
-  //   1. Pre-baked (texture_mode == Disabled OR
-  //      filter == Nearest with a non-Disabled texture_mode): no
-  //      shadergen, no D3DCompile, no m_shader_cache lookup. The
-  //      shared picker in D3DCommon::EmbeddedShaders returns the
-  //      matching .inc-supplied DXBC blob and we hand it straight
-  //      to D3D11::ShaderCompiler::CreatePixelShader (which wraps
-  //      ID3D11Device::CreatePixelShader with the byte / size pair).
-  //      Same blobs the D3D12 backend consumes; fxc emits ps_5_0
-  //      that both APIs honour identically. No shader-cache
-  //      entries are produced for these cells.
-  //   2. Runtime (every other filter): the existing shadergen +
-  //      D3DCompile + m_shader_cache path, unchanged. Bilinear /
-  //      JINC2 / xBR (and their *BinAlpha variants) still take
-  //      this path. As subsequent pre-bake commits land their
-  //      filter slices for the D3D12 backend, the same pre-baked
-  //      blobs become reusable here.
+  // Every batch FS variant is pre-baked (the batch FS pre-bake arc
+  // completed at f2620c1). The shared pickers in
+  // D3DCommon::EmbeddedShaders return the matching .inc-supplied
+  // DXBC blob, which we hand straight to
+  // D3D11::ShaderCompiler::CreatePixelShader (a thin wrapper over
+  // ID3D11Device::CreatePixelShader with the byte / size pair):
+  //   - Untextured (texture_mode == Disabled): PickBatchUntexturedFS
+  //   - Textured + Nearest:   PickBatchTexturedNearestFS
+  //   - Textured + Bilinear:  PickBatchTexturedBilinearFS
+  //   - Textured + JINC2:     PickBatchTexturedJINC2FS
+  //   - Textured + xBR:       PickBatchTexturedXBRFS
+  // These are the same blobs the D3D12 backend consumes; fxc emits
+  // ps_5_0 that both APIs honour identically. No shadergen, no
+  // D3DCompile, no m_shader_cache lookup or entry for any batch FS
+  // cell - m_shader_cache now serves only the non-batch shaders
+  // (batch VS, screen / UV quad VS, copy / vram / display PS).
   //
   // The use_dual_source bit is the same shadergen formula the
   // pickers consume on D3D12 (m_supports_dual_source_blend AND

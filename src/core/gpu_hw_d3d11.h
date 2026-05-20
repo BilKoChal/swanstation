@@ -168,16 +168,19 @@ private:
   //     no kernel call, no serialisation against the background
   //     precompile worker. This is what DrawBatchVertices hits in
   //     steady state.
-  //   - SLOW path (slot null after the atomic load): runs
-  //     shadergen + m_shader_cache.GetPixelShader (HLSL -> DXBC
-  //     via D3DCompile + CreatePixelShader) WITHOUT
-  //     m_batch_shader_mutex held. m_shader_cache is internally
-  //     thread-safe (separate mutex around the index, NOT held
-  //     across D3DCompile). After the compile completes,
-  //     m_batch_shader_mutex is taken briefly to publish into the
-  //     matrix under a double-check; the mutex window is now
-  //     publish-only (microseconds), not compile-spanning
-  //     (50-200 ms).
+  //   - SLOW path (slot null after the atomic load): picks the
+  //     pre-baked DXBC blob for this (filter, render_mode,
+  //     texture_mode) cell from D3DCommon::EmbeddedShaders and
+  //     wraps it into an ID3D11PixelShader via
+  //     D3D11::ShaderCompiler::CreatePixelShader, WITHOUT
+  //     m_batch_shader_mutex held. CreatePixelShader (i.e.
+  //     ID3D11Device::CreatePixelShader) is free-threaded, so
+  //     concurrent slow-path wraps for different cells don't
+  //     serialise. After the wrap completes, m_batch_shader_mutex
+  //     is taken briefly to publish into the matrix under a double-
+  //     check; the mutex window is publish-only (microseconds). No
+  //     shadergen, no D3DCompile, no m_shader_cache for batch FS -
+  //     the entire batch FS set is pre-baked as of f2620c1.
   //
   // ID3D11PixelShader* itself is free-threaded for the consumer
   // side (PSSetShader), so DrawBatchVertices can use the raw
@@ -194,10 +197,10 @@ private:
   // and reachable, switching back to it later is an atomic load on
   // an already-filled slot. Mirrors the D3D12 dim cache landed in
   // 10c53b8 and the Vulkan dim cache from the glslang-elimination
-  // series. The slow-path shadergen is rebuilt per-call against
-  // the requested filter so a worker / main-thread fault for a
-  // non-current filter's sub-cube generates HLSL for that filter,
-  // not for m_texture_filtering.
+  // series. The slow path picks the pre-baked DXBC for the
+  // requested filter directly, so a worker / main-thread fault for
+  // a non-current filter's sub-cube wraps that filter's blob, not
+  // m_texture_filtering's.
   ID3D11PixelShader* GetBatchPixelShader(GPUTextureFilter filter, uint8_t render_mode, uint8_t texture_mode, bool dithering, bool interlacing);
 
   // Background-thread worker for 'Lazy' mode: walks the entire
