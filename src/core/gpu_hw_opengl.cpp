@@ -819,9 +819,21 @@ void GPU_HW_OpenGL::UpdateSettings()
   // OpenGL has no worker thread so there's no relaunch step on this
   // path - precompile_mode contract is simply "RebuildDisplayPrograms
   // is synchronous" in any mode.
-  bool framebuffer_changed, shaders_changed, only_dim_changed, shader_source_changed, display_only_source_changed;
-  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, nullptr, &shader_source_changed,
-                   &display_only_source_changed);
+  bool framebuffer_changed, shaders_changed, only_dim_changed, downsample_changed, shader_source_changed,
+    display_only_source_changed;
+  UpdateHWSettings(&framebuffer_changed, &shaders_changed, &only_dim_changed, &downsample_changed,
+                   &shader_source_changed, &display_only_source_changed);
+
+  // A downsample-mode change that UpdateHWSettings did not fold into
+  // framebuffer_changed (GL only does Box, so this is Disabled <-> Box -
+  // it never sets framebuffer_changed, which keys on Adaptive) still
+  // needs the box downsample texture created or freed. CreateFramebuffer
+  // (re)builds it for the new mode, so route the change through the
+  // normal ReadVRAM -> CreateFramebuffer -> UpdateVRAM round-trip rather
+  // than recreating it in isolation. Downsample toggling is a rare user
+  // action, so the extra round-trip is not a concern.
+  if (downsample_changed && !framebuffer_changed)
+    framebuffer_changed = true;
 
   if (framebuffer_changed)
   {
@@ -893,6 +905,15 @@ void GPU_HW_OpenGL::UpdateSettings()
       CompilePrograms();
     }
   }
+
+  // Rebuild the downsample program for the new mode. shader_source_changed
+  // was false for a downsample-only change, so CompilePrograms above did
+  // not run; without this the box program stays null after a Disabled <->
+  // Box toggle and the downsample pass draws with no program. The texture
+  // side was handled by the downsample_changed -> framebuffer_changed
+  // promotion above.
+  if (downsample_changed)
+    CompileDownsampleProgram();
 
   if (framebuffer_changed)
   {
@@ -1320,29 +1341,51 @@ bool GPU_HW_OpenGL::CompilePrograms()
 
   progress.Increment();
 
-  if (m_downsample_mode == GPUDownsampleMode::Box)
-  {
-    prog = shader_cache.GetProgram(shadergen.GenerateScreenQuadVertexShader(), {},
-                                   shadergen.GenerateBoxSampleDownsampleFragmentShader(),
-                                   [this, use_binding_layout](GL::Program& p) {
-                                     if (!IsGLES() && !use_binding_layout)
-                                       p.BindFragData(0, "o_col0");
-                                   });
-    if (!prog)
-      return false;
-
-    if (!use_binding_layout)
-    {
-      prog->Bind();
-      prog->Uniform1i("samp0", 0);
-    }
-
-    m_downsample_program = std::move(*prog);
-  }
+  if (!CompileDownsampleProgram())
+    return false;
 
   progress.Increment();
 #undef UPDATE_PROGRESS
 
+  return true;
+}
+
+bool GPU_HW_OpenGL::CompileDownsampleProgram()
+{
+  // (Re)build the Box downsample program for the current
+  // m_downsample_mode. Split out of CompilePrograms so UpdateSettings
+  // can rebuild it on a downsample-mode change: GPU_HW::UpdateHWSettings
+  // keeps downsample mode out of shaders_changed (it does not touch the
+  // batch matrix) and surfaces it via downsample_changed, so without
+  // this the program stays null after a runtime Disabled <-> Box switch
+  // and the downsample pass draws with no program. GL only supports Box
+  // downsampling (m_supports_adaptive_downsampling = false), so Disabled
+  // is a no-op. m_shader_cache / m_shadergen / m_use_binding_layout were
+  // set up by the initial CompilePrograms and stay valid here (a
+  // downsample-only change does not move any shadergen input).
+  if (m_downsample_mode != GPUDownsampleMode::Box)
+    return true;
+
+  GL::ShaderCache& shader_cache = m_shader_cache;
+  GPU_HW_ShaderGen& shadergen = *m_shadergen;
+  const bool use_binding_layout = m_use_binding_layout;
+
+  auto prog = shader_cache.GetProgram(shadergen.GenerateScreenQuadVertexShader(), {},
+                                      shadergen.GenerateBoxSampleDownsampleFragmentShader(),
+                                      [this, use_binding_layout](GL::Program& p) {
+                                        if (!IsGLES() && !use_binding_layout)
+                                          p.BindFragData(0, "o_col0");
+                                      });
+  if (!prog)
+    return false;
+
+  if (!use_binding_layout)
+  {
+    prog->Bind();
+    prog->Uniform1i("samp0", 0);
+  }
+
+  m_downsample_program = std::move(*prog);
   return true;
 }
 

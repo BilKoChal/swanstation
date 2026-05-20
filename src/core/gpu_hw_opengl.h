@@ -139,6 +139,7 @@ private:
   bool CreateTextureBuffer();
 
   bool CompilePrograms();
+  bool CompileDownsampleProgram();
   bool RebuildDisplayPrograms();
 
   // Fast-path companion to CompilePrograms for the dim-cache
