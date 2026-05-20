@@ -1,10 +1,11 @@
 #include "shader_cache.h"
 #include "../file_system.h"
 #include "../log.h"
-#include "../md5_digest.h"
 #include <cstring>
 
 #include <file/file_path.h>
+
+#include "xxhash.h"
 
 Log_SetChannel(D3D12::ShaderCache);
 
@@ -173,67 +174,64 @@ std::string ShaderCache::GetCacheBaseFileName(const std::string_view& base_path,
   return base_filename;
 }
 
-union MD5Hash
-{
-  struct
-  {
-    uint64_t low;
-    uint64_t high;
-  };
-  uint8_t hash[16];
-};
-
 ShaderCache::CacheIndexKey ShaderCache::GetPipelineCacheKey(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& gpdesc)
 {
-  MD5Digest digest;
+  // XXH3 (128-bit) over the pipeline descriptor and the attached shader
+  // bytecode, replacing MD5. This hash is the only thing the key is used
+  // for now: FormatPipelineLibraryName renders it as the
+  // ID3D12PipelineLibrary entry name. XXH128_hash_t maps straight onto
+  // the key's two uint64 fields. Far cheaper than a cryptographic digest
+  // for a local cache key.
+  XXH3_state_t* state = XXH3_createState();
+  XXH3_128bits_reset(state);
   uint32_t length = sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
 
   if (gpdesc.VS.BytecodeLength > 0)
   {
-    digest.Update(gpdesc.VS.pShaderBytecode, static_cast<uint32_t>(gpdesc.VS.BytecodeLength));
+    XXH3_128bits_update(state, gpdesc.VS.pShaderBytecode, static_cast<uint32_t>(gpdesc.VS.BytecodeLength));
     length += static_cast<uint32_t>(gpdesc.VS.BytecodeLength);
   }
   if (gpdesc.GS.BytecodeLength > 0)
   {
-    digest.Update(gpdesc.GS.pShaderBytecode, static_cast<uint32_t>(gpdesc.GS.BytecodeLength));
+    XXH3_128bits_update(state, gpdesc.GS.pShaderBytecode, static_cast<uint32_t>(gpdesc.GS.BytecodeLength));
     length += static_cast<uint32_t>(gpdesc.GS.BytecodeLength);
   }
   if (gpdesc.PS.BytecodeLength > 0)
   {
-    digest.Update(gpdesc.PS.pShaderBytecode, static_cast<uint32_t>(gpdesc.PS.BytecodeLength));
+    XXH3_128bits_update(state, gpdesc.PS.pShaderBytecode, static_cast<uint32_t>(gpdesc.PS.BytecodeLength));
     length += static_cast<uint32_t>(gpdesc.PS.BytecodeLength);
   }
 
-  digest.Update(&gpdesc.BlendState, sizeof(gpdesc.BlendState));
-  digest.Update(&gpdesc.SampleMask, sizeof(gpdesc.SampleMask));
-  digest.Update(&gpdesc.RasterizerState, sizeof(gpdesc.RasterizerState));
-  digest.Update(&gpdesc.DepthStencilState, sizeof(gpdesc.DepthStencilState));
+  XXH3_128bits_update(state, &gpdesc.BlendState, sizeof(gpdesc.BlendState));
+  XXH3_128bits_update(state, &gpdesc.SampleMask, sizeof(gpdesc.SampleMask));
+  XXH3_128bits_update(state, &gpdesc.RasterizerState, sizeof(gpdesc.RasterizerState));
+  XXH3_128bits_update(state, &gpdesc.DepthStencilState, sizeof(gpdesc.DepthStencilState));
 
   for (uint32_t i = 0; i < gpdesc.InputLayout.NumElements; i++)
   {
     const D3D12_INPUT_ELEMENT_DESC& ie = gpdesc.InputLayout.pInputElementDescs[i];
-    digest.Update(ie.SemanticName, static_cast<uint32_t>(std::strlen(ie.SemanticName)));
-    digest.Update(&ie.SemanticIndex, sizeof(ie.SemanticIndex));
-    digest.Update(&ie.Format, sizeof(ie.Format));
-    digest.Update(&ie.InputSlot, sizeof(ie.InputSlot));
-    digest.Update(&ie.AlignedByteOffset, sizeof(ie.AlignedByteOffset));
-    digest.Update(&ie.InputSlotClass, sizeof(ie.InputSlotClass));
-    digest.Update(&ie.InstanceDataStepRate, sizeof(ie.InstanceDataStepRate));
+    XXH3_128bits_update(state, ie.SemanticName, static_cast<uint32_t>(std::strlen(ie.SemanticName)));
+    XXH3_128bits_update(state, &ie.SemanticIndex, sizeof(ie.SemanticIndex));
+    XXH3_128bits_update(state, &ie.Format, sizeof(ie.Format));
+    XXH3_128bits_update(state, &ie.InputSlot, sizeof(ie.InputSlot));
+    XXH3_128bits_update(state, &ie.AlignedByteOffset, sizeof(ie.AlignedByteOffset));
+    XXH3_128bits_update(state, &ie.InputSlotClass, sizeof(ie.InputSlotClass));
+    XXH3_128bits_update(state, &ie.InstanceDataStepRate, sizeof(ie.InstanceDataStepRate));
     length += sizeof(D3D12_INPUT_ELEMENT_DESC);
   }
 
-  digest.Update(&gpdesc.IBStripCutValue, sizeof(gpdesc.IBStripCutValue));
-  digest.Update(&gpdesc.PrimitiveTopologyType, sizeof(gpdesc.PrimitiveTopologyType));
-  digest.Update(&gpdesc.NumRenderTargets, sizeof(gpdesc.NumRenderTargets));
-  digest.Update(gpdesc.RTVFormats, sizeof(gpdesc.RTVFormats));
-  digest.Update(&gpdesc.DSVFormat, sizeof(gpdesc.DSVFormat));
-  digest.Update(&gpdesc.SampleDesc, sizeof(gpdesc.SampleDesc));
-  digest.Update(&gpdesc.Flags, sizeof(gpdesc.Flags));
+  XXH3_128bits_update(state, &gpdesc.IBStripCutValue, sizeof(gpdesc.IBStripCutValue));
+  XXH3_128bits_update(state, &gpdesc.PrimitiveTopologyType, sizeof(gpdesc.PrimitiveTopologyType));
+  XXH3_128bits_update(state, &gpdesc.NumRenderTargets, sizeof(gpdesc.NumRenderTargets));
+  XXH3_128bits_update(state, gpdesc.RTVFormats, sizeof(gpdesc.RTVFormats));
+  XXH3_128bits_update(state, &gpdesc.DSVFormat, sizeof(gpdesc.DSVFormat));
+  XXH3_128bits_update(state, &gpdesc.SampleDesc, sizeof(gpdesc.SampleDesc));
+  XXH3_128bits_update(state, &gpdesc.Flags, sizeof(gpdesc.Flags));
 
-  MD5Hash h;
-  digest.Final(h.hash);
+  const XXH128_hash_t h = XXH3_128bits_digest(state);
+  XXH3_freeState(state);
 
-  return CacheIndexKey{h.low, h.high, length, EntryType::GraphicsPipeline};
+  return CacheIndexKey{h.low64, h.high64, length, EntryType::GraphicsPipeline};
 }
 
 ShaderCache::ComPtr<ID3D12PipelineState> ShaderCache::GetPipelineState(ID3D12Device* device,
