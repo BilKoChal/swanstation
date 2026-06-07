@@ -23,6 +23,7 @@ DEBUG                 ?= 0
 SILENT                ?= 0
 LINK_STATIC_LIBCPLUSPLUS ?= 1
 USE_D3D12             ?= 1
+EXTRA_LDFLAGS         ?=
 
 CORE_DIR  := .
 TARGET_NAME := swanstation
@@ -704,7 +705,7 @@ $(OBJECTS): | $(SRC_DIR)/config.h $(SRC_LIBRETRO_DIR)/version.h
 
 $(TARGET): $(OBJECTS)
 	@echo "LD $@"
-	$(LD) -o $@ $(OBJECTS) $(LDFLAGS)
+	$(LD) -o $@ $(OBJECTS) $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 %.o: %.cpp
 	@if [ "$(SILENT)" != "1" ]; then echo "CXX $<"; fi

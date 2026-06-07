@@ -40,6 +40,8 @@ static bool s_libretro_log_callback_valid = false;
 
 /* ---- autoload platform abstractions ---- */
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #define AUTOLOAD_STRCASECMP _stricmp
 #define AUTOLOAD_PATH_SEP   '\\'
 #define AUTOLOAD_MAX_PATH   260
@@ -130,18 +132,15 @@ RETRO_API void retro_reset(void)
  *
  * A line is written to "autoload.log" beside the core for diagnostics. */
 
+/* Windows API constants for autoload – these come from <windows.h>
+ * which was included above with WIN32_LEAN_AND_MEAN. */
 #ifdef _WIN32
-#define AUTOLOAD_FROM_ADDRESS        0x00000004
-#define AUTOLOAD_UNCHANGED_REFCOUNT  0x00000002
-
-extern "C" __declspec(dllimport)
-int           __stdcall GetModuleHandleExA(unsigned long dwFlags,
-                                           const char *lpModuleName,
-                                           void **phModule);
-extern "C" __declspec(dllimport)
-unsigned long __stdcall GetModuleFileNameA(void *hModule,
-                                           char *lpFilename,
-                                           unsigned long nSize);
+#ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+#define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS  0x00000004
+#endif
+#ifndef GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT
+#define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT 0x00000002
+#endif
 #endif
 
 #define AUTOLOAD_MAX_RUNS  25   /* keep only the latest N runs in autoload.log */
@@ -157,11 +156,11 @@ static void autoload_get_self_dir(char *out, size_t out_size)
 {
    out[0] = '\0';
 #ifdef _WIN32
-   void *hm = NULL;
-   char  path[AUTOLOAD_MAX_PATH];
-   char *slash;
-   if (!GetModuleHandleExA(AUTOLOAD_FROM_ADDRESS | AUTOLOAD_UNCHANGED_REFCOUNT,
-                           (const char*)&autoload_get_self_dir, &hm))
+   HMODULE hm = NULL;
+   char    path[AUTOLOAD_MAX_PATH];
+   char   *slash;
+   if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCSTR)&autoload_get_self_dir, &hm))
       return;
    if (!GetModuleFileNameA(hm, path, sizeof(path)))
       return;
@@ -188,11 +187,11 @@ static void autoload_get_self_name(char *out, size_t out_size)
 {
    out[0] = '\0';
 #ifdef _WIN32
-   void *hm = NULL;
-   char  path[AUTOLOAD_MAX_PATH];
-   char *slash, *dot, *base;
-   if (!GetModuleHandleExA(AUTOLOAD_FROM_ADDRESS | AUTOLOAD_UNCHANGED_REFCOUNT,
-                           (const char*)&autoload_get_self_name, &hm))
+   HMODULE hm = NULL;
+   char    path[AUTOLOAD_MAX_PATH];
+   char   *slash, *dot, *base;
+   if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCSTR)&autoload_get_self_name, &hm))
       return;
    if (!GetModuleFileNameA(hm, path, sizeof(path)))
       return;
