@@ -64,9 +64,19 @@ else ifneq (,$(findstring armv,$(platform)))
    override platform += unix
 endif
 
+# Detect Android cross-compile: if the CC path contains "android" we
+# are targeting Android, which provides pthread in Bionic (no -lpthread)
+# and has no librt at all.
+IS_ANDROID := 0
+ifneq ($(findstring android,$(CC)),)
+   IS_ANDROID := 1
+endif
+
 ifneq ($(platform), osx)
-   ifeq ($(findstring Haiku,$(shell uname -s)),)
-      PTHREAD_FLAGS = -lpthread
+   ifneq ($(IS_ANDROID),1)
+      ifeq ($(findstring Haiku,$(shell uname -s)),)
+         PTHREAD_FLAGS = -lpthread
+      endif
    endif
 endif
 
@@ -128,7 +138,12 @@ ifneq (,$(findstring unix,$(platform)))
    ifeq ($(LINK_STATIC_LIBCPLUSPLUS),1)
       LDFLAGS += -static-libgcc -static-libstdc++
    endif
-   LDFLAGS += $(PTHREAD_FLAGS) -ldl -lrt
+   # Android: pthread is in Bionic, no librt; -ldl for dladdr() is present.
+   ifeq ($(IS_ANDROID),1)
+      LDFLAGS += -ldl
+   else
+      LDFLAGS += $(PTHREAD_FLAGS) -ldl -lrt
+   endif
    ifneq ($(findstring Haiku,$(shell uname -s)),)
       LDFLAGS := $(filter-out -ldl -lrt,$(LDFLAGS)) -lroot
    endif
