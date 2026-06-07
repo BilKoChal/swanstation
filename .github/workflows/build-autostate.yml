@@ -63,6 +63,7 @@ jobs:
                CC=x86_64-w64-mingw32-gcc \
                CXX=x86_64-w64-mingw32-g++ \
                CPU_ARCH=x64 \
+               USE_D3D12=0 \
                -j$(nproc)
 
       - name: Stage artifact
@@ -108,6 +109,7 @@ jobs:
                CC=i686-w64-mingw32-gcc \
                CXX=i686-w64-mingw32-g++ \
                CPU_ARCH=x86 \
+               USE_D3D12=0 \
                -j$(nproc)
 
       - name: Stage artifact
