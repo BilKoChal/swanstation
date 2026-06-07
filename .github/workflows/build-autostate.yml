@@ -264,9 +264,10 @@ jobs:
 
           # platform=unix sets TARGET=swanstation_libretro.so and fpic=-fPIC
           # We override SHARED: Android linker doesn't support --version-script
-          # -ldl is essential for dladdr() used by autoload self-detection
-          # -static-libstdc++ statically links libc++ into the .so so it
-          #   won't depend on libc++_shared.so at runtime.
+          # EXTRA_LDFLAGS adds -lm for Android without overriding the
+          # Makefile's own LDFLAGS (which include -shared, -static-libstdc++, etc).
+          # -static-libstdc++ is already handled by LINK_STATIC_LIBCPLUSPLUS=1.
+          # -ldl is already in the unix LDFLAGS for dladdr().
           make -f Makefile.libretro \
             platform=unix \
             CC="$CC" \
@@ -276,7 +277,7 @@ jobs:
             STRIP="$STRIP" \
             CPU_ARCH=${{ matrix.cpu_arch }} \
             SHARED="-shared -fPIC" \
-            LDFLAGS="-ldl -static-libstdc++ -lm" \
+            EXTRA_LDFLAGS="-lm" \
             -j$(nproc)
 
       - name: Stage artifact
