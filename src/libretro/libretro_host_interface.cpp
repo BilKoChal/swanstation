@@ -33,6 +33,11 @@
 #include <file/file_path.h>
 #include <streams/file_stream.h>
 
+/* Forward-declare libretro log variables so the autoload block below
+ * can reference them.  The full definitions appear later in this file. */
+static retro_log_callback s_libretro_log_callback = {};
+static bool s_libretro_log_callback_valid = false;
+
 /* ---- autoload platform abstractions ---- */
 #ifdef _WIN32
 #define AUTOLOAD_STRCASECMP _stricmp
@@ -698,8 +703,6 @@ retro_input_state_t g_retro_input_state_callback;
 bool g_retro_skip_video_this_frame = false;
 bool g_retro_skip_audio_this_frame = false;
 
-static retro_log_callback s_libretro_log_callback = {};
-static bool s_libretro_log_callback_valid = false;
 static bool s_libretro_log_callback_registered = false;
 static bool libretro_supports_option_categories = false;
 static bool analog_pressed = false;
