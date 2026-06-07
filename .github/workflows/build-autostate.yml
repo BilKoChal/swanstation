@@ -1,0 +1,288 @@
+# .github/workflows/build-autostate.yml
+#
+# Builds the patched swanstation_libretro core for:
+#   - Windows 64-bit  (MinGW cross-compile on Ubuntu)
+#   - Windows 32-bit  (MinGW cross-compile on Ubuntu)
+#   - Linux 64-bit
+#   - macOS (Intel + Apple Silicon universal)
+#   - Android arm64-v8a
+#   - Android armeabi-v7a
+#   - Android x86_64
+#
+# Artifacts are uploaded so you can download them directly from the
+# GitHub Actions run page without needing a release.
+#
+# Trigger: every push and pull-request, plus manual dispatch.
+#
+# The -ldl flag links libdl which provides dladdr() used by the
+# autoload block to locate the core's own .so/.dll path at runtime.
+#
+# The -static-libstdc++ flag in the Android build statically links libc++
+# so the core won't depend on libc++_shared.so at runtime. Without it,
+# dlopen fails with "library libc++_shared.so not found" on Android.
+#
+# SwanStation uses Makefile.libretro (not Makefile) and C++17.
+# CPU_ARCH is set per job for proper recompiler backend selection.
+
+name: Build SwanStation autostate
+
+on:
+  push:
+    branches: [ "**" ]
+    tags: [ "v*" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------ #
+  # Windows 64-bit (MinGW cross-compile)                               #
+  # ------------------------------------------------------------------ #
+  build-win64:
+    name: Windows x64 (MinGW)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64 \
+            g++-mingw-w64-x86-64 \
+            make
+
+      - name: Build
+        run: |
+          make -f Makefile.libretro \
+               platform=win \
+               CC=x86_64-w64-mingw32-gcc \
+               CXX=x86_64-w64-mingw32-g++ \
+               CPU_ARCH=x64 \
+               -j$(nproc)
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist
+          cp swanstation_libretro.dll dist/swanstation_libretro_win64.dll
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swanstation_libretro_win64
+          path: dist/swanstation_libretro_win64.dll
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/swanstation_libretro_win64.dll
+
+  # ------------------------------------------------------------------ #
+  # Windows 32-bit (MinGW cross-compile)                               #
+  # ------------------------------------------------------------------ #
+  build-win32:
+    name: Windows x86 (MinGW)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 toolchain (32-bit)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-i686 \
+            g++-mingw-w64-i686 \
+            make
+
+      - name: Build
+        run: |
+          make -f Makefile.libretro \
+               platform=win \
+               CC=i686-w64-mingw32-gcc \
+               CXX=i686-w64-mingw32-g++ \
+               CPU_ARCH=x86 \
+               -j$(nproc)
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist
+          cp swanstation_libretro.dll dist/swanstation_libretro_win32.dll
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swanstation_libretro_win32
+          path: dist/swanstation_libretro_win32.dll
+
+  # ------------------------------------------------------------------ #
+  # Linux 64-bit                                                       #
+  # ------------------------------------------------------------------ #
+  build-linux64:
+    name: Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            make
+
+      - name: Build
+        run: |
+          make -f Makefile.libretro \
+               platform=unix \
+               CPU_ARCH=x64 \
+               -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swanstation_libretro_linux64
+          path: swanstation_libretro.so
+
+  # ------------------------------------------------------------------ #
+  # macOS (Intel + Apple Silicon universal)                            #
+  # ------------------------------------------------------------------ #
+  build-macos:
+    name: macOS Universal
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build x86_64 slice
+        run: |
+          make -f Makefile.libretro \
+               platform=osx \
+               CPU_ARCH=x64 \
+               arch=intel \
+               -j$(sysctl -n hw.ncpu)
+          mv swanstation_libretro.dylib swanstation_libretro_x86_64.dylib
+
+      - name: Build arm64 slice
+        run: |
+          make -f Makefile.libretro clean
+          make -f Makefile.libretro \
+               platform=osx \
+               CPU_ARCH=aarch64 \
+               arch=arm64 \
+               CROSS_COMPILE=1 \
+               LIBRETRO_APPLE_PLATFORM=arm64-apple-macos11 \
+               LIBRETRO_APPLE_ISYSROOT=$(xcodebuild -version -sdk macosx Path) \
+               -j$(sysctl -n hw.ncpu)
+          mv swanstation_libretro.dylib swanstation_libretro_arm64.dylib
+
+      - name: Create universal binary
+        run: |
+          lipo -create -output swanstation_libretro.dylib \
+               swanstation_libretro_x86_64.dylib \
+               swanstation_libretro_arm64.dylib
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swanstation_libretro_macos
+          path: swanstation_libretro.dylib
+
+  # ------------------------------------------------------------------ #
+  # Android — arm64-v8a / armeabi-v7a / x86_64                        #
+  #                                                                    #
+  # SwanStation's Makefile.libretro uses platform=unix for Android     #
+  # NDK cross-compile. We override CC/CXX with NDK Clang and drop the #
+  # version-script from SHARED (Android linker does not support it).   #
+  # -ldl links libdl for dladdr() used by autoload self-detection.     #
+  # -static-libstdc++ statically links libc++ so the core won't       #
+  # depend on libc++_shared.so at runtime. Without this flag, the     #
+  # resulting .so requires libc++_shared.so which is not available    #
+  # on most Android devices when loading libretro cores, causing      #
+  # dlopen to fail with "library libc++_shared.so not found".         #
+  # ------------------------------------------------------------------ #
+  build-android:
+    name: Android ${{ matrix.abi }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            ndk_target: aarch64-linux-android
+            cpu_arch: aarch64
+            artifact_suffix: android_arm64-v8a
+
+          - abi: armeabi-v7a
+            ndk_target: armv7a-linux-androideabi
+            cpu_arch: aarch32
+            artifact_suffix: android_armeabi-v7a
+
+          - abi: x86_64
+            ndk_target: x86_64-linux-android
+            cpu_arch: x64
+            artifact_suffix: android_x86_64
+
+    env:
+      ANDROID_API: 21
+      NDK_VERSION: "26.3.11579264"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install NDK
+        run: |
+          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;${{ env.NDK_VERSION }}" 2>&1 | tail -3
+          echo "NDK_ROOT=${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+      - name: Install make
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends make
+
+      - name: Build
+        run: |
+          TOOLCHAIN=${NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64
+          CC="${TOOLCHAIN}/bin/${{ matrix.ndk_target }}${{ env.ANDROID_API }}-clang"
+          CXX="${TOOLCHAIN}/bin/${{ matrix.ndk_target }}${{ env.ANDROID_API }}-clang++"
+          AR="${TOOLCHAIN}/bin/llvm-ar"
+          RANLIB="${TOOLCHAIN}/bin/llvm-ranlib"
+          STRIP="${TOOLCHAIN}/bin/llvm-strip"
+
+          # platform=unix sets TARGET=swanstation_libretro.so and fpic=-fPIC
+          # We override SHARED: Android linker doesn't support --version-script
+          # -ldl is essential for dladdr() used by autoload self-detection
+          # -static-libstdc++ statically links libc++ into the .so so it
+          #   won't depend on libc++_shared.so at runtime.
+          make -f Makefile.libretro \
+            platform=unix \
+            CC="$CC" \
+            CXX="$CXX" \
+            AR="$AR" \
+            RANLIB="$RANLIB" \
+            STRIP="$STRIP" \
+            CPU_ARCH=${{ matrix.cpu_arch }} \
+            SHARED="-shared -fPIC" \
+            LDFLAGS="-ldl -static-libstdc++ -lm" \
+            -j$(nproc)
+
+      - name: Stage artifact
+        run: |
+          cp swanstation_libretro.so swanstation_libretro_${{ matrix.artifact_suffix }}.so
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swanstation_libretro_${{ matrix.artifact_suffix }}
+          path: swanstation_libretro_${{ matrix.artifact_suffix }}.so
